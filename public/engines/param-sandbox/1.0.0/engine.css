@@ -82,13 +82,20 @@
   outline: 3px solid var(--rds-info);
   outline-offset: 2px;
 }
-/* margin-left/right: auto centers the stage in its grid cell once a
-   background image caps its width (see main.ts's stageDimensions /
-   STAGE_MAX_HEIGHT_PX) -- a grid item's width otherwise stretches to fill
-   its column (justify-self default), so these margins are inert (no extra
-   space to distribute) for the no-background/uncapped stage and only take
-   effect once max-width actually leaves room beside the stage. */
-.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; margin-left: auto; margin-right: auto; }
+/* width:100% + margin-left/right:auto centers the stage in its grid cell
+   once a background image caps its width (see main.ts's stageDimensions /
+   STAGE_MAX_HEIGHT_PX). NOTE: a grid item's default sizing (justify-self:
+   normal, which behaves as stretch) is what fills the column when NO auto
+   margin is present -- but the instant an axis carries an auto margin, the
+   grid spec switches that axis away from stretch to content-based sizing,
+   which would collapse this box (its only children are position:absolute,
+   so they don't establish an intrinsic width) to 0x0. The explicit
+   `width: 100%` restores the fill behavior directly, so it's unaffected by
+   that stretch/content-based switch; `max-width` (set inline once a
+   background image needs capping) then constrains that 100%, and the auto
+   margins center the result within the grid cell's leftover space -- inert
+   (no extra space to distribute) for the no-background/uncapped stage. */
+.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; width: 100%; margin-left: auto; margin-right: auto; }
 .ilb-stage-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .ilb-overlay { position: absolute; }
 /* Stage-zone controls: a layer of small cards positioned by box percents,
