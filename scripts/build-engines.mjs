@@ -7,6 +7,27 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ENGINE_VERSION = "1.0.0";
 const SCORM_VERSION = "1.0.0";
+const DEFAULT_OUT = path.join(ROOT, "public", "engines");
+
+// Mirrors src/lib/design/tokens.ts's GENERATED marker + emitters exactly.
+// Duplicated here (rather than imported) because this is a plain .mjs build
+// script with no TS toolchain — tests/engine-build-drift.test.ts cross-checks
+// this copy against the TS emitters so the two cannot silently diverge.
+const GENERATED = "/* GENERATED FILE - edit src/lib/design/tokens.json and run npm run build:engines */";
+
+function emitRootVariables(tokens) {
+  const lines = Object.keys(tokens.colors).map((n) => `  --rds-${n}: ${tokens.colors[n]};`);
+  return `:root {\n${lines.join("\n")}\n}`;
+}
+
+function emitAppThemeCss(tokens) {
+  const colorLines = Object.keys(tokens.colors).map((n) => `  --color-rds-${n}: ${tokens.colors[n]};`);
+  return `${GENERATED}\n${emitRootVariables(tokens)}\n\n@theme {\n${colorLines.join("\n")}\n  --font-app: ${tokens.fonts.app};\n  --radius-pill: ${tokens.radius.pill};\n  --radius-card: ${tokens.radius.card};\n}\n`;
+}
+
+function emitEngineTokensCss(tokens) {
+  return `${GENERATED}\n${emitRootVariables(tokens)}\n:root {\n  --ilb-font-heading: ${tokens.fonts.lessonHeading};\n  --ilb-font-body: ${tokens.fonts.lessonBody};\n  --radius-card: ${tokens.radius.card};\n}\n`;
+}
 
 /**
  * Build both engine bundles (+ manifest) into `outDir` (defaults to
@@ -20,12 +41,26 @@ const SCORM_VERSION = "1.0.0";
  * shell invocations, only path.join/path.resolve for paths.
  */
 export async function buildEngines({ outDir } = {}) {
-  const OUT = outDir ?? path.join(ROOT, "public", "engines");
+  const OUT = outDir ?? DEFAULT_OUT;
 
   const sandboxDir = path.join(OUT, "param-sandbox", ENGINE_VERSION);
   const scormDir = path.join(OUT, "scorm", SCORM_VERSION);
   mkdirSync(sandboxDir, { recursive: true });
   mkdirSync(scormDir, { recursive: true });
+
+  const tokens = JSON.parse(readFileSync(path.join(ROOT, "src/lib/design/tokens.json"), "utf8"));
+  const appTokensCss = emitAppThemeCss(tokens);
+  const engineTokensCss = emitEngineTokensCss(tokens);
+
+  // App chrome theme: committed at src/app/tokens.css when building to the
+  // default public/engines out dir; written alongside a temp/other out dir
+  // instead (as app-tokens.css) so the drift test can compare without
+  // touching the tree.
+  if (path.resolve(OUT) === path.resolve(DEFAULT_OUT)) {
+    writeFileSync(path.join(ROOT, "src", "app", "tokens.css"), appTokensCss);
+  } else {
+    writeFileSync(path.join(OUT, "app-tokens.css"), appTokensCss);
+  }
 
   await build({
     entryPoints: [path.join(ROOT, "src/engine-runtime/param-sandbox/main.ts")],
@@ -47,7 +82,10 @@ export async function buildEngines({ outDir } = {}) {
     alias: { "@": path.join(ROOT, "src") },
   });
 
-  copyFileSync(path.join(ROOT, "src/engine-runtime/param-sandbox/engine.css"), path.join(sandboxDir, "engine.css"));
+  // engine.css ships the generated tokens layer prepended to the hand-
+  // written source rules (source may reference var(--rds-*) freely).
+  const engineCssSource = readFileSync(path.join(ROOT, "src/engine-runtime/param-sandbox/engine.css"), "utf8");
+  writeFileSync(path.join(sandboxDir, "engine.css"), `${engineTokensCss}\n${engineCssSource}`);
   copyFileSync(path.join(ROOT, "src/engine-runtime/param-sandbox/preview.html"), path.join(sandboxDir, "preview.html"));
 
   const sha256 = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
@@ -83,6 +121,7 @@ export async function buildEngines({ outDir } = {}) {
     sandboxDir,
     scormDir,
     manifest,
+    appTokensCss,
     files: {
       "param-sandbox/1.0.0/engine.js": path.join(sandboxDir, "engine.js"),
       "param-sandbox/1.0.0/engine.css": path.join(sandboxDir, "engine.css"),

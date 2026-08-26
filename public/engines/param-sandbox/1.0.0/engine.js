@@ -231,10 +231,35 @@
 
   // src/engine-runtime/param-sandbox/main.ts
   var preloadedBandUrls = /* @__PURE__ */ new Set();
+  var ILB_CHART_COLORS = {
+    line: "#8c1d40",
+    marker: "#747474",
+    axisText: "#484848",
+    frame: "#bfbfbf"
+  };
+  function zoneOf(placement) {
+    var _a;
+    return (_a = placement == null ? void 0 : placement.zone) != null ? _a : "panel";
+  }
+  function stageBoxOf(placement) {
+    return placement && placement.zone === "stage" ? placement.box : null;
+  }
+  var LAYOUT_ZONE_ORDER = {
+    // Side (default): inputs | stage | outputs sit in one row, then the
+    // below-zone panel spans full width beneath, then charts.
+    side: ["inputs", "stage", "outputs", "below", "charts"],
+    // Stacked: single column, stage first, then inputs, then below, then
+    // outputs, then charts.
+    stacked: ["stage", "inputs", "below", "outputs", "charts"],
+    // Stage-focus: stage first (full width), then inputs+outputs share a row,
+    // then below, then charts.
+    "stage-focus": ["stage", "inputs", "outputs", "below", "charts"]
+  };
   function mountSandbox(root, config) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     root.innerHTML = "";
     root.classList.add("ilb-sandbox");
+    root.setAttribute("role", "main");
     const mountId = `ilb-${Math.random().toString(36).slice(2, 9)}`;
     const asts = /* @__PURE__ */ new Map();
     for (const out of config.outputs) {
@@ -295,8 +320,20 @@
     root.appendChild(header);
     const layout = el("div", "ilb-layout");
     root.appendChild(layout);
+    layout.classList.add(`ilb-layout-${(_b = config.layout) != null ? _b : "side"}`);
+    const allElements = [...config.inputs, ...config.outputs];
+    const anyStageZone = allElements.some((e) => zoneOf(e.placement) === "stage");
+    const hasBelowZone = allElements.some((e) => zoneOf(e.placement) === "below");
+    const needsStage = !!config.visual && (!!config.visual.backgroundUrl || config.visual.overlays.length > 0 || anyStageZone);
     const inputsPanel = el("div", "ilb-inputs");
-    layout.appendChild(inputsPanel);
+    const outputsPanel = el("div", "ilb-outputs");
+    const belowPanel = el("div", "ilb-below-panel");
+    let stage = null;
+    let stageControls = null;
+    if (needsStage) {
+      stage = el("div", "ilb-stage");
+      stageControls = el("div", "ilb-stage-controls");
+    }
     for (const inp of config.inputs) {
       const inputId = `${mountId}-${inp.id}`;
       const row = el("div", "ilb-input-row");
@@ -310,7 +347,7 @@
         const sel = document.createElement("select");
         sel.id = inputId;
         sel.dataset.input = inp.id;
-        for (const opt of (_b = inp.options) != null ? _b : []) {
+        for (const opt of (_c = inp.options) != null ? _c : []) {
           const o = document.createElement("option");
           o.value = String(opt.value);
           o.textContent = opt.label;
@@ -333,36 +370,118 @@
           onInteract();
         });
         control = cb;
-      } else {
+      } else if (inp.type === "slider") {
+        const range = document.createElement("input");
+        range.type = "range";
+        range.id = inputId;
+        range.dataset.input = inp.id;
+        range.min = String((_d = inp.min) != null ? _d : 0);
+        range.max = String((_e = inp.max) != null ? _e : 100);
+        range.step = String((_f = inp.step) != null ? _f : "any");
+        range.value = String(values[inp.id]);
         const num = document.createElement("input");
-        num.type = inp.type === "slider" ? "range" : "number";
-        num.id = inputId;
+        num.type = "number";
+        num.id = `${inputId}-value`;
+        num.className = "ilb-input-number";
         num.dataset.input = inp.id;
-        num.min = String((_c = inp.min) != null ? _c : 0);
-        num.max = String((_d = inp.max) != null ? _d : 100);
-        num.step = String((_e = inp.step) != null ? _e : "any");
-        num.value = String(values[inp.id]);
-        const valueBadge = el("span", "ilb-input-value");
-        valueBadge.textContent = String(values[inp.id]);
+        num.min = range.min;
+        num.max = range.max;
+        num.step = range.step;
+        num.value = range.value;
+        num.setAttribute("aria-label", `${inp.label}, exact value`);
+        range.addEventListener("input", () => {
+          const v = Number(range.value);
+          if (!Number.isFinite(v)) return;
+          values[inp.id] = v;
+          num.value = range.value;
+          onInteract();
+        });
         num.addEventListener("input", () => {
           if (num.value === "") return;
           const v = Number(num.value);
           if (!Number.isFinite(v)) return;
           values[inp.id] = v;
-          valueBadge.textContent = num.value;
+          range.value = String(v);
           onInteract();
+        });
+        const commitClamp = () => {
+          if (num.value === "") return;
+          const raw = Number(num.value);
+          if (!Number.isFinite(raw)) return;
+          let v = raw;
+          if (inp.min !== void 0) v = Math.max(inp.min, v);
+          if (inp.max !== void 0) v = Math.min(inp.max, v);
+          if (v !== raw || String(v) !== num.value) {
+            values[inp.id] = v;
+            range.value = String(v);
+            num.value = String(v);
+            onInteract();
+          }
+        };
+        num.addEventListener("blur", commitClamp);
+        num.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") commitClamp();
+        });
+        const wrap = el("span", "ilb-input-control");
+        wrap.appendChild(range);
+        wrap.appendChild(num);
+        control = wrap;
+      } else {
+        const num = document.createElement("input");
+        num.type = "number";
+        num.id = inputId;
+        num.className = "ilb-input-number";
+        num.dataset.input = inp.id;
+        num.min = String((_g = inp.min) != null ? _g : 0);
+        num.max = String((_h = inp.max) != null ? _h : 100);
+        num.step = String((_i = inp.step) != null ? _i : "any");
+        num.value = String(values[inp.id]);
+        num.addEventListener("input", () => {
+          if (num.value === "") return;
+          const v = Number(num.value);
+          if (!Number.isFinite(v)) return;
+          values[inp.id] = v;
+          onInteract();
+        });
+        const commitClamp = () => {
+          if (num.value === "") return;
+          const raw = Number(num.value);
+          if (!Number.isFinite(raw)) return;
+          let v = raw;
+          if (inp.min !== void 0) v = Math.max(inp.min, v);
+          if (inp.max !== void 0) v = Math.min(inp.max, v);
+          if (v !== raw || String(v) !== num.value) {
+            values[inp.id] = v;
+            num.value = String(v);
+            onInteract();
+          }
+        };
+        num.addEventListener("blur", commitClamp);
+        num.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") commitClamp();
         });
         const wrap = el("span", "ilb-input-control");
         wrap.appendChild(num);
-        wrap.appendChild(valueBadge);
         control = wrap;
       }
       row.appendChild(control);
-      inputsPanel.appendChild(row);
+      const zone = zoneOf(inp.placement);
+      const box = stageBoxOf(inp.placement);
+      if (zone === "stage" && stageControls && box) {
+        const card = el("div", "ilb-stage-control");
+        card.style.left = `${box.x}%`;
+        card.style.top = `${box.y}%`;
+        card.style.width = `${box.w}%`;
+        card.style.height = `${box.h}%`;
+        card.appendChild(row);
+        stageControls.appendChild(card);
+      } else if (zone === "below") {
+        belowPanel.appendChild(row);
+      } else {
+        inputsPanel.appendChild(row);
+      }
     }
-    let stage = null;
-    if (config.visual && (config.visual.backgroundUrl || config.visual.overlays.length)) {
-      stage = el("div", "ilb-stage");
+    if (stage && config.visual) {
       if (config.visual.backgroundUrl) {
         const bg = document.createElement("img");
         bg.className = "ilb-stage-bg";
@@ -403,11 +522,9 @@
         }
         stage.appendChild(holder);
       }
-      layout.appendChild(stage);
+      if (stageControls) stage.appendChild(stageControls);
       layout.classList.add("ilb-has-stage");
     }
-    const outputsPanel = el("div", "ilb-outputs");
-    layout.appendChild(outputsPanel);
     const outputNodes = /* @__PURE__ */ new Map();
     for (const out of config.outputs) {
       const card = el("div", "ilb-output");
@@ -421,19 +538,36 @@
       val.appendChild(num);
       val.appendChild(dash);
       const unit = el("span", "ilb-output-units");
-      unit.textContent = (_f = out.units) != null ? _f : "";
+      unit.textContent = (_j = out.units) != null ? _j : "";
       const sr = el("span", "ilb-sr-only");
       card.appendChild(lab);
       card.appendChild(val);
       card.appendChild(unit);
       card.appendChild(sr);
-      outputsPanel.appendChild(card);
       outputNodes.set(out.id, { num, dash, sr });
+      const zone = zoneOf(out.placement);
+      const box = stageBoxOf(out.placement);
+      if (zone === "stage" && stageControls && box) {
+        const wrap = el("div", "ilb-stage-control");
+        wrap.style.left = `${box.x}%`;
+        wrap.style.top = `${box.y}%`;
+        wrap.style.width = `${box.w}%`;
+        wrap.style.height = `${box.h}%`;
+        wrap.appendChild(card);
+        stageControls.appendChild(wrap);
+      } else if (zone === "below") {
+        belowPanel.appendChild(card);
+      } else {
+        outputsPanel.appendChild(card);
+      }
     }
     const outputsSummary = el("div", "ilb-sr-only");
     outputsSummary.setAttribute("role", "status");
     outputsSummary.setAttribute("aria-live", "polite");
-    outputsPanel.appendChild(outputsSummary);
+    const outputsPanelHasVisibleOutputs = outputsPanel.childElementCount > 0;
+    if (outputsPanelHasVisibleOutputs) {
+      outputsPanel.appendChild(outputsSummary);
+    }
     let outputsSummaryTimer = null;
     const OUTPUTS_SUMMARY_DEBOUNCE_MS = 500;
     const chartsPanel = el("div", "ilb-charts");
@@ -453,7 +587,32 @@
       chartsPanel.appendChild(wrap);
       chartCanvases.set(chart.id, canvas);
     }
-    if (config.charts.length) layout.appendChild(chartsPanel);
+    const zoneOrder = (_l = LAYOUT_ZONE_ORDER[(_k = config.layout) != null ? _k : "side"]) != null ? _l : LAYOUT_ZONE_ORDER.side;
+    for (const zone of zoneOrder) {
+      switch (zone) {
+        case "inputs":
+          if (inputsPanel.childElementCount > 0) layout.appendChild(inputsPanel);
+          break;
+        case "outputs":
+          if (outputsPanelHasVisibleOutputs) {
+            layout.appendChild(outputsPanel);
+          } else {
+            const outputsLive = el("div", "ilb-outputs-live");
+            outputsLive.appendChild(outputsSummary);
+            layout.appendChild(outputsLive);
+          }
+          break;
+        case "below":
+          if (hasBelowZone) layout.appendChild(belowPanel);
+          break;
+        case "stage":
+          if (stage) layout.appendChild(stage);
+          break;
+        case "charts":
+          if (config.charts.length) layout.appendChild(chartsPanel);
+          break;
+      }
+    }
     const challengeNodes = /* @__PURE__ */ new Map();
     if (config.challenges.length) {
       const panel = el("div", "ilb-challenges");
@@ -590,10 +749,10 @@
       const pad = 28;
       const px = (x) => pad + (x - xMin) / (xMax - xMin || 1) * (canvas.width - 2 * pad);
       const py = (y) => canvas.height - pad - (y - yMin) / (yMax - yMin || 1) * (canvas.height - 2 * pad);
-      ctx.strokeStyle = "#9aa0a6";
+      ctx.strokeStyle = ILB_CHART_COLORS.frame;
       ctx.lineWidth = 1;
       ctx.strokeRect(pad, pad, canvas.width - 2 * pad, canvas.height - 2 * pad);
-      ctx.strokeStyle = "#8C1D40";
+      ctx.strokeStyle = ILB_CHART_COLORS.line;
       ctx.lineWidth = 2;
       ctx.beginPath();
       let needMove = true;
@@ -613,13 +772,13 @@
       const curX = values[chart.xInputId];
       let curLabel = "no current point";
       if (cur !== null && curX >= xMin && curX <= xMax) {
-        ctx.fillStyle = "#B8860B";
+        ctx.fillStyle = ILB_CHART_COLORS.marker;
         ctx.beginPath();
         ctx.arc(px(curX), py(cur), 4, 0, 2 * Math.PI);
         ctx.fill();
         curLabel = `current point (${round2(curX)}, ${round2(cur)})`;
       }
-      ctx.fillStyle = "#5f6368";
+      ctx.fillStyle = ILB_CHART_COLORS.axisText;
       ctx.font = "11px sans-serif";
       ctx.fillText(String(round2(xMin)), pad, canvas.height - 8);
       ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);

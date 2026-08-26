@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { mountSandbox } from "@/engine-runtime/param-sandbox/main";
+import { validateSandboxConfig, toRuntimeConfig, emptySandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import type { ScormSession } from "@/engine-runtime/scorm-adapter";
+
+const ENGINE_CSS_PATH = path.resolve(__dirname, "../src/engine-runtime/param-sandbox/engine.css");
 
 const config: RuntimeSandboxConfig = {
   title: "Test",
@@ -40,7 +45,7 @@ describe("mountSandbox", () => {
 
   it("recomputes when an input changes", () => {
     mountSandbox(document.getElementById("root")!, config);
-    const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+    const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
     slider.value = "6";
     slider.dispatchEvent(new Event("input", { bubbles: true }));
     const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
@@ -49,11 +54,147 @@ describe("mountSandbox", () => {
 
   it("marks challenges met and unmet", () => {
     mountSandbox(document.getElementById("root")!, config);
-    const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+    const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
     expect(document.querySelector('[data-challenge="c1"]')!.classList.contains("met")).toBe(false);
     slider.value = "7";
     slider.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector('[data-challenge="c1"]')!.classList.contains("met")).toBe(true);
+  });
+
+  it("displays a title containing '&' correctly end-to-end through the FULL authoring pipeline (validate -> runtime -> mount)", () => {
+    // Task fix 2: sanitizePlainText used to entity-escape plain-text fields
+    // at storage time, so a title of "Mass & weight test" was PERMANENTLY
+    // stored as "Mass &amp; weight test" and every consumer (including this
+    // textContent render) displayed the escaped form. Round-tripping
+    // through the real authoring schema (not just calling mountSandbox
+    // directly with a hand-built RuntimeSandboxConfig) is what actually
+    // exercises sanitizePlainText.
+    const draft = { ...emptySandboxConfig("x"), title: "Mass & weight test" };
+    const result = validateSandboxConfig(draft);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.title).toBe("Mass & weight test"); // stored raw, not "Mass &amp; weight test"
+
+    const runtimeConfig = toRuntimeConfig(result.config, () => { throw new Error("no assets in this config"); });
+    mountSandbox(document.getElementById("root")!, runtimeConfig);
+    const h2 = document.querySelector(".ilb-title")!;
+    expect(h2.textContent).toBe("Mass & weight test");
+  });
+
+  describe("paired numeric input for sliders (2.5.7)", () => {
+    it("renders both a range input and a visible number input for a slider, sharing min/max/step", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      expect(range).toBeTruthy();
+      expect(number).toBeTruthy();
+      expect(number.id).not.toBe(range.id); // mount-unique id, distinct from the range's
+      expect(number.min).toBe(range.min);
+      expect(number.max).toBe(range.max);
+      expect(number.step).toBe(range.step);
+      expect(number.getAttribute("aria-label")).toBe("Mass, exact value");
+    });
+
+    it("slider change updates the paired number field's value", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      range.value = "6";
+      range.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(number.value).toBe("6");
+    });
+
+    it("typing into the paired number field updates outputs and the range value", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      number.value = "7";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(range.value).toBe("7");
+      const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
+      expect(out.textContent).toBe("14");
+    });
+
+    it("ignores an empty/non-finite intermediate value while typing in the number field", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      number.value = "";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
+      expect(out.textContent).toBe("8"); // unchanged from the default (4 * 2)
+    });
+
+    it("clamps an out-of-range number entry into [min, max] on blur", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      number.value = "999"; // config max is 10
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      number.dispatchEvent(new Event("blur", { bubbles: true }));
+      expect(number.value).toBe("10");
+      expect(range.value).toBe("10");
+      const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
+      expect(out.textContent).toBe("20"); // 10 * 2, clamped value drives outputs
+    });
+
+    it("preserves in-progress typing in the number field instead of rewriting it mid-keystroke", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+
+      // A leading zero must not be snapped away mid-keystroke.
+      number.value = "07";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(number.value).toBe("07");
+      expect(range.value).toBe("7");
+
+      // A trailing zero after the decimal point must not be snapped away
+      // mid-keystroke either (typing "3.5" then "3.50").
+      number.value = "3.5";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      number.value = "3.50";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(number.value).toBe("3.50");
+      const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
+      expect(out.textContent).toBe("7"); // 3.5 * 2
+
+      // Only on blur is the displayed text normalized.
+      number.dispatchEvent(new Event("blur", { bubbles: true }));
+      expect(number.value).toBe("3.5");
+      expect(range.value).toBe("3.5");
+    });
+
+    it("clamps an out-of-range number entry into [min, max] on Enter", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      number.value = "-5"; // config min is 0
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      number.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      expect(number.value).toBe("0");
+      expect(range.value).toBe("0");
+    });
+  });
+
+  describe("engine.css source rules (2.5.8 target size + focus visibility)", () => {
+    const css = readFileSync(ENGINE_CSS_PATH, "utf8");
+
+    it("defines a 24px minimum height for range, number, and select controls", () => {
+      expect(css).toMatch(/input\[type="range"\][^{]*\{[^}]*min-height:\s*24px/);
+      expect(css).toMatch(/input\[type="number"\][^{]*\{[^}]*min-height:\s*24px/);
+      expect(css).toMatch(/select[^{]*\{[^}]*min-height:\s*24px/);
+    });
+
+    it("defines a 24x24px checkbox control", () => {
+      expect(css).toMatch(/input\[type="checkbox"\][^{]*\{[^}]*width:\s*24px/);
+      expect(css).toMatch(/input\[type="checkbox"\][^{]*\{[^}]*height:\s*24px/);
+    });
+
+    it("defines focus-visible outline styles scoped under .ilb-sandbox", () => {
+      expect(css).toMatch(
+        /\.ilb-sandbox[^{]*input:focus-visible[^{]*,[^{]*select:focus-visible[^{]*,[^{]*button:focus-visible[^{]*\{[^}]*outline:\s*3px solid var\(--rds-info\)[^}]*outline-offset:\s*2px/,
+      );
+    });
   });
 
   it("renders a fill overlay whose height tracks the output", () => {
@@ -117,7 +258,7 @@ describe("mountSandbox", () => {
       (window as any).ILBScorm = scorm as unknown as ScormSession;
 
       mountSandbox(document.getElementById("root")!, config);
-      const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+      const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
 
       // Meet the challenge: double = 14 >= 12.
       slider.value = "7";
@@ -152,7 +293,7 @@ describe("mountSandbox", () => {
       (window as any).ILBScorm = scorm as unknown as ScormSession;
 
       mountSandbox(document.getElementById("root")!, config);
-      const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+      const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
 
       // double = 10, challenge requires >= 12: still unmet, but an absent
       // score reads as "not attempted" in Canvas, not zero — must be written.
@@ -179,6 +320,190 @@ describe("mountSandbox", () => {
       expect(scorm.setScore).toHaveBeenCalledTimes(1);
       expect(scorm.setScore).toHaveBeenCalledWith(50);
       expect(scorm.setCompleted).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("placement zones and layout presets (Task 11)", () => {
+    const placementConfig: RuntimeSandboxConfig = {
+      title: "Placement test",
+      layout: "stage-focus",
+      inputs: [
+        { id: "panelIn", label: "Panel input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 2 },
+        { id: "belowIn", label: "Below input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 3, placement: { zone: "below" } },
+        { id: "stageIn", label: "Stage input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 4, placement: { zone: "stage", box: { x: 10, y: 20, w: 15, h: 10 } } },
+      ],
+      outputs: [
+        { id: "panelOut", label: "Panel output", formula: "panelIn * 2" },
+        { id: "belowOut", label: "Below output", formula: "belowIn * 2", placement: { zone: "below" } },
+        { id: "stageOut", label: "Stage output", formula: "stageIn * 2", placement: { zone: "stage", box: { x: 40, y: 50, w: 15, h: 10 } } },
+      ],
+      charts: [],
+      challenges: [],
+      visual: { overlays: [] },
+    };
+
+    it("applies the layout class to .ilb-layout", () => {
+      mountSandbox(document.getElementById("root")!, placementConfig);
+      const layout = document.querySelector(".ilb-layout")!;
+      expect(layout.classList.contains("ilb-layout-stage-focus")).toBe(true);
+    });
+
+    it("renders a stage-zone input inside .ilb-stage-controls with left/top set, and its slider still drives outputs", () => {
+      mountSandbox(document.getElementById("root")!, placementConfig);
+      const stageControls = document.querySelector(".ilb-stage-controls")!;
+      const slider = stageControls.querySelector('input[type="range"][data-input="stageIn"]') as HTMLInputElement;
+      expect(slider).toBeTruthy();
+      const card = slider.closest(".ilb-stage-control") as HTMLElement;
+      expect(card.style.left).toBe("10%");
+      expect(card.style.top).toBe("20%");
+
+      slider.value = "8";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      const out = document.querySelector('[data-output="stageOut"] .ilb-output-value')!;
+      expect(out.textContent).toBe("16");
+    });
+
+    it("renders below-zone input and output inside .ilb-below-panel", () => {
+      mountSandbox(document.getElementById("root")!, placementConfig);
+      const below = document.querySelector(".ilb-below-panel")!;
+      expect(below.querySelector('input[data-input="belowIn"]')).toBeTruthy();
+      expect(below.querySelector('[data-output="belowOut"]')).toBeTruthy();
+    });
+
+    it("omits the below-panel and stage entirely when nothing uses those zones", () => {
+      mountSandbox(document.getElementById("root")!, config); // the module-level `config` fixture: no placement, no visual
+      expect(document.querySelector(".ilb-below-panel")).toBeNull();
+      expect(document.querySelector(".ilb-stage")).toBeNull();
+    });
+  });
+
+  describe("focus order matches each preset's visual reading order (WCAG 1.3.2/2.4.3, technique C27)", () => {
+    // Same shape as `placementConfig` above (one input + one output per
+    // zone) but parameterized over `layout`, so DOM order can be checked
+    // against each preset's documented visual order (main.ts's
+    // LAYOUT_ZONE_ORDER / engine.css's grid placement).
+    function configFor(layout: RuntimeSandboxConfig["layout"]): RuntimeSandboxConfig {
+      return {
+        title: "Placement test",
+        layout,
+        inputs: [
+          { id: "panelIn", label: "Panel input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 2 },
+          { id: "belowIn", label: "Below input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 3, placement: { zone: "below" } },
+          { id: "stageIn", label: "Stage input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 4, placement: { zone: "stage", box: { x: 10, y: 20, w: 15, h: 10 } } },
+        ],
+        outputs: [
+          { id: "panelOut", label: "Panel output", formula: "panelIn * 2" },
+          { id: "belowOut", label: "Below output", formula: "belowIn * 2", placement: { zone: "below" } },
+          { id: "stageOut", label: "Stage output", formula: "stageIn * 2", placement: { zone: "stage", box: { x: 40, y: 50, w: 15, h: 10 } } },
+        ],
+        charts: [],
+        challenges: [],
+        visual: { overlays: [] },
+      };
+    }
+
+    // Expected zone-container DOM order, and the resulting input/output
+    // element order it implies (below-zone and stage-zone elements sort
+    // wherever their zone container falls; panel-zone elements sort
+    // wherever .ilb-inputs/.ilb-outputs falls) — one case per preset.
+    const cases: Array<{
+      layout: RuntimeSandboxConfig["layout"];
+      panels: string[];
+      inputOrder: string[];
+      outputOrder: string[];
+    }> = [
+      {
+        layout: "side",
+        // Visual: inputs | stage | outputs row, then below-panel beneath.
+        panels: ["ilb-inputs", "ilb-stage", "ilb-outputs", "ilb-below-panel"],
+        inputOrder: ["panelIn", "stageIn", "belowIn"],
+        outputOrder: ["stageOut", "panelOut", "belowOut"],
+      },
+      {
+        layout: "stacked",
+        // Visual: stage first, then inputs, then below, then outputs.
+        panels: ["ilb-stage", "ilb-inputs", "ilb-below-panel", "ilb-outputs"],
+        inputOrder: ["stageIn", "panelIn", "belowIn"],
+        outputOrder: ["stageOut", "belowOut", "panelOut"],
+      },
+      {
+        layout: "stage-focus",
+        // Visual: stage first (full width), then inputs+outputs row, then below.
+        panels: ["ilb-stage", "ilb-inputs", "ilb-outputs", "ilb-below-panel"],
+        inputOrder: ["stageIn", "panelIn", "belowIn"],
+        outputOrder: ["stageOut", "panelOut", "belowOut"],
+      },
+    ];
+
+    for (const { layout, panels, inputOrder, outputOrder } of cases) {
+      it(`layout="${layout}": DOM order of zone containers, inputs, and outputs matches the visual order`, () => {
+        mountSandbox(document.getElementById("root")!, configFor(layout));
+        const layoutEl = document.querySelector(".ilb-layout")!;
+        expect(Array.from(layoutEl.children).map((c) => c.className)).toEqual(panels);
+
+        const actualInputOrder = [...new Set(Array.from(document.querySelectorAll("[data-input]")).map((n) => n.getAttribute("data-input")))];
+        expect(actualInputOrder).toEqual(inputOrder);
+
+        const actualOutputOrder = Array.from(document.querySelectorAll("[data-output]")).map((n) => n.getAttribute("data-output"));
+        expect(actualOutputOrder).toEqual(outputOrder);
+      });
+    }
+  });
+
+  describe("empty zone containers are not rendered (Task 13 cosmetic fix)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Every input AND output placed off-panel (stage/below), with a visual
+    // scene present so the "stage" placements are valid — nothing at all
+    // routes into .ilb-inputs or .ilb-outputs, so both containers should be
+    // omitted entirely rather than rendered empty.
+    const allStageConfig: RuntimeSandboxConfig = {
+      title: "All stage",
+      layout: "stage-focus",
+      inputs: [
+        { id: "stageIn", label: "Stage input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 4, placement: { zone: "stage", box: { x: 10, y: 20, w: 15, h: 10 } } },
+      ],
+      outputs: [
+        { id: "stageOut", label: "Stage output", formula: "stageIn * 2", placement: { zone: "stage", box: { x: 40, y: 50, w: 15, h: 10 } } },
+      ],
+      charts: [],
+      challenges: [],
+      visual: { overlays: [] },
+    };
+
+    it("omits .ilb-inputs and .ilb-outputs when every input/output is stage-placed", () => {
+      mountSandbox(document.getElementById("root")!, allStageConfig);
+      expect(document.querySelector(".ilb-inputs")).toBeNull();
+      expect(document.querySelector(".ilb-outputs")).toBeNull();
+      // The stage-placed controls themselves still render.
+      expect(document.querySelector('[data-input="stageIn"]')).toBeTruthy();
+      expect(document.querySelector('[data-output="stageOut"]')).toBeTruthy();
+    });
+
+    it("still renders the sr-only outputs live region (in a minimal wrapper) and keeps it functional", () => {
+      vi.useFakeTimers();
+      mountSandbox(document.getElementById("root")!, allStageConfig);
+      const live = document.querySelector('[role="status"][aria-live="polite"]');
+      expect(live).toBeTruthy();
+      // Not inside an (absent) .ilb-outputs card — it must have its own
+      // minimal wrapper instead.
+      expect(document.querySelector(".ilb-outputs")).toBeNull();
+      expect(live!.closest(".ilb-outputs-live")).toBeTruthy();
+
+      const slider = document.querySelector('input[type="range"][data-input="stageIn"]') as HTMLInputElement;
+      slider.value = "8";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(500);
+      expect(live!.textContent).toBe("Stage output: 16");
+    });
+
+    it("still renders .ilb-inputs/.ilb-outputs when at least one panel-zone element exists", () => {
+      mountSandbox(document.getElementById("root")!, config); // module-level fixture: panel-zone input+output
+      expect(document.querySelector(".ilb-inputs")).toBeTruthy();
+      expect(document.querySelector(".ilb-outputs")).toBeTruthy();
+      expect(document.querySelector(".ilb-outputs-live")).toBeNull();
     });
   });
 });

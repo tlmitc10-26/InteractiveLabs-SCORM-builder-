@@ -67,21 +67,60 @@ export function sanitizeRichText(input: string): string {
   return sanitizeHtml(input, RICH_TEXT_OPTIONS);
 }
 
+/** Single regex pass over the 3 entities sanitize-html's serializer always
+ *  re-encodes in a text node (`&`, `<`, `>` — verified directly against
+ *  sanitize-html; it leaves `"`/`'`/non-ASCII untouched in text position),
+ *  undoing that re-encoding so PLAIN_TEXT_OPTIONS below returns the raw
+ *  string rather than an HTML-escaped one. A single alternation (rather
+ *  than three chained `.replace`s) so a value the AUTHOR already
+ *  double-escaped — e.g. literally typing "&amp;lt;" to mean the four
+ *  characters `&lt;` — decodes exactly once: "&amp;lt;" matches "&amp;" as
+ *  one unit at position 0, decoding to "&" + the untouched literal "lt;",
+ *  i.e. "&lt;" — not decoded a second time into "<". Chained replaces
+ *  would get this wrong (decode "&amp;" first, THEN "&lt;" would still be
+ *  there to decode again). */
+function decodeTextEntities(text: string): string {
+  const table: Record<string, string> = { amp: "&", lt: "<", gt: ">" };
+  return text.replace(/&(amp|lt|gt);/g, (_, name: string) => table[name]);
+}
+
+const PLAIN_TEXT_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: [],
+  allowedAttributes: {},
+  disallowedTagsMode: "discard",
+  textFilter: decodeTextEntities,
+};
+
 /**
- * Escape everything: for labels, units, titles.
+ * Strip HTML tags for labels/units/titles/prompts: for markup, the runtime
+ * mounts these fields via `textContent` (see main.ts's mount-time comment),
+ * so escaping them at storage time was actively wrong — it made a stored
+ * label like "Mass & weight" literally render as the text
+ * "Mass &amp; weight" in an exported package, while the editor's live
+ * preview (which never round-trips through this function) showed the raw
+ * draft. Every real sink now escapes correctly at its own point of use
+ * instead: the runtime via `textContent` (which needs no escaping at all),
+ * `xmlEscape` in manifest.ts, `htmlEscape` in index-html.ts, and the
+ * filename sanitizer — so escaping here would only double-escape.
  *
- * sanitize-html's "escape" mode only escapes tag/entity-forming characters
- * (`<`, `>`, `&`) — verified directly against sanitize-html: it leaves `"`
- * and `'` untouched. That's fine as long as the value is only ever placed
- * in an HTML text position, but plain-text fields (label/units/title) are
- * exactly the kind of field a future call site could plausibly interpolate
- * into an HTML attribute (e.g. a title="..." tooltip). A value like
- * `kg" onmouseover="x` would then break out of the attribute and inject a
- * live handler even though it contains no `<`/`>`/`&` at all. Escaping
- * quotes here too closes that off regardless of which position (text or
- * attribute) the caller ends up using.
+ * Tags are still stripped (`allowedTags: []`, `disallowedTagsMode:
+ * "discard"`) — sanitize-html's default `nonTextTags` drops a `<script>`/
+ * `<style>` element's inner text along with the tag itself (verified: `<b>x
+ * </b>` -> `x` keeps text, but `<script>alert(1)</script>hi` -> `hi` drops
+ * BOTH the tag and its content), so this remains a real sanitizer, not a
+ * no-op — it just no longer entity-escapes what it lets through.
+ *
+ * SECURITY NOTE for src/lib/export/scanner.ts: its decoded-authoring-value
+ * forbidden-pattern walk (collectStrings + scanForbiddenPatterns) now sees
+ * this function's raw, unescaped output. A label that survives sanitization
+ * still containing a literal "<iframe" (sanitize-html's HTML parser did not
+ * recognize it as a real tag to strip — e.g. malformed markup) will now
+ * trip that scanner's forbidden-pattern rule and BLOCK export, where the
+ * old entity-escaped form ("&lt;iframe") never matched it. That's a
+ * fail-closed change (a legitimate label can no longer contain that exact
+ * substring), which is the accepted tradeoff for making textContent
+ * rendering and JSON storage agree.
  */
 export function sanitizePlainText(input: string): string {
-  const escaped = sanitizeHtml(input, { allowedTags: [], allowedAttributes: {}, disallowedTagsMode: "escape" });
-  return escaped.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return sanitizeHtml(input, PLAIN_TEXT_OPTIONS);
 }

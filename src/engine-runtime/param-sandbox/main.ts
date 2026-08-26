@@ -10,11 +10,69 @@ type SuspendPayload = { values?: Record<string, number>; best?: number; complete
 // never re-fetched/re-preloaded more than once.
 const preloadedBandUrls = new Set<string>();
 
+// Canvas 2D drawing cannot resolve CSS custom properties, so chart colors
+// are hardcoded hex here rather than read from var(--rds-*). These mirror
+// the token palette (src/lib/design/tokens.json) directly:
+//   line     -> --rds-primary  (#8c1d40)
+//   marker   -> --rds-dark-1   (#747474; 4.6:1 on white, replaces the old
+//                #B8860B marker which read too light against #fff8e1/white)
+//   axisText -> --rds-dark-2   (#484848)
+//   frame    -> --rds-light-5  (#bfbfbf)
+const ILB_CHART_COLORS = {
+  line: "#8c1d40",
+  marker: "#747474",
+  axisText: "#484848",
+  frame: "#bfbfbf",
+} as const;
+
+/** Placement model (schema.ts's `placementSchema`): where an input/output
+ *  renders. Absence of `placement` means "panel" — the only behavior that
+ *  existed before this feature, so every pre-existing config renders
+ *  identically. */
+type Placement = NonNullable<RuntimeSandboxConfig["inputs"][number]["placement"]>;
+
+function zoneOf(placement: Placement | undefined): "panel" | "below" | "stage" {
+  return placement?.zone ?? "panel";
+}
+
+/** The stage box for a "stage" zone placement, or null for any other zone
+ *  (including absent placement). */
+function stageBoxOf(placement: Placement | undefined): { x: number; y: number; w: number; h: number } | null {
+  return placement && placement.zone === "stage" ? placement.box : null;
+}
+
+type ZoneKind = "inputs" | "outputs" | "below" | "stage" | "charts";
+
+/** Per-preset DOM append order for `.ilb-layout`'s zone containers — this
+ *  IS the tab order, and must match wherever engine.css visually places
+ *  each zone for that preset (grid-column placement only; engine.css must
+ *  never apply a CSS `order` that contradicts this). A zone absent from a
+ *  config (nothing routed to it, or no charts) is simply skipped when
+ *  assembling, regardless of its position here. */
+const LAYOUT_ZONE_ORDER: Record<NonNullable<RuntimeSandboxConfig["layout"]>, ZoneKind[]> = {
+  // Side (default): inputs | stage | outputs sit in one row, then the
+  // below-zone panel spans full width beneath, then charts.
+  side: ["inputs", "stage", "outputs", "below", "charts"],
+  // Stacked: single column, stage first, then inputs, then below, then
+  // outputs, then charts.
+  stacked: ["stage", "inputs", "below", "outputs", "charts"],
+  // Stage-focus: stage first (full width), then inputs+outputs share a row,
+  // then below, then charts.
+  "stage-focus": ["stage", "inputs", "outputs", "below", "charts"],
+};
+
 /** Mount the Parameter Sandbox. Labels/units via textContent (never innerHTML);
  *  only `intro` may contain markup and it arrives pre-sanitized from the builder. */
 export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): void {
   root.innerHTML = "";
   root.classList.add("ilb-sandbox");
+  // The sandbox is the entire content of its host page (an iframe SCO with
+  // no other page furniture — see buildIndexHtml), so it IS that page's main
+  // landmark; without this, axe's "region" rule correctly flags every node
+  // here as unlandmarked content (nothing else on the page could contain
+  // it). role="main" instead of a bare <main> tag because `root` is caller-
+  // supplied (could be any element, including one already `<main>`).
+  root.setAttribute("role", "main");
 
   // Unique per-mount id prefix so <label for> associations never collide if
   // more than one sandbox instance is mounted in the same document.
@@ -104,10 +162,53 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
 
   const layout = el("div", "ilb-layout");
   root.appendChild(layout);
+  layout.classList.add(`ilb-layout-${config.layout ?? "side"}`);
+
+  // FOCUS-ORDER INVARIANT (WCAG 1.3.2/2.4.3, technique C27): DOM and tab
+  // order follow the preset's visual reading order; within a zone,
+  // authoring order. The zone containers themselves are always the same
+  // five nodes -- .ilb-inputs, .ilb-outputs (or its .ilb-outputs-live
+  // stand-in, see below), .ilb-below-panel, .ilb-stage, .ilb-charts, each
+  // omitted when it has nothing to show -- but the ORDER they're appended
+  // to `.ilb-layout` in is chosen per `config.layout` (see LAYOUT_ZONE_ORDER
+  // below) to match wherever engine.css visually places that preset's
+  // zones. engine.css therefore places zones purely via `grid-column`
+  // (which column/row span), never via a CSS `order` that would let the
+  // visual position diverge from DOM/tab order again.
+  //   .ilb-inputs       - panel-zone inputs, in authoring order
+  //   .ilb-outputs      - panel-zone outputs, in authoring order. The
+  //      sr-only live-region summary (see `outputsSummary` below) normally
+  //      lives inside this container, but it must survive even when the
+  //      container itself is omitted — in that case it's appended to a
+  //      minimal `.ilb-outputs-live` wrapper (no card styling) in this same
+  //      slot instead, so the container being empty of VISIBLE outputs
+  //      never silences the live region.
+  //   .ilb-below-panel  - below-zone inputs then below-zone outputs, in
+  //      authoring order
+  //   .ilb-stage        - background image/overlays first, then
+  //      .ilb-stage-controls (stage-zone inputs then stage-zone outputs,
+  //      in authoring order) appended LAST, so a stage-zone control is
+  //      always a later sibling of the stage's own image/overlay nodes
+  //   .ilb-charts       - omitted when there are no charts
+  // The (sr-only, non-focusable) live region never participates in tab
+  // order either way, so omitting/relocating its container never affects
+  // reading order.
+  const allElements = [...config.inputs, ...config.outputs];
+  const anyStageZone = allElements.some((e) => zoneOf(e.placement) === "stage");
+  const hasBelowZone = allElements.some((e) => zoneOf(e.placement) === "below");
+  const needsStage = !!config.visual && (!!config.visual.backgroundUrl || config.visual.overlays.length > 0 || anyStageZone);
+
+  const inputsPanel = el("div", "ilb-inputs");
+  const outputsPanel = el("div", "ilb-outputs");
+  const belowPanel = el("div", "ilb-below-panel");
+  let stage: HTMLElement | null = null;
+  let stageControls: HTMLElement | null = null;
+  if (needsStage) {
+    stage = el("div", "ilb-stage");
+    stageControls = el("div", "ilb-stage-controls");
+  }
 
   // ---------- inputs ----------
-  const inputsPanel = el("div", "ilb-inputs");
-  layout.appendChild(inputsPanel);
   for (const inp of config.inputs) {
     const inputId = `${mountId}-${inp.id}`;
     const row = el("div", "ilb-input-row");
@@ -135,15 +236,84 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       cb.type = "checkbox"; cb.id = inputId; cb.dataset.input = inp.id; cb.checked = values[inp.id] !== 0;
       cb.addEventListener("change", () => { values[inp.id] = cb.checked ? 1 : 0; onInteract(); });
       control = cb;
+    } else if (inp.type === "slider") {
+      // 2.5.7 (WCAG 2.2): every slider gets a paired, visible number input
+      // so a learner who cannot perform a drag gesture can type an exact
+      // value. This number field IS the readout — it replaces the old
+      // read-only ".ilb-input-value" text badge.
+      const range = document.createElement("input");
+      range.type = "range";
+      range.id = inputId;
+      range.dataset.input = inp.id;
+      range.min = String(inp.min ?? 0); range.max = String(inp.max ?? 100);
+      range.step = String(inp.step ?? "any"); range.value = String(values[inp.id]);
+
+      const num = document.createElement("input");
+      num.type = "number";
+      num.id = `${inputId}-value`; // own mount-unique id, distinct from the range's
+      num.className = "ilb-input-number";
+      num.dataset.input = inp.id; // same logical control as the range, distinguished by [type]
+      num.min = range.min; num.max = range.max; num.step = range.step;
+      num.value = range.value;
+      num.setAttribute("aria-label", `${inp.label}, exact value`);
+
+      // The range always carries a browser-sanitized, complete value (never
+      // a mid-edit string), so its input handler may freely mirror straight
+      // into the number field's text.
+      range.addEventListener("input", () => {
+        const v = Number(range.value);
+        if (!Number.isFinite(v)) return;
+        values[inp.id] = v;
+        num.value = range.value;
+        onInteract();
+      });
+      // The number field, by contrast, can be mid-keystroke ("07", "3.50",
+      // a trailing "-" or "."): accept a finite value into the model and
+      // mirror it to the range, but never rewrite the number field's own
+      // text here — doing so would snap "07" -> "7" or "3.50" -> "3.5" out
+      // from under the learner's cursor on every keystroke. Ignore an
+      // empty/non-finite intermediate state rather than writing 0 into the
+      // model, matching the plain "number" type's handling below.
+      num.addEventListener("input", () => {
+        if (num.value === "") return;
+        const v = Number(num.value);
+        if (!Number.isFinite(v)) return;
+        values[inp.id] = v;
+        range.value = String(v);
+        onInteract();
+      });
+      // Only on blur/Enter do we clamp into [min, max] AND normalize the
+      // number field's displayed text (e.g. "3.50" -> "3.5", out-of-range
+      // -> the bound) — this is the one point where rewriting the field is
+      // safe, since the learner is done typing.
+      const commitClamp = (): void => {
+        if (num.value === "") return;
+        const raw = Number(num.value);
+        if (!Number.isFinite(raw)) return;
+        let v = raw;
+        if (inp.min !== undefined) v = Math.max(inp.min, v);
+        if (inp.max !== undefined) v = Math.min(inp.max, v);
+        if (v !== raw || String(v) !== num.value) {
+          values[inp.id] = v;
+          range.value = String(v);
+          num.value = String(v);
+          onInteract();
+        }
+      };
+      num.addEventListener("blur", commitClamp);
+      num.addEventListener("keydown", (e) => { if (e.key === "Enter") commitClamp(); });
+
+      const wrap = el("span", "ilb-input-control");
+      wrap.appendChild(range); wrap.appendChild(num);
+      control = wrap;
     } else {
       const num = document.createElement("input");
-      num.type = inp.type === "slider" ? "range" : "number";
+      num.type = "number";
       num.id = inputId;
+      num.className = "ilb-input-number";
       num.dataset.input = inp.id;
       num.min = String(inp.min ?? 0); num.max = String(inp.max ?? 100);
       num.step = String(inp.step ?? "any"); num.value = String(values[inp.id]);
-      const valueBadge = el("span", "ilb-input-value");
-      valueBadge.textContent = String(values[inp.id]);
       num.addEventListener("input", () => {
         // Ignore an empty/non-finite intermediate typing state rather than
         // writing 0 into the model (e.g. while the learner clears a <input
@@ -152,21 +322,45 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
         const v = Number(num.value);
         if (!Number.isFinite(v)) return;
         values[inp.id] = v;
-        valueBadge.textContent = num.value;
         onInteract();
       });
+      const commitClamp = (): void => {
+        if (num.value === "") return;
+        const raw = Number(num.value);
+        if (!Number.isFinite(raw)) return;
+        let v = raw;
+        if (inp.min !== undefined) v = Math.max(inp.min, v);
+        if (inp.max !== undefined) v = Math.min(inp.max, v);
+        if (v !== raw || String(v) !== num.value) {
+          values[inp.id] = v;
+          num.value = String(v);
+          onInteract();
+        }
+      };
+      num.addEventListener("blur", commitClamp);
+      num.addEventListener("keydown", (e) => { if (e.key === "Enter") commitClamp(); });
       const wrap = el("span", "ilb-input-control");
-      wrap.appendChild(num); wrap.appendChild(valueBadge);
+      wrap.appendChild(num);
       control = wrap;
     }
     row.appendChild(control);
-    inputsPanel.appendChild(row);
+    const zone = zoneOf(inp.placement);
+    const box = stageBoxOf(inp.placement);
+    if (zone === "stage" && stageControls && box) {
+      const card = el("div", "ilb-stage-control");
+      card.style.left = `${box.x}%`; card.style.top = `${box.y}%`;
+      card.style.width = `${box.w}%`; card.style.height = `${box.h}%`;
+      card.appendChild(row);
+      stageControls.appendChild(card);
+    } else if (zone === "below") {
+      belowPanel.appendChild(row);
+    } else {
+      inputsPanel.appendChild(row);
+    }
   }
 
   // ---------- stage (visual layer) ----------
-  let stage: HTMLElement | null = null;
-  if (config.visual && (config.visual.backgroundUrl || config.visual.overlays.length)) {
-    stage = el("div", "ilb-stage");
+  if (stage && config.visual) {
     if (config.visual.backgroundUrl) {
       const bg = document.createElement("img");
       bg.className = "ilb-stage-bg"; bg.alt = ""; bg.src = config.visual.backgroundUrl;
@@ -211,7 +405,10 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       }
       stage.appendChild(holder);
     }
-    layout.appendChild(stage);
+    // Stage-zone controls are appended LAST, after the background image
+    // and every overlay node, so they're always a later sibling of the
+    // stage's own visual content (see FOCUS-ORDER INVARIANT above).
+    if (stageControls) stage.appendChild(stageControls);
     layout.classList.add("ilb-has-stage");
   }
 
@@ -221,8 +418,6 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   // avoids announcing every keystroke of a slider drag. Each card still
   // keeps a per-output aria-hidden dash + sr-only fallback for browse-mode
   // screen reader navigation.
-  const outputsPanel = el("div", "ilb-outputs");
-  layout.appendChild(outputsPanel);
   const outputNodes = new Map<string, { num: HTMLElement; dash: HTMLElement; sr: HTMLElement }>();
   for (const out of config.outputs) {
     const card = el("div", "ilb-output");
@@ -236,23 +431,48 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const unit = el("span", "ilb-output-units"); unit.textContent = out.units ?? "";
     const sr = el("span", "ilb-sr-only");
     card.appendChild(lab); card.appendChild(val); card.appendChild(unit); card.appendChild(sr);
-    outputsPanel.appendChild(card);
     outputNodes.set(out.id, { num, dash, sr });
+
+    const zone = zoneOf(out.placement);
+    const box = stageBoxOf(out.placement);
+    if (zone === "stage" && stageControls && box) {
+      const wrap = el("div", "ilb-stage-control");
+      wrap.style.left = `${box.x}%`; wrap.style.top = `${box.y}%`;
+      wrap.style.width = `${box.w}%`; wrap.style.height = `${box.h}%`;
+      wrap.appendChild(card);
+      stageControls.appendChild(wrap);
+    } else if (zone === "below") {
+      belowPanel.appendChild(card);
+    } else {
+      outputsPanel.appendChild(card);
+    }
   }
+
   // Debounced, visually-hidden live-region summary of all outputs: mirrors
   // the instant visual values on a trailing timer so a screen reader hears
-  // one settled announcement after input stops, not one per tick.
+  // one settled announcement after input stops, not one per tick. It must
+  // survive even when every output is placed "below"/"stage" (so
+  // .ilb-outputs ends up with no visible children) — in that case it gets a
+  // minimal wrapper of its own (no card styling), appended in the same DOM
+  // position `.ilb-outputs` would otherwise occupy, instead of the
+  // (otherwise-empty) outputs card.
   const outputsSummary = el("div", "ilb-sr-only");
   outputsSummary.setAttribute("role", "status");
   outputsSummary.setAttribute("aria-live", "polite");
-  outputsPanel.appendChild(outputsSummary);
+  const outputsPanelHasVisibleOutputs = outputsPanel.childElementCount > 0;
+  if (outputsPanelHasVisibleOutputs) {
+    outputsPanel.appendChild(outputsSummary);
+  }
+
   let outputsSummaryTimer: ReturnType<typeof setTimeout> | null = null;
   const OUTPUTS_SUMMARY_DEBOUNCE_MS = 500;
 
   // ---------- charts ----------
   // Charts live OUTSIDE the outputs region entirely (their own container,
   // not aria-live) — a canvas redraw / aria-label refresh on every render
-  // must never trigger the outputs live region to re-announce.
+  // must never trigger the outputs live region to re-announce. Built here
+  // (before the zone-container assembly below) so the assembly can append
+  // it in whatever position the active preset calls for.
   const chartsPanel = el("div", "ilb-charts");
   const chartCanvases = new Map<string, HTMLCanvasElement>();
   for (const chart of config.charts) {
@@ -266,7 +486,39 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     chartsPanel.appendChild(wrap);
     chartCanvases.set(chart.id, canvas);
   }
-  if (config.charts.length) layout.appendChild(chartsPanel);
+
+  // Assemble the layout's zone containers in the ACTIVE PRESET's visual
+  // reading order (see LAYOUT_ZONE_ORDER + the FOCUS-ORDER INVARIANT above)
+  // — this append order IS the tab order. Content was routed into each
+  // container by zone in the loops above, independent of this append order.
+  // A zone that ended up with nothing to show is omitted entirely, rather
+  // than shipping an empty, borderless-but-still-padded card.
+  const zoneOrder = LAYOUT_ZONE_ORDER[config.layout ?? "side"] ?? LAYOUT_ZONE_ORDER.side;
+  for (const zone of zoneOrder) {
+    switch (zone) {
+      case "inputs":
+        if (inputsPanel.childElementCount > 0) layout.appendChild(inputsPanel);
+        break;
+      case "outputs":
+        if (outputsPanelHasVisibleOutputs) {
+          layout.appendChild(outputsPanel);
+        } else {
+          const outputsLive = el("div", "ilb-outputs-live");
+          outputsLive.appendChild(outputsSummary);
+          layout.appendChild(outputsLive);
+        }
+        break;
+      case "below":
+        if (hasBelowZone) layout.appendChild(belowPanel);
+        break;
+      case "stage":
+        if (stage) layout.appendChild(stage);
+        break;
+      case "charts":
+        if (config.charts.length) layout.appendChild(chartsPanel);
+        break;
+    }
+  }
 
   // ---------- challenges ----------
   const challengeNodes = new Map<string, HTMLElement>();
@@ -410,9 +662,9 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const pad = 28;
     const px = (x: number) => pad + ((x - xMin) / (xMax - xMin || 1)) * (canvas.width - 2 * pad);
     const py = (y: number) => canvas.height - pad - ((y - yMin) / (yMax - yMin || 1)) * (canvas.height - 2 * pad);
-    ctx.strokeStyle = "#9aa0a6"; ctx.lineWidth = 1;
+    ctx.strokeStyle = ILB_CHART_COLORS.frame; ctx.lineWidth = 1;
     ctx.strokeRect(pad, pad, canvas.width - 2 * pad, canvas.height - 2 * pad);
-    ctx.strokeStyle = "#8C1D40"; ctx.lineWidth = 2;
+    ctx.strokeStyle = ILB_CHART_COLORS.line; ctx.lineWidth = 2;
     ctx.beginPath();
     // Break the polyline across samples where the formula failed, rather
     // than drawing a misleading straight line across the gap.
@@ -430,11 +682,11 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const curX = values[chart.xInputId];
     let curLabel = "no current point";
     if (cur !== null && curX >= xMin && curX <= xMax) {
-      ctx.fillStyle = "#B8860B";
+      ctx.fillStyle = ILB_CHART_COLORS.marker;
       ctx.beginPath(); ctx.arc(px(curX), py(cur), 4, 0, 2 * Math.PI); ctx.fill();
       curLabel = `current point (${round2(curX)}, ${round2(cur)})`;
     }
-    ctx.fillStyle = "#5f6368"; ctx.font = "11px sans-serif";
+    ctx.fillStyle = ILB_CHART_COLORS.axisText; ctx.font = "11px sans-serif";
     ctx.fillText(String(round2(xMin)), pad, canvas.height - 8);
     ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);
     ctx.fillText(String(round2(yMax)), 2, pad + 8);

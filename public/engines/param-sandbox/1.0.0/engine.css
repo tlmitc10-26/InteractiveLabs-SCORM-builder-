@@ -1,31 +1,123 @@
-.ilb-sandbox { font-family: Georgia, "Times New Roman", serif; color: #1b1b1b; max-width: 960px; margin: 0 auto; padding: 16px; }
-.ilb-sandbox h2 { color: #8C1D40; font-size: 1.1rem; margin: 16px 0 8px; }
-.ilb-sandbox h2.ilb-title { font-size: 1.6rem; margin: 0 0 8px; }
-.ilb-intro { background: #fff8e1; border-left: 4px solid #B8860B; padding: 8px 12px; margin-bottom: 12px; }
+/* GENERATED FILE - edit src/lib/design/tokens.json and run npm run build:engines */
+:root {
+  --rds-primary: #8c1d40;
+  --rds-secondary: #ffc627;
+  --rds-success: #446d12;
+  --rds-info: #00a3e0;
+  --rds-warning: #ff7f32;
+  --rds-danger: #b72a2a;
+  --rds-light: #f8f9fa;
+  --rds-dark: #212529;
+  --rds-light-1: #fafafa;
+  --rds-light-2: #f1f1f1;
+  --rds-light-3: #e8e8e8;
+  --rds-light-4: #d0d0d0;
+  --rds-light-5: #bfbfbf;
+  --rds-dark-1: #747474;
+  --rds-dark-2: #484848;
+  --rds-dark-3: #191919;
+}
+:root {
+  --ilb-font-heading: Georgia, 'Times New Roman', serif;
+  --ilb-font-body: Arial, Helvetica, sans-serif;
+  --radius-card: 8px;
+}
+
+.ilb-sandbox { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 960px; margin: 0 auto; padding: 16px; }
+.ilb-sandbox h2 { font-family: var(--ilb-font-heading); color: var(--rds-primary); font-weight: 700; line-height: 1.2; font-size: 18px; margin: 16px 0 8px; }
+@media (min-width: 992px) { .ilb-sandbox h2 { font-size: 24px; } }
+.ilb-sandbox h2.ilb-title { font-size: 24px; margin: 0 0 8px; }
+@media (min-width: 992px) { .ilb-sandbox h2.ilb-title { font-size: 36px; } }
+.ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: 8px 12px; margin-bottom: 12px; }
+/* Layout presets (Task 11 / focus-order fix): the DOM order of
+   .ilb-layout's zone containers is chosen PER PRESET by main.ts
+   (LAYOUT_ZONE_ORDER, see its FOCUS-ORDER INVARIANT comment) to match
+   each preset's visual reading order — DOM order IS tab order here.
+   Placement below is therefore grid-column ONLY (which column/row a zone
+   spans); it must never reorder zones relative to their DOM order, or tab
+   order would again diverge from what's on screen. */
 .ilb-layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
-@media (min-width: 760px) { .ilb-layout { grid-template-columns: 260px 1fr; } .ilb-layout.ilb-has-stage { grid-template-columns: 260px 1fr 1fr; } }
-.ilb-inputs, .ilb-outputs, .ilb-challenges, .ilb-charts { background: #fff; border: 1px solid #D6D2CC; border-radius: 8px; padding: 12px; }
+.ilb-layout > .ilb-below-panel { grid-column: 1 / -1; }
+.ilb-layout > .ilb-charts { grid-column: 1 / -1; }
+
+/* Stage-focus: the stage spans full width on top; inputs and outputs share
+   a row beneath it (DOM order: stage, inputs, outputs, below, charts). */
+.ilb-layout.ilb-layout-stage-focus > .ilb-stage { grid-column: 1 / -1; }
+
+@media (min-width: 760px) {
+  /* Side (default): input panel | stage | output panel, side by side. */
+  .ilb-layout.ilb-layout-side { grid-template-columns: 260px 1fr; }
+  .ilb-layout.ilb-layout-side.ilb-has-stage { grid-template-columns: 260px 1fr 1fr; }
+  .ilb-layout.ilb-layout-stacked { grid-template-columns: 1fr; }
+  .ilb-layout.ilb-layout-stage-focus { grid-template-columns: 1fr 1fr; }
+}
+.ilb-inputs, .ilb-outputs, .ilb-below-panel, .ilb-challenges, .ilb-charts { background: #fff; border: 1px solid var(--rds-light-4); border-radius: 8px; padding: 12px; }
 .ilb-input-row { display: block; margin-bottom: 14px; }
 .ilb-input-label { display: block; font-weight: bold; font-size: 0.9rem; margin-bottom: 4px; }
 .ilb-input-control { display: flex; align-items: center; gap: 8px; }
-.ilb-input-control input[type="range"] { flex: 1; accent-color: #8C1D40; }
-.ilb-input-value { min-width: 3ch; font-variant-numeric: tabular-nums; }
-.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: #f7f5f2; align-self: start; }
+.ilb-input-control input[type="range"] { flex: 1; accent-color: var(--rds-primary); }
+/* 2.5.7: the paired number field IS the readout for a slider (replaces the
+   old read-only ".ilb-input-value" text badge) and is also used standalone
+   for type:"number" inputs. */
+.ilb-input-number { width: 6ch; font-variant-numeric: tabular-nums; text-align: right; flex: 0 0 auto; }
+
+/* 2.5.8 (WCAG 2.2) target size: every interactive control in the sandbox
+   gets at least a 24x24px hit area. */
+.ilb-sandbox input[type="range"],
+.ilb-sandbox input[type="number"],
+.ilb-sandbox select {
+  min-height: 24px;
+}
+.ilb-sandbox input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+
+/* Focus visibility: a clearly visible ring on every interactive control,
+   distinct from any hover/selected styling. */
+.ilb-sandbox input:focus-visible,
+.ilb-sandbox select:focus-visible,
+.ilb-sandbox button:focus-visible {
+  outline: 3px solid var(--rds-info);
+  outline-offset: 2px;
+}
+.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; }
 .ilb-stage-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .ilb-overlay { position: absolute; }
+/* Stage-zone controls: a layer of small cards positioned by box percents,
+   sitting above the background image/overlays (later in DOM => on top). */
+.ilb-stage-controls { position: absolute; inset: 0; }
+.ilb-stage-control {
+  position: absolute;
+  background: rgba(250, 250, 250, 0.92); /* fallback for engines without color-mix(): ~= --rds-light-1 (#fafafa) at .92 opacity */
+  background: color-mix(in srgb, var(--rds-light-1) 92%, transparent);
+  border-radius: var(--radius-card, 8px);
+  /* 6px so a focused control's 3px ring + 2px outline-offset (5px total)
+   * fits inside the card instead of being clipped at its edge. Note:
+   * .ilb-stage itself is `overflow: hidden`, so a stage-control card
+   * positioned at the extreme edge of the stage can still have its ring
+   * clipped by the STAGE's boundary, not this card's -- accepted, since
+   * that only affects controls placed flush against the stage edge.
+   */
+  padding: 6px;
+  overflow: auto;
+}
+/* Controls placed on the stage still get the same 24px minimum targets as
+   panel/below controls (enforced globally below, not re-declared here). */
 .ilb-fill { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; opacity: 0.65; transition: height 120ms ease; }
 .ilb-overlay-img { width: 100%; height: 100%; object-fit: contain; transition: transform 120ms ease, opacity 120ms ease; }
 .ilb-output { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid #eee; }
 .ilb-output-label { flex: 1; }
-.ilb-output-value { font-size: 1.3rem; font-weight: bold; color: #8C1D40; font-variant-numeric: tabular-nums; }
+.ilb-output-value { font-size: 1.3rem; font-weight: bold; color: var(--rds-primary); font-variant-numeric: tabular-nums; }
 .ilb-output-units { color: #5f6368; font-size: 0.85rem; }
 .ilb-chart { margin-top: 12px; }
 .ilb-chart:first-child { margin-top: 0; }
 .ilb-chart canvas { width: 100%; height: auto; }
 .ilb-chart-title { font-size: 0.9rem; font-weight: bold; margin-bottom: 4px; }
 .ilb-challenge { display: flex; gap: 8px; align-items: center; padding: 6px 0; }
-.ilb-challenge-mark::before { content: "○"; color: #6b7075; }
-.ilb-challenge.met .ilb-challenge-mark::before { content: "●"; color: #2e7d32; }
+.ilb-challenge-mark::before { content: "○"; color: var(--rds-dark-1); }
+.ilb-challenge.met .ilb-challenge-mark::before { content: "●"; color: var(--rds-success); }
 
 /* Visually-hidden but screen-reader-accessible text. */
 .ilb-sr-only {

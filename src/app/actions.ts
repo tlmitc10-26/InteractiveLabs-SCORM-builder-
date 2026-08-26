@@ -2,7 +2,8 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { emptySandboxConfig, validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { STARTERS, starterConfig, DEFAULT_STARTER_ID } from "@/lib/engines/param-sandbox/starter-configs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -35,13 +36,17 @@ export async function createInteractive(formData: FormData) {
   const projectId = String(formData.get("projectId") ?? "");
   if (!projectId) return;
   const title = String(formData.get("title") ?? "").trim().slice(0, 200) || "Untitled interactive";
+  // Unknown/missing starter id falls back to the blank starter — a stray or
+  // tampered form value must never 500 this action.
+  const requestedStarter = String(formData.get("starter") ?? DEFAULT_STARTER_ID);
+  const starterId = Object.prototype.hasOwnProperty.call(STARTERS, requestedStarter) ? requestedStarter : DEFAULT_STARTER_ID;
   const interactive = await prisma.interactive.create({
     data: {
       projectId,
       title,
       engineId: "param-sandbox",
       engineVersion: "1.0.0",
-      configJson: JSON.stringify(emptySandboxConfig(title)),
+      configJson: JSON.stringify(starterConfig(starterId, title)),
     },
   });
   redirect(`/interactives/${interactive.id}`);

@@ -2,16 +2,66 @@ import { z } from "zod";
 import { parseFormula } from "@/lib/formula/parser";
 import { collectIdentifiers } from "@/lib/formula/evaluate";
 import { sanitizeRichText, sanitizePlainText } from "@/lib/sanitize";
+import { isTokenName, colorHex } from "@/lib/design/tokens";
+import { contrastRatio, meetsNonText, ratioLabel } from "@/lib/design/contrast";
+import {
+  resolveColorHex, toRuntimeConfig as toRuntimeConfigImpl, collectAssetIds as collectAssetIdsImpl,
+  type RuntimeSandboxConfig as RuntimeSandboxConfigImpl,
+} from "@/lib/engines/param-sandbox/runtime-config";
+
+// Re-exported so no existing import site (tests, engine-runtime, editor)
+// breaks: the color-resolution/runtime-shape helpers now live in the light,
+// zod-free runtime-config.ts module (see its file comment for why), but
+// schema.ts remains the canonical place authoring code imports them from.
+export { resolveColorHex, colorRefToCss, migrateLegacyColors } from "@/lib/engines/param-sandbox/runtime-config";
+export type { ColorRef } from "@/lib/engines/param-sandbox/runtime-config";
 
 const idPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const safeId = z.string().min(1).max(40).regex(idPattern, "ids must be letters/digits/underscore");
-// Pre-transform cap fails fast on giant inputs; the post-transform `.pipe()`
-// cap enforces the declared max on the STORED value, since entity escaping
-// (sanitizePlainText) can inflate length past the original input's cap
-// (e.g. "&" x120 -> "&amp;" x120 = 600 chars).
+// Pre-transform cap fails fast on giant inputs. sanitizePlainText only
+// strips HTML tags now (no entity escaping — see its doc comment), so it
+// can only ever shrink a string; the post-transform `.pipe()` cap is kept
+// anyway as a defensive invariant on the STORED value (belt and braces,
+// and cheap), rather than because tag-stripping could grow past the cap.
 const plain = (max: number) => z.string().max(max).transform(sanitizePlainText).pipe(z.string().max(max));
 const rich = (max: number) => z.string().max(max).transform(sanitizeRichText).pipe(z.string().max(max));
-const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+/** Hybrid verifiable color model: a designer picks a named RDS token
+ *  (contrast-safe by construction against the default stage background) or
+ *  a verified custom hex (validated below). Legacy authoring drafts stored
+ *  a bare hex string directly on the field — that shape is migrated to
+ *  `{ hex }` at parse time so old drafts keep validating unchanged. This
+ *  schema needs zod, so (unlike ColorRef/resolveColorHex/colorRefToCss) it
+ *  stays in schema.ts rather than moving to the light runtime-config.ts. */
+export const colorRefSchema = z.union([
+  z.object({ token: z.string().refine(isTokenName, "unknown color token") }).strict(),
+  z.object({ hex: z.string().regex(/^#[0-9a-fA-F]{6}$/) }).strict(),
+  z.string().regex(/^#[0-9a-fA-F]{6}$/).transform((hex) => ({ hex })),
+]);
+
+/** Stage background used for the fill-overlay contrast gate (light-1). */
+const STAGE_BG_HEX = colorHex("light-1");
+
+const boxSchema = z.object({
+  x: z.number().min(0).max(100), y: z.number().min(0).max(100),
+  w: z.number().min(0).max(100), h: z.number().min(0).max(100),
+}).strict();
+
+/** Stage placement reuses the same {x,y,w,h} percent box as overlays. */
+const stageBoxSchema = boxSchema;
+
+/** Placement model: where an input/output renders. `placement` is optional
+ *  on both inputSchema and outputSchema — its absence means "panel" (the
+ *  historical, only-ever behavior before this task), so every pre-existing
+ *  config stays valid unchanged. A "stage" placement additionally requires
+ *  a visual scene to exist (cross-checked in validateSandboxConfig, since
+ *  that check needs the parsed config as a whole, not just this field). */
+export const placementSchema = z.union([
+  z.object({ zone: z.literal("panel") }).strict(),
+  z.object({ zone: z.literal("below") }).strict(),
+  z.object({ zone: z.literal("stage"), box: stageBoxSchema }).strict(),
+]);
+export type Placement = z.infer<typeof placementSchema>;
 
 const inputSchema = z.object({
   id: safeId,
@@ -23,6 +73,7 @@ const inputSchema = z.object({
   defaultValue: z.number(),
   units: plain(20).optional(),
   options: z.array(z.object({ label: plain(80), value: z.number() }).strict()).max(20).optional(),
+  placement: placementSchema.optional(),
 }).strict();
 
 const outputSchema = z.object({
@@ -31,6 +82,7 @@ const outputSchema = z.object({
   formula: z.string().min(1).max(500),
   units: plain(20).optional(),
   decimals: z.number().int().min(0).max(8).optional(),
+  placement: placementSchema.optional(),
 }).strict();
 
 const chartSchema = z.object({
@@ -41,15 +93,10 @@ const chartSchema = z.object({
   samples: z.number().int().min(2).max(200),
 }).strict();
 
-const boxSchema = z.object({
-  x: z.number().min(0).max(100), y: z.number().min(0).max(100),
-  w: z.number().min(0).max(100), h: z.number().min(0).max(100),
-}).strict();
-
 const overlaySchema = z.discriminatedUnion("type", [
   z.object({
     id: safeId, type: z.literal("fill"), outputId: safeId,
-    inMin: z.number(), inMax: z.number(), color: hexColor, box: boxSchema,
+    inMin: z.number(), inMax: z.number(), color: colorRefSchema, box: boxSchema,
   }).strict(),
   z.object({
     id: safeId, type: z.literal("swap"), outputId: safeId, box: boxSchema,
@@ -86,6 +133,7 @@ export const sandboxConfigSchema = z.object({
   charts: z.array(chartSchema).max(6).default([]),
   visual: visualSchema.optional(),
   challenges: z.array(challengeSchema).max(12).default([]),
+  layout: z.enum(["side", "stacked", "stage-focus"]).default("side"),
 }).strict();
 
 export type SandboxConfig = z.infer<typeof sandboxConfigSchema>;
@@ -132,6 +180,20 @@ export function validateSandboxConfig(raw: unknown): ValidationResult {
   const overlayDupes = dupesWithin((config.visual?.overlays ?? []).map((o) => o.id));
   if (overlayDupes.length) errors.push(`duplicate overlay ids: ${overlayDupes.join(", ")}`);
 
+  // Placement cross-check: a "stage" zone renders inside the stage layer, so
+  // it requires a visual scene to actually exist to render into.
+  const hasVisual = !!config.visual;
+  for (const inp of config.inputs) {
+    if (inp.placement?.zone === "stage" && !hasVisual) {
+      errors.push(`input "${inp.id}": placement zone "stage" requires a visual scene`);
+    }
+  }
+  for (const out of config.outputs) {
+    if (out.placement?.zone === "stage" && !hasVisual) {
+      errors.push(`output "${out.id}": placement zone "stage" requires a visual scene`);
+    }
+  }
+
   for (const c of config.charts) {
     if (!inputIdSet.has(c.xInputId)) {
       errors.push(`chart "${c.id}": unknown xInputId "${c.xInputId}"`);
@@ -143,10 +205,22 @@ export function validateSandboxConfig(raw: unknown): ValidationResult {
     }
     if (!outputIdSet.has(c.yOutputId)) errors.push(`chart "${c.id}": unknown yOutputId "${c.yOutputId}"`);
   }
+  const hasBackgroundImage = !!config.visual?.backgroundAssetId;
   for (const ov of config.visual?.overlays ?? []) {
     if (!outputIdSet.has(ov.outputId)) errors.push(`overlay "${ov.id}": unknown outputId "${ov.outputId}"`);
     if ((ov.type === "fill" || ov.type === "transform") && ov.inMin === ov.inMax) {
       errors.push(`overlay "${ov.id}": inMin and inMax must differ`);
+    }
+    if (ov.type === "fill" && !hasBackgroundImage) {
+      // No background image behind the stage: the overlay's fill color sits
+      // directly on the stage background, so it must be verifiably legible
+      // (WCAG 1.4.11 non-text, 3:1). When a background image IS set this is
+      // advisory only (the runtime's numeric readout is the guarantee) —
+      // the editor surfaces a warning but export is not blocked.
+      const ratio = contrastRatio(resolveColorHex(ov.color), STAGE_BG_HEX);
+      if (!meetsNonText(ratio)) {
+        errors.push(`overlay "${ov.id}": fill color fails 3:1 contrast against the stage background (${ratioLabel(ratio)}) — pick a stronger color`);
+      }
     }
     if (ov.type === "swap") {
       const ups = ov.bands.map((b) => b.upTo);
@@ -183,48 +257,14 @@ export function validateSandboxConfig(raw: unknown): ValidationResult {
   return errors.length ? { ok: false, errors } : { ok: true, config };
 }
 
-/** Runtime config: assetIds resolved to URLs. Shape consumed by the engine runtime. */
-export type RuntimeSandboxConfig = Omit<SandboxConfig, "visual"> & {
-  visual?: {
-    backgroundUrl?: string;
-    overlays: Array<
-      | { id: string; type: "fill"; outputId: string; inMin: number; inMax: number; color: string; box: { x: number; y: number; w: number; h: number } }
-      | { id: string; type: "swap"; outputId: string; box: { x: number; y: number; w: number; h: number }; bands: Array<{ upTo: number; url: string }> }
-      | { id: string; type: "transform"; outputId: string; box: { x: number; y: number; w: number; h: number }; url: string; property: "translateY" | "translateX" | "rotate" | "scale" | "opacity"; inMin: number; inMax: number; outMin: number; outMax: number }
-    >;
-  };
-};
-
-export function toRuntimeConfig(config: SandboxConfig, urlForAsset: (assetId: string) => string): RuntimeSandboxConfig {
-  const { visual, ...rest } = config;
-  if (!visual) return rest;
-  return {
-    ...rest,
-    visual: {
-      backgroundUrl: visual.backgroundAssetId ? urlForAsset(visual.backgroundAssetId) : undefined,
-      overlays: visual.overlays.map((ov) => {
-        if (ov.type === "fill") return ov;
-        if (ov.type === "swap") {
-          const { bands, ...o } = ov;
-          return { ...o, bands: bands.map((b) => ({ upTo: b.upTo, url: urlForAsset(b.assetId) })) };
-        }
-        const { assetId, ...o } = ov;
-        return { ...o, url: urlForAsset(assetId) };
-      }),
-    },
-  };
-}
-
-/** All assetIds referenced by a config (for export bundling). */
-export function collectAssetIds(config: SandboxConfig): string[] {
-  const ids = new Set<string>();
-  if (config.visual?.backgroundAssetId) ids.add(config.visual.backgroundAssetId);
-  for (const ov of config.visual?.overlays ?? []) {
-    if (ov.type === "swap") ov.bands.forEach((b) => ids.add(b.assetId));
-    if (ov.type === "transform") ids.add(ov.assetId);
-  }
-  return [...ids];
-}
+// Runtime-shape mapping (RuntimeSandboxConfig/toRuntimeConfig/collectAssetIds)
+// lives in the light, zod-free runtime-config.ts so client bundles that only
+// need to resolve/reshape a config (the editor's live preview) don't pull in
+// zod/sanitize-html/the formula parser. Re-exported here so no existing
+// import site breaks.
+export type RuntimeSandboxConfig = RuntimeSandboxConfigImpl;
+export const toRuntimeConfig: (config: SandboxConfig, urlForAsset: (assetId: string) => string) => RuntimeSandboxConfig = toRuntimeConfigImpl;
+export const collectAssetIds: (config: SandboxConfig) => string[] = collectAssetIdsImpl;
 
 export function emptySandboxConfig(title: string): SandboxConfig {
   return sandboxConfigSchema.parse({

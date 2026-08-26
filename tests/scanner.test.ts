@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { scanPackage, ScanContext } from "@/lib/export/scanner";
 import { buildManifestXml } from "@/lib/scorm/manifest";
+import { sanitizePlainText } from "@/lib/sanitize";
 import { createHash } from "node:crypto";
 
 const sha256 = (b: Buffer | string) => createHash("sha256").update(b).digest("hex");
@@ -392,6 +393,23 @@ describe("scanPackage", () => {
     )).toBe(true);
   });
 
+  // --- Task 6: hybrid color model contrast gate must be enforced at scan
+  // time too (revalidation via validateSandboxConfig), not just at save ---
+
+  it("blocks a fill overlay whose custom hex color fails 3:1 contrast against the stage background (no background image) — caught by schema revalidation", () => {
+    const p = goodPackage();
+    const bad = {
+      ...goodConfig,
+      visual: {
+        overlays: [{ id: "water", type: "fill", outputId: "y", inMin: 0, inMax: 10, color: { hex: "#e8e8e8" }, box: { x: 0, y: 0, w: 10, h: 10 } }],
+      },
+    };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "schema" && /fails 3:1 contrast/.test(v.detail))).toBe(true);
+  });
+
   it("the manifest-namespace exemption does not apply outside imsmanifest.xml (exact-URL-in-wrong-file is still caught)", () => {
     // Same exact string as one of the exempt namespace URIs, but placed in
     // content/config.json instead -- must NOT be exempt there.
@@ -401,5 +419,75 @@ describe("scanPackage", () => {
     const r = scanPackage(p, ctx({ authoringConfig: bad }));
     expect(r.passed).toBe(false);
     expect(r.violations.some((v) => v.rule === "url-allowlist" && v.file === "content/config.json")).toBe(true);
+  });
+
+  // --- Hardening (re-review): sanitizePlainText no longer entity-escapes
+  // (src/lib/sanitize.ts), so an author-typed ENCODED "&lt;script&gt;..."
+  // in a label decodes to live markup that would otherwise ship in
+  // content/config.json unflagged. ---
+
+  describe("forbidden markup-injection tags (script/object/embed) in non-html package text", () => {
+    it("blocks a label whose ENCODED &lt;script&gt; is decoded back to live markup by sanitizePlainText, via the decoded-config-value walk", () => {
+      // The actual regression this hardening is for: sanitizePlainText no
+      // longer entity-escapes (src/lib/sanitize.ts), so an author who types
+      // the encoded form "&lt;script&gt;alert(1)&lt;/script&gt;" gets it
+      // stored back as literal "<script>alert(1)</script>" text.
+      const decodedLabel = sanitizePlainText("&lt;script&gt;alert(1)&lt;/script&gt;");
+      expect(decodedLabel).toBe("<script>alert(1)</script>"); // confirms the decode actually happened
+      const p = goodPackage();
+      const bad = { ...goodConfig, outputs: [{ id: "y", label: decodedLabel }] };
+      p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+      const r = scanPackage(p, ctx({ authoringConfig: bad }));
+      expect(r.passed).toBe(false);
+      expect(r.violations.some((v) =>
+        v.rule === "forbidden-pattern" && v.file === "content/config.json" && /script element/i.test(v.detail)
+      )).toBe(true);
+    });
+
+    it("blocks a label whose ENCODED &lt;object data=//evil&gt; decodes to a live <object> element", () => {
+      const decodedLabel = sanitizePlainText("&lt;object data=//evil.example&gt;");
+      expect(decodedLabel).toBe("<object data=//evil.example>");
+      const p = goodPackage();
+      const bad = { ...goodConfig, outputs: [{ id: "y", label: decodedLabel }] };
+      p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+      const r = scanPackage(p, ctx({ authoringConfig: bad }));
+      expect(r.passed).toBe(false);
+      expect(r.violations.some((v) =>
+        v.rule === "forbidden-pattern" && v.file === "content/config.json" && /object element/i.test(v.detail)
+      )).toBe(true);
+    });
+
+    it("blocks an <embed> element the same way", () => {
+      const p = goodPackage();
+      const bad = { ...goodConfig, outputs: [{ id: "y", label: "<embed src=//evil.example>" }] };
+      p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+      const r = scanPackage(p, ctx({ authoringConfig: bad }));
+      expect(r.passed).toBe(false);
+      expect(r.violations.some((v) =>
+        v.rule === "forbidden-pattern" && v.file === "content/config.json" && /embed element/i.test(v.detail)
+      )).toBe(true);
+    });
+
+    it("also catches a <script> substring sitting raw in a non-html per-file text scan (not just the decoded-config walk)", () => {
+      // Independent of the authoringConfig walk: content/config.json's own
+      // serialized bytes are scanned as a text file too, ext "json" !== "html".
+      const p = goodPackage();
+      p.set("content/config.json", Buffer.from('{"note":"<script>alert(1)</script>"}'));
+      const r = scanPackage(p, ctx());
+      expect(r.passed).toBe(false);
+      expect(r.violations.some((v) =>
+        v.rule === "forbidden-pattern" && v.file === "content/config.json" && /script element/i.test(v.detail)
+      )).toBe(true);
+    });
+
+    it("does NOT apply the script/object/embed rule to index.html — the audited launcher legitimately contains <script> tags", () => {
+      // goodPackage()'s index.html has a real, empty-body
+      // <script src="engine/engine.js"></script> and passes clean today;
+      // this must still be true after the hardening (html is excluded from
+      // FORBIDDEN_MARKUP_PATTERNS_NON_HTML).
+      const r = scanPackage(goodPackage(), ctx());
+      expect(r.violations.some((v) => v.file === "index.html" && /script element|object element|embed element/i.test(v.detail))).toBe(false);
+      expect(r.passed).toBe(true);
+    });
   });
 });

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
+import JSZip from "jszip";
 import { assemblePackage, zipPackage, MAX_PACKAGE_ASSETS, MAX_PACKAGE_ASSET_BYTES } from "@/lib/export/package";
 import { scanPackage } from "@/lib/export/scanner";
-import { emptySandboxConfig, SandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { emptySandboxConfig, validateSandboxConfig, SandboxConfig } from "@/lib/engines/param-sandbox/schema";
 
 /** Builds a config referencing exactly `n` distinct assetIds, spread across
  *  "swap" overlays (max 12 bands each per schema) — the cheapest way to
@@ -141,5 +142,44 @@ describe("assemblePackage: asset caps + parallel resolution + determinism", () =
     const b = await assembleOnce();
     const [zipA, zipB] = await Promise.all([zipPackage(a.files), zipPackage(b.files)]);
     expect(zipA.equals(zipB)).toBe(true);
+  });
+});
+
+describe("assemblePackage: title with '&' escapes correctly exactly once (Task fix 2 end-to-end)", () => {
+  it("stores the raw title in content/config.json, single-escapes it in index.html's <title> and imsmanifest.xml, and leaves the inlined runtime config JSON raw", async () => {
+    const draft = { ...emptySandboxConfig("placeholder"), title: "Mass & weight test" };
+    const result = validateSandboxConfig(draft);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // sanitizePlainText no longer entity-escapes: confirm the stored config
+    // carries the raw, un-escaped title before it ever reaches export.
+    expect(result.config.title).toBe("Mass & weight test");
+
+    const { files } = await assemblePackage({
+      identifier: "ILB-amp-test",
+      title: result.config.title,
+      config: result.config,
+      resolveAsset: async () => { throw new Error("no assets in this config"); },
+    });
+
+    // Round-trip through the actual zip/unzip path, not just the in-memory
+    // `files` map, so this proves what a real downloaded package contains.
+    const zipped = await zipPackage(files);
+    const unzipped = await JSZip.loadAsync(zipped);
+
+    const configJson = await unzipped.file("content/config.json")!.async("string");
+    expect(configJson).toContain('"title": "Mass & weight test"'); // raw, not "Mass &amp; weight test"
+
+    const indexHtml = await unzipped.file("index.html")!.async("string");
+    const titleMatches = indexHtml.match(/<title>[^<]*<\/title>/g) ?? [];
+    expect(titleMatches).toEqual(["<title>Mass &amp; weight test</title>"]); // escaped exactly ONCE
+    // The inlined runtime config JSON (a <script type="application/json">
+    // block, not parsed as HTML entities) carries the raw string.
+    expect(indexHtml).toContain('"title":"Mass & weight test"');
+
+    const manifestXml = await unzipped.file("imsmanifest.xml")!.async("string");
+    const manifestTitleMatches = manifestXml.match(/<title>[^<]*<\/title>/g) ?? [];
+    expect(manifestTitleMatches.length).toBeGreaterThan(0);
+    for (const m of manifestTitleMatches) expect(m).toBe("<title>Mass &amp; weight test</title>");
   });
 });
