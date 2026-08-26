@@ -30,6 +30,13 @@ describe("thresholds", () => {
     expect(meetsBodyText(4.49)).toBe(false);
   });
   it("ratioLabel formats for designers", () => {
-    expect(ratioLabel(8.876)).toBe("8.9:1");
+    // Floor semantics, not round: 8.876 -> 8.8:1 (never overstate compliance).
+    expect(ratioLabel(8.876)).toBe("8.8:1");
+  });
+  it("ratioLabel floors at compliance boundaries so it never overstates", () => {
+    expect(ratioLabel(2.95)).toBe("2.9:1");
+    expect(ratioLabel(4.49)).toBe("4.4:1");
+    expect(ratioLabel(3.0)).toBe("3.0:1");
+    expect(ratioLabel(2.999999)).toBe("2.9:1");
   });
 });

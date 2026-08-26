@@ -31,5 +31,7 @@ export const meetsNonText = (ratio: number): boolean => ratio >= 3;
 export const meetsBodyText = (ratio: number): boolean => ratio >= 4.5;
 
 export function ratioLabel(ratio: number): string {
-  return `${(Math.round(ratio * 10) / 10).toFixed(1)}:1`;
+  // Floor, never round: the displayed ratio must never overstate compliance
+  // (2.95 must show 2.9:1, not 3.0:1).
+  return `${(Math.floor(ratio * 10) / 10).toFixed(1)}:1`;
 }
