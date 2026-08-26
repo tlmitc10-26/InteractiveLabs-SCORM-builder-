@@ -32,6 +32,56 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewReady = useRef(false);
 
+  // "Latest ref" pattern: kept in sync with `config` via an effect (never
+  // written during render) so the mount-only message-listener effect below
+  // (fix #2) can always post the freshest config to a preview that only
+  // just announced it's ready, instead of whatever `config` was in scope
+  // when that effect first ran.
+  const configRef = useRef(config);
+  useEffect(() => { configRef.current = config; }, [config]);
+
+  // Save serialization (fix #1): at most one saveInteractiveConfig request
+  // may be in flight. A debounce firing while a save is in flight stashes
+  // its {config,title} in queuedRef instead of sending; when the in-flight
+  // request settles, the queued send (if any) fires immediately. requestId
+  // gates state updates so only the response to the most recently *sent*
+  // request may touch setErrors/setSaveState — defense in depth even though
+  // full serialization already makes responses arrive in send order.
+  const inFlightRef = useRef(false);
+  const queuedRef = useRef<{ config: EConfig; title: string } | null>(null);
+  const requestIdRef = useRef(0);
+
+  // Named function expression (not an arrow assigned to the outer const) so
+  // the recursive call inside `.finally()` resolves to this function's own
+  // JS-level self-binding, not to the `useCallback`-produced outer binding —
+  // referencing a Hook's own result inside its factory is flagged by the
+  // hooks linter, plain recursive-NFE closures are not.
+  const sendSave = useCallback(function runSave(cfg: EConfig, ttl: string) {
+    inFlightRef.current = true;
+    const id = ++requestIdRef.current;
+    saveInteractiveConfig(interactiveId, cfg, ttl)
+      .then((result) => {
+        if (id === requestIdRef.current) {
+          setErrors(result.ok ? [] : result.errors);
+          setSaveState("saved");
+        }
+      })
+      .catch(() => {
+        if (id === requestIdRef.current) {
+          setErrors(["Draft could not be saved"]);
+          setSaveState("saved");
+        }
+      })
+      .finally(() => {
+        inFlightRef.current = false;
+        const queued = queuedRef.current;
+        if (queued) {
+          queuedRef.current = null;
+          runSave(queued.config, queued.title);
+        }
+      });
+  }, [interactiveId]);
+
   const postPreview = useCallback((cfg: EConfig) => {
     const runtime = toPreviewRuntime(cfg);
     // Target the iframe's own origin explicitly (not "*"): preview.html only
@@ -42,12 +92,11 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
 
   useEffect(() => {
     const onMsg = (ev: MessageEvent) => {
-      if (ev.data?.type === "ilb-preview-ready") { previewReady.current = true; postPreview(config); }
+      if (ev.data?.type === "ilb-preview-ready") { previewReady.current = true; postPreview(configRef.current); }
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [postPreview]);
 
   // Debounced save + preview refresh on every config/title change.
   // `saveState` transitions to "saving" from the event handlers that cause a
@@ -56,13 +105,15 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
   // things settle, per the react-hooks/set-state-in-effect rule.
   useEffect(() => {
     if (previewReady.current) postPreview(config);
-    const t = setTimeout(async () => {
-      const result = await saveInteractiveConfig(interactiveId, config, title);
-      setErrors(result.ok ? [] : result.errors);
-      setSaveState("saved");
+    const t = setTimeout(() => {
+      if (inFlightRef.current) {
+        queuedRef.current = { config, title };
+      } else {
+        sendSave(config, title);
+      }
     }, 600);
     return () => clearTimeout(t);
-  }, [config, title, interactiveId, postPreview]);
+  }, [config, title, postPreview, sendSave]);
 
   const handleTitleChange = (v: string) => { setTitle(v); setSaveState("saving"); };
   const patch = (p: Partial<EConfig>) => { setConfig((c) => ({ ...c, ...p })); setSaveState("saving"); };
@@ -72,13 +123,13 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
       <div className="max-h-[85vh] space-y-4 overflow-y-auto pr-2">
         <div className="rounded border border-gray-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <label className="block text-sm font-semibold">Title</label>
+            <label htmlFor="ilb-title-field" className="block text-sm font-semibold">Title</label>
             <span className="text-xs text-gray-400">{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}</span>
           </div>
-          <input value={title} onChange={(e) => handleTitleChange(e.target.value)} maxLength={200}
+          <input id="ilb-title-field" value={title} onChange={(e) => handleTitleChange(e.target.value)} maxLength={200}
             className="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
-          <label className="mt-3 block text-sm font-semibold">Intro (basic formatting allowed)</label>
-          <textarea value={config.intro ?? ""} onChange={(e) => patch({ intro: e.target.value })} rows={3}
+          <label htmlFor="ilb-intro-field" className="mt-3 block text-sm font-semibold">Intro (basic formatting allowed)</label>
+          <textarea id="ilb-intro-field" value={config.intro ?? ""} onChange={(e) => patch({ intro: e.target.value })} rows={3}
             className="mt-1 w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm" />
         </div>
 
@@ -185,18 +236,59 @@ function SelectField({ label, value, options, onChange }: { label: string; value
   </Field>;
 }
 
-let uid = 0;
-const newId = (prefix: string) => `${prefix}_${++uid}${Date.now() % 10000}`;
+/** Splits on the FIRST "=" only, so a label/value containing "=" doesn't get
+ *  silently truncated or shifted (used for "label=value" and "upTo=assetId"
+ *  textarea lines). Returns ["", ""] worth of slack when there's no "=". */
+function splitFirstEquals(line: string): [string, string] {
+  const idx = line.indexOf("=");
+  if (idx === -1) return [line, ""];
+  return [line.slice(0, idx), line.slice(idx + 1)];
+}
+
+/** Collision-safe id generator: increments until `prefix_N` isn't already in
+ *  the caller's current id set (callers pass their section's own ids). No
+ *  Date.now() suffix, so ids stay clean (input_1, input_2, ...). */
+function newId(prefix: string, existingIds: Set<string>): string {
+  let n = 1;
+  let id = `${prefix}_${n}`;
+  while (existingIds.has(id)) {
+    n += 1;
+    id = `${prefix}_${n}`;
+  }
+  return id;
+}
+
+/** Stable React `key` per row, independent of the row's own (user-editable,
+ *  duplicatable-while-typing) `id` field and independent of array index
+ *  (which shifts on removal). Keys live in state (not a ref — reading a ref
+ *  during render to build `key=` props is unsafe/disallowed) parallel to the
+ *  row array, updated in lockstep: `add()` appends a new uuid, `remove(i)`
+ *  splices the same index. Both calls happen synchronously in the same
+ *  event handler as the row array's own onChange, so React batches them
+ *  into the same re-render — keys and rows never go out of sync. Field
+ *  edits go through `update()` in each section, which replaces the row
+ *  object at a fixed index without touching the keys array, so mid-typing
+ *  re-renders never remount the row. */
+function useRowKeys(initialLength: number) {
+  const [keys, setKeys] = useState<string[]>(() => Array.from({ length: initialLength }, () => crypto.randomUUID()));
+  const add = () => setKeys((k) => [...k, crypto.randomUUID()]);
+  const remove = (index: number) => setKeys((k) => k.filter((_, i) => i !== index));
+  return { keys, add, remove };
+}
 
 /* ---------- sections ---------- */
 
 function InputsSection({ inputs, onChange }: { inputs: EInput[]; onChange: (v: EInput[]) => void }) {
+  const rowKeys = useRowKeys(inputs.length);
   const update = (i: number, p: Partial<EInput>) => onChange(inputs.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
     <Section title="Inputs (what learners manipulate)" addLabel="input"
-      onAdd={() => onChange([...inputs, { id: newId("input"), label: "New input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 5 }])}>
+      onAdd={() => {
+        rowKeys.add();
+        onChange([...inputs, { id: newId("input", new Set(inputs.map((x) => x.id))), label: "New input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 5 }]);
+      }}>
       {inputs.map((inp, i) => (
-        <Row key={i} onRemove={() => onChange(inputs.filter((_, j) => j !== i))}>
+        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(inputs.filter((_, j) => j !== i)); }}>
           <TextField label="ID (used in formulas)" value={inp.id} onChange={(id) => update(i, { id })} />
           <TextField label="Label" value={inp.label} onChange={(label) => update(i, { label })} />
           <SelectField label="Type" value={inp.type}
@@ -215,8 +307,8 @@ function InputsSection({ inputs, onChange }: { inputs: EInput[]; onChange: (v: E
                 value={(inp.options ?? []).map((o) => `${o.label}=${o.value}`).join("\n")}
                 onChange={(e) => update(i, {
                   options: e.target.value.split("\n").filter(Boolean).map((line) => {
-                    const [label, value] = line.split("=");
-                    return { label: label ?? "", value: Number(value ?? 0) };
+                    const [label, value] = splitFirstEquals(line);
+                    return { label, value: Number(value || 0) };
                   }),
                 })} />
             </Field>
@@ -228,12 +320,16 @@ function InputsSection({ inputs, onChange }: { inputs: EInput[]; onChange: (v: E
 }
 
 function OutputsSection({ outputs, onChange }: { outputs: EOutput[]; onChange: (v: EOutput[]) => void }) {
+  const rowKeys = useRowKeys(outputs.length);
   const update = (i: number, p: Partial<EOutput>) => onChange(outputs.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
     <Section title="Outputs (computed by formulas)" addLabel="output"
-      onAdd={() => onChange([...outputs, { id: newId("out"), label: "New output", formula: "1" }])}>
+      onAdd={() => {
+        rowKeys.add();
+        onChange([...outputs, { id: newId("out", new Set(outputs.map((x) => x.id))), label: "New output", formula: "1" }]);
+      }}>
       {outputs.map((out, i) => (
-        <Row key={i} onRemove={() => onChange(outputs.filter((_, j) => j !== i))}>
+        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(outputs.filter((_, j) => j !== i)); }}>
           <TextField label="ID" value={out.id} onChange={(id) => update(i, { id })} />
           <TextField label="Label" value={out.label} onChange={(label) => update(i, { label })} />
           <Field label="Formula (inputs + earlier outputs; e.g. mass / density * 1000)">
@@ -248,12 +344,16 @@ function OutputsSection({ outputs, onChange }: { outputs: EOutput[]; onChange: (
 }
 
 function ChartsSection({ charts, inputs, outputs, onChange }: { charts: EChart[]; inputs: EInput[]; outputs: EOutput[]; onChange: (v: EChart[]) => void }) {
+  const rowKeys = useRowKeys(charts.length);
   const update = (i: number, p: Partial<EChart>) => onChange(charts.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
     <Section title="Charts (pattern across an input's range)" addLabel="chart"
-      onAdd={() => onChange([...charts, { id: newId("chart"), title: "New chart", xInputId: inputs[0]?.id ?? "", yOutputId: outputs[0]?.id ?? "", samples: 40 }])}>
+      onAdd={() => {
+        rowKeys.add();
+        onChange([...charts, { id: newId("chart", new Set(charts.map((x) => x.id))), title: "New chart", xInputId: inputs[0]?.id ?? "", yOutputId: outputs[0]?.id ?? "", samples: 40 }]);
+      }}>
       {charts.map((c, i) => (
-        <Row key={i} onRemove={() => onChange(charts.filter((_, j) => j !== i))}>
+        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(charts.filter((_, j) => j !== i)); }}>
           <TextField label="ID" value={c.id} onChange={(id) => update(i, { id })} />
           <TextField label="Title" value={c.title} onChange={(title) => update(i, { title })} />
           <SelectField label="X axis (input)" value={c.xInputId}
@@ -271,6 +371,7 @@ function VisualSection({ visual, outputs, assets, onChange }: {
   visual: EConfig["visual"]; outputs: EOutput[]; assets: AssetRef[]; onChange: (v: EConfig["visual"]) => void;
 }) {
   const v = visual ?? { overlays: [] };
+  const rowKeys = useRowKeys(v.overlays.length);
   const assetOptions = [{ value: "", label: "(none)" }, ...assets.map((a) => ({ value: a.id, label: a.filename }))];
   const outputOptions = outputs.map((o) => ({ value: o.id, label: o.label }));
   const updateOverlay = (i: number, p: Partial<EOverlay>) =>
@@ -279,7 +380,7 @@ function VisualSection({ visual, outputs, assets, onChange }: {
     <Field label="Box x,y,w,h (% of stage)">
       <div className="flex gap-1">
         {(["x", "y", "w", "h"] as const).map((k) => (
-          <input key={k} type="number" min={0} max={100} className={inputCls} value={box[k]}
+          <input key={k} type="number" min={0} max={100} className={inputCls} value={box[k]} aria-label={`Box ${k}`}
             onChange={(e) => updateOverlay(i, { box: { ...box, [k]: Number(e.target.value) } } as Partial<EOverlay>)} />
         ))}
       </div>
@@ -287,11 +388,14 @@ function VisualSection({ visual, outputs, assets, onChange }: {
   );
   return (
     <Section title="Visual stage (background + state overlays)" addLabel="overlay"
-      onAdd={() => onChange({ ...v, overlays: [...v.overlays, { id: newId("ov"), type: "fill", outputId: outputs[0]?.id ?? "", inMin: 0, inMax: 100, color: "#4a90d9", box: { x: 10, y: 10, w: 80, h: 80 } }] })}>
+      onAdd={() => {
+        rowKeys.add();
+        onChange({ ...v, overlays: [...v.overlays, { id: newId("ov", new Set(v.overlays.map((x) => x.id))), type: "fill", outputId: outputs[0]?.id ?? "", inMin: 0, inMax: 100, color: "#4a90d9", box: { x: 10, y: 10, w: 80, h: 80 } }] });
+      }}>
       <SelectField label="Background image" value={v.backgroundAssetId ?? ""}
         options={assetOptions} onChange={(id) => onChange({ ...v, backgroundAssetId: id || undefined })} />
       {v.overlays.map((ov, i) => (
-        <Row key={i} onRemove={() => onChange({ ...v, overlays: v.overlays.filter((_, j) => j !== i) })}>
+        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange({ ...v, overlays: v.overlays.filter((_, j) => j !== i) }); }}>
           <TextField label="ID" value={ov.id} onChange={(id) => updateOverlay(i, { id })} />
           <SelectField label="Type" value={ov.type}
             options={[{ value: "fill", label: "fill (rising level)" }, { value: "swap", label: "swap (image per range)" }, { value: "transform", label: "transform (move/rotate/scale/fade)" }]}
@@ -314,8 +418,8 @@ function VisualSection({ visual, outputs, assets, onChange }: {
                 value={ov.bands.map((b) => `${b.upTo}=${b.assetId}`).join("\n")}
                 onChange={(e) => updateOverlay(i, {
                   bands: e.target.value.split("\n").filter(Boolean).map((line) => {
-                    const [upTo, assetId] = line.split("=");
-                    return { upTo: Number(upTo ?? 0), assetId: assetId ?? "" };
+                    const [upTo, assetId] = splitFirstEquals(line);
+                    return { upTo: Number(upTo || 0), assetId };
                   }),
                 } as Partial<EOverlay>)} />
             </Field>
@@ -339,13 +443,17 @@ function VisualSection({ visual, outputs, assets, onChange }: {
 function ChallengesSection({ challenges, outputs, onChange }: {
   challenges: EConfig["challenges"]; outputs: EOutput[]; onChange: (v: EConfig["challenges"]) => void;
 }) {
+  const rowKeys = useRowKeys(challenges.length);
   const update = (i: number, p: Partial<EConfig["challenges"][number]>) =>
     onChange(challenges.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
     <Section title="Challenges (drive completion + score)" addLabel="challenge"
-      onAdd={() => onChange([...challenges, { id: newId("ch"), prompt: "New challenge", outputId: outputs[0]?.id ?? "", comparator: "gte", value: 0 }])}>
+      onAdd={() => {
+        rowKeys.add();
+        onChange([...challenges, { id: newId("ch", new Set(challenges.map((x) => x.id))), prompt: "New challenge", outputId: outputs[0]?.id ?? "", comparator: "gte", value: 0 }]);
+      }}>
       {challenges.map((ch, i) => (
-        <Row key={i} onRemove={() => onChange(challenges.filter((_, j) => j !== i))}>
+        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(challenges.filter((_, j) => j !== i)); }}>
           <TextField label="ID" value={ch.id} onChange={(id) => update(i, { id })} />
           <TextField label="Prompt" value={ch.prompt} onChange={(prompt) => update(i, { prompt })} />
           <SelectField label="Output" value={ch.outputId} options={outputs.map((o) => ({ value: o.id, label: o.label }))}
