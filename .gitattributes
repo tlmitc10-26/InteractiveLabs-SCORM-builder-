@@ -1,0 +1,16 @@
+# Enforce LF line endings for all text files, on every platform.
+#
+# This is load-bearing, not cosmetic: the engine bundles under public/engines
+# are audited artifacts whose SHA-256 hashes are pinned in engines.manifest.json
+# and byte-verified by the compliance scanner and the drift test. engine.css and
+# preview.html are copied VERBATIM from src/engine-runtime by build:engines, so
+# a CRLF-smudged source file (Windows core.autocrlf) would produce bundles that
+# no longer match the committed hashes and break reproducible builds.
+* text=auto eol=lf
+
+# Audited, checksum-verified engine bundles: never apply EOL normalization at
+# all — treat them as verbatim bytes.
+public/engines/** -text
+
+# Golden export fixture is compared byte-for-byte; keep it verbatim too.
+tests/fixtures/golden-config.json -text
