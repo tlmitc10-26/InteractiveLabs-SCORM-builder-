@@ -13,7 +13,7 @@ export interface ScanContext {
   /** the authoring config as it will be exported (pre-runtime-mapping) */
   authoringConfig: unknown;
   /**
-   * OPTIONAL, but Task 13 SHOULD always supply it: the exact bytes
+   * OPTIONAL, but Task 13 MUST supply it in production: the exact bytes
    * index.html is expected to be — i.e. the same
    * buildIndexHtml({ title, configJson }) call the caller is about to
    * write into the package. When present, the scanner requires the
@@ -22,15 +22,17 @@ export interface ScanContext {
    * proves index.html is the audited launcher: a reference-only check
    * (which files does it point to) can't see executable inline JS, so
    * without this the scanner can only fall back to a much blunter rule —
-   * see below.
+   * see below. The fallback is a weaker safety net, not a substitute:
+   * Task 13 wiring this field is what makes N4 airtight.
    *
    * If omitted (older callers, or this test suite exercising the
    * fallback), the scanner instead: (1) keeps the existing "only
    * checksummed/known engine paths may be <script src>/<link href>
-   * targets" check, and (2) rejects any inline `<script>` (no `src`
-   * attribute) whose body is non-empty outright — inline script
-   * provenance cannot be verified without the generator's exact expected
-   * output, so in fallback mode no inline script is trusted, period.
+   * targets" check, and (2) rejects ANY <script> tag (src or no src —
+   * see the "hasSrc" removal note at the call site) whose body is
+   * non-empty outright — inline script provenance cannot be verified
+   * without the generator's exact expected output, so in fallback mode no
+   * inline script content is trusted, period.
    */
   expectedIndexHtml?: string | Buffer;
 }
@@ -118,17 +120,34 @@ const FORBIDDEN_PATTERNS_CSS: Array<{ re: RegExp; label: string }> = [
  *  at all right after "://" when the host starts with a non-ASCII
  *  character, silently dropping the whole URL from detection). Each
  *  matched token is handed to the real WHATWG URL parser below rather than
- *  compared as a raw string. */
-const URL_TOKEN_RE = /\bhttps?:\/\/[^\s"'<>)]+/gi;
+ *  compared as a raw string.
+ *
+ *  Deliberately does NOT exclude tab/CR/LF from the token body (only a
+ *  literal space, quote, angle bracket, or ")" ends a token). An earlier
+ *  version excluded `\s` (which includes tab/CR/LF) and the CALLER
+ *  pre-stripped tab/CR/LF from the whole text before tokenizing — but
+ *  that collapses e.g. "word\thttps://evil.com" into
+ *  "wordhttps://evil.com" BEFORE the regex ever runs, destroying the
+ *  `\b` word-boundary the match depends on and producing a false
+ *  negative (the URL is simply never found). Instead: tokenize the RAW
+ *  text (so a real preceding tab still counts as a non-word character
+ *  and the boundary fires normally), let tab/CR/LF ride along inside a
+ *  match if they occur mid-token (so a control-character-obfuscated URL
+ *  is still captured whole), then strip them from just that token before
+ *  handing it to `new URL()` — see below. */
+const URL_TOKEN_RE = /\bhttps?:\/\/[^ "'<>)]+/gi;
 
 /** Parse each http(s) token in `text` with the real WHATWG URL constructor
  *  and check its (already lowercased/punycoded/userinfo-stripped)
  *  hostname against the allowlist. Shared between the per-file text scan
  *  and the authoring-config string walk below (N1/N2/N3) so both paths
- *  apply the exact same logic. */
+ *  apply the exact same logic. Callers may pass either raw text (tab/CR/LF
+ *  intact — this function strips them per-token, see URL_TOKEN_RE above)
+ *  or an already-stripped string (the config-string walk); either way
+ *  `stripUrlWhitespace` on an already-clean token is a no-op. */
 function scanUrlTokensForAllowlist(text: string, file: string, urlAllowlist: string[], violations: Violation[]): void {
   for (const m of text.matchAll(URL_TOKEN_RE)) {
-    const token = m[0];
+    const token = stripUrlWhitespace(m[0]);
     let url: URL;
     try {
       url = new URL(token);
@@ -238,17 +257,28 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
         }
       } else {
         const htmlText = buf.toString("utf8");
-        for (const m of htmlText.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
-          const [, attrs, body] = m;
-          // NOT `\bsrc` — a `\b` word boundary also fires inside
-          // "data-src=" (the "-"->"s" transition is a boundary too), which
-          // would misclassify a real inline script carrying a decoy
-          // `data-src` attribute as "externally sourced" and skip it,
-          // even though browsers execute it inline regardless. Require
-          // "src" to be preceded by whitespace (or start-of-attrs).
-          const hasSrc = /(?:^|\s)src\s*=/i.test(attrs);
-          if (!hasSrc && body.trim().length > 0) {
-            violations.push({ file: path, rule: "inline-script", detail: "index.html contains inline <script> content that cannot be verified without ctx.expectedIndexHtml" });
+        // No "hasSrc" exception here at all, deliberately: an earlier
+        // version tried to skip enforcement for tags that "have a real
+        // src" (so the audited engine/scorm-adapter script tags wouldn't
+        // trip this), first via a `\bsrc` check (defeated by a decoy
+        // `data-src=` attribute) and then via a whitespace-anchored
+        // `src=` check (still defeated by a decoy attribute whose OWN
+        // quoted value contains " src=", e.g. `data-x=" src=y"` — the
+        // regex has no idea it's inside a different attribute's string).
+        // There is no attribute-presence check that can't be spoofed by
+        // an attacker-controlled attribute value using nothing but a
+        // regex. So: don't try. Flag ANY <script>...</script> pair (any
+        // attributes, matched case-insensitively with whitespace/newlines
+        // tolerated in the tag, e.g. <SCRIPT>, <script\n>, <script
+        // type=module>) whose body is non-empty. A legitimate reference
+        // like <script src="engine/engine.js"></script> has an EMPTY body
+        // and never trips this; the real launcher's non-empty mount IIFE
+        // is validated by the byte-equal ctx.expectedIndexHtml path above,
+        // which is why that path is the one Task 13 must wire up.
+        for (const m of htmlText.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+          const body = m[1];
+          if (body.trim().length > 0) {
+            violations.push({ file: path, rule: "inline-script", detail: "index.html contains a <script> with a non-empty inline body that cannot be verified without ctx.expectedIndexHtml" });
           }
         }
       }
@@ -261,14 +291,13 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
     for (const { re, label } of FORBIDDEN_PATTERNS) {
       if (re.test(text)) violations.push({ file: path, rule: "forbidden-pattern", detail: label });
     }
-    // javascript:/data: URL schemes AND the URL-allowlist tokenizer both
-    // run against the whitespace-stripped text (N1/N2/N3, part b) — a
-    // literal tab/newline appearing directly in a text file (as opposed to
-    // JSON-escaped inside a serialized value, handled separately below by
-    // the authoring-config string walk) must not be able to truncate a
-    // token early or otherwise reshape how `new URL()` resolves it.
-    // Checking the stripped copy alone is sufficient: it still matches the
-    // ordinary, non-obfuscated form when there's nothing to strip.
+    // javascript:/data: scheme check: run against the whole-text
+    // whitespace-stripped copy (N1/N2/N3, part b) — a literal tab/newline
+    // embedded INSIDE the scheme keyword itself (`jav\tascript:`) must not
+    // be able to hide the literal substring match. This check has no `\b`
+    // boundary dependency, so whole-text stripping is safe here (unlike
+    // the URL-allowlist tokenizer just below, which strips per-token
+    // instead — see URL_TOKEN_RE's comment for why).
     const strippedText = stripUrlWhitespace(text);
     scanForbiddenUrlSchemes(strippedText, path, violations);
     if (ext === "html") {
@@ -315,10 +344,13 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
       }
     }
 
-    // Rule: URL allowlist, via real WHATWG URL parsing (C1/C2/C3). See
-    // scanUrlTokensForAllowlist for the mechanics; run against the
-    // whitespace-stripped text per above.
-    scanUrlTokensForAllowlist(strippedText, path, ctx.urlAllowlist, violations);
+    // Rule: URL allowlist, via real WHATWG URL parsing (C1/C2/C3). Run
+    // against the RAW text (not strippedText) — see URL_TOKEN_RE's
+    // comment: pre-stripping the whole text here would collapse a
+    // preceding word character into the URL and break the `\b` boundary
+    // the tokenizer depends on. Per-token stripping happens inside
+    // scanUrlTokensForAllowlist itself.
+    scanUrlTokensForAllowlist(text, path, ctx.urlAllowlist, violations);
   }
 
   // Rule (N1/N2/N3, part a): scan the AUTHORING CONFIG'S ACTUAL string
