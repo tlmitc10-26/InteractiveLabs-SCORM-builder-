@@ -1,0 +1,19 @@
+{
+  "engines": [
+    {
+      "id": "param-sandbox",
+      "version": "1.0.0",
+      "title": "Parameter Sandbox",
+      "files": {
+        "engine.js": "b290f4ef06ca72c500881f47ab85c5d2d336c960ca3f87b2e1e9cf72f717e669",
+        "engine.css": "0ead0c8c8357fc012ce122a23074eaeef63378b9e48e12e974d6e78f4da251e5"
+      }
+    }
+  ],
+  "scorm": {
+    "version": "1.0.0",
+    "files": {
+      "scorm-adapter.js": "9bc5c01df08cfeb2c28ae51c5e3286c4a4ed55fed2e8d3164b2b64d5db5bff3f"
+    }
+  }
+}

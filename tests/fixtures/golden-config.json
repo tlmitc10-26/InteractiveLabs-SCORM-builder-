@@ -1,0 +1,17 @@
+{
+  "title": "Golden Sandbox",
+  "intro": "<p>Golden fixture. Do not change without updating the golden test.</p>",
+  "inputs": [
+    { "id": "mass", "label": "Mass", "type": "slider", "min": 1, "max": 20, "step": 1, "defaultValue": 10, "units": "kg" },
+    { "id": "density", "label": "Density", "type": "number", "min": 100, "max": 2000, "step": 10, "defaultValue": 1000, "units": "kg/m3" }
+  ],
+  "outputs": [
+    { "id": "volume", "label": "Displaced volume", "formula": "mass / density * 1000", "units": "L", "decimals": 2 }
+  ],
+  "charts": [
+    { "id": "sweep", "title": "Volume vs mass", "xInputId": "mass", "yOutputId": "volume", "samples": 20 }
+  ],
+  "challenges": [
+    { "id": "big", "prompt": "Displace at least 15 L", "outputId": "volume", "comparator": "gte", "value": 15 }
+  ]
+}
