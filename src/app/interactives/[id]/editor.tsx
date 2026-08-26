@@ -10,6 +10,7 @@ import { saveInteractiveConfig } from "@/app/actions";
 import { toRuntimeConfig, type SandboxConfigLike, type ColorRef } from "@/lib/engines/param-sandbox/runtime-config";
 import { colorHex } from "@/lib/design/tokens";
 import { ColorField } from "./color-field";
+import { StageAuthoringLayer, type Target as StageTarget } from "./stage-authoring";
 import { uniqueSlug } from "./slugify";
 // Light import (no zod/sanitize-html — see runtime-config.ts's own file
 // comment for why that matters for this client bundle): rename.ts only
@@ -18,7 +19,14 @@ import { uniqueSlug } from "./slugify";
 import { renameIdentifier, type RenameableConfig } from "@/lib/engines/param-sandbox/rename";
 
 /* Editing shape mirrors the Zod input (pre-validation). */
-type EInput = { id: string; label: string; type: "slider" | "number" | "toggle" | "select"; min?: number; max?: number; step?: number; defaultValue: number; units?: string; options?: Array<{ label: string; value: number }> };
+/** Placement model (schema.ts's `placementSchema`, Task 11): where an
+ *  input renders. Absent = implicit "panel" (legacy configs, and any new
+ *  row until a designer explicitly moves it — that picker arrives in Task
+ *  13). "stage" placement is what StageAuthoringLayer (Task 12, below)
+ *  drags/resizes/nudges: its `box` is a percent-of-stage rect, same shape
+ *  as an overlay's own `box`. */
+type EPlacement = { zone: "panel" } | { zone: "below" } | { zone: "stage"; box: Box };
+type EInput = { id: string; label: string; type: "slider" | "number" | "toggle" | "select"; min?: number; max?: number; step?: number; defaultValue: number; units?: string; options?: Array<{ label: string; value: number }>; placement?: EPlacement };
 type EOutput = { id: string; label: string; formula: string; units?: string; decimals?: number };
 type EChart = { id: string; title: string; xInputId: string; yOutputId: string; samples: number };
 /* Hybrid verifiable color model (schema.ts ColorRef): a named RDS token or a
@@ -49,6 +57,11 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
   const [saveState, setSaveState] = useState<"saved" | "saving" | "idle">("idle");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewReady = useRef(false);
+
+  // Stage authoring (Task 12): which overlay/stage-input is selected for
+  // drag/resize/nudge, keyed "overlay:<id>" / "input:<id>" — see `targets`
+  // and `handleBoxChange`/`handleSelect` below.
+  const [selected, setSelected] = useState<string | null>(null);
 
   // "Latest ref" pattern: kept in sync with `config` via an effect (never
   // written during render) so the mount-only message-listener effect below
@@ -179,6 +192,58 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
     setSaveState("saving");
   }, []);
 
+  // ---------- stage authoring (Task 12) ----------
+
+  // Targets = overlays (fill/swap/transform, always stage-placed by nature)
+  // plus any input whose placement.zone is "stage" — the placement UI
+  // itself arrives in Task 13, but a config can already carry a stage
+  // placement (hand-authored, or a future starter), so this reads the
+  // field defensively rather than assuming Task 13's picker put it there.
+  const overlays = config.visual?.overlays ?? [];
+  const stageInputs = config.inputs.filter((inp): inp is EInput & { placement: { zone: "stage"; box: Box } } => inp.placement?.zone === "stage");
+  const targets: StageTarget[] = [
+    ...overlays.map((ov) => ({
+      key: `overlay:${ov.id}`,
+      label: `${ov.type} → ${config.outputs.find((o) => o.id === ov.outputId)?.label ?? ov.outputId}`,
+      box: ov.box,
+    })),
+    ...stageInputs.map((inp) => ({ key: `input:${inp.id}`, label: inp.label, box: inp.placement.box })),
+  ];
+
+  // Routes a drag/resize/nudge commit from the stage layer into the same
+  // config slot the numeric Box fields already write to (overlay.box, or
+  // input.placement.box) — both paths converge on the same setConfig call,
+  // so the fields and the on-stage outline never disagree.
+  const handleBoxChange = useCallback((key: string, box: Box) => {
+    if (key.startsWith("overlay:")) {
+      const id = key.slice("overlay:".length);
+      setConfig((c) => (c.visual
+        ? { ...c, visual: { ...c.visual, overlays: c.visual.overlays.map((o) => (o.id === id ? { ...o, box } : o)) } }
+        : c));
+    } else if (key.startsWith("input:")) {
+      const id = key.slice("input:".length);
+      setConfig((c) => ({
+        ...c,
+        inputs: c.inputs.map((i) => (i.id === id && i.placement?.zone === "stage" ? { ...i, placement: { ...i.placement, box } } : i)),
+      }));
+    }
+    setSaveState("saving");
+  }, []);
+
+  // Selecting a target on the stage also scrolls its form row into view —
+  // rows carry a matching `data-row-key` (see Row, below). Deferred one
+  // frame since a fresh selection can itself cause the row's section to
+  // re-render (e.g. a highlight style), and scrollIntoView is most reliable
+  // against final layout.
+  const handleSelect = useCallback((key: string | null) => {
+    setSelected(key);
+    if (key) {
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-row-key="${key}"]`)?.scrollIntoView({ block: "nearest" });
+      });
+    }
+  }, []);
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="max-h-[85vh] space-y-4 overflow-y-auto pr-2">
@@ -204,12 +269,12 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
           </div>
         )}
 
-        <InputsSection inputs={config.inputs} otherIds={new Set(config.outputs.map((o) => o.id))}
+        <InputsSection inputs={config.inputs} otherIds={new Set(config.outputs.map((o) => o.id))} selected={selected}
           onChange={(inputs) => patch({ inputs })} onRenameId={renameId} />
         <OutputsSection outputs={config.outputs} inputs={config.inputs} otherIds={new Set(config.inputs.map((i) => i.id))}
           onChange={(outputs) => patch({ outputs })} onRenameId={renameId} />
         <ChartsSection charts={config.charts} inputs={config.inputs} outputs={config.outputs} onChange={(charts) => patch({ charts })} />
-        <VisualSection visual={config.visual} outputs={config.outputs} assets={assets}
+        <VisualSection visual={config.visual} outputs={config.outputs} assets={assets} selected={selected}
           onChange={(visual) => patch({ visual })} />
         <ChallengesSection challenges={config.challenges} outputs={config.outputs} onChange={(challenges) => patch({ challenges })} />
 
@@ -239,9 +304,21 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
             through the debounce effect even on a run where the ready-ping
             message is never received at all — this is a superset of the
             message-based path, not a replacement for it. */}
-        <iframe ref={iframeRef} src={PREVIEW_SRC} title="Preview"
-          onLoad={() => { previewReady.current = true; postPreview(configRef.current); }}
-          className="h-full w-full rounded border border-gray-300 bg-white" />
+        {/* Task 12: StageAuthoringLayer is a plain sibling of the iframe inside
+            this `relative` wrapper, absolutely positioned to cover it exactly
+            (`inset-0`). It measures `.ilb-stage` inside the iframe's own
+            contentDocument itself (same-origin, read-only) and never touches
+            the save/preview handshake above — it only ever calls
+            `handleBoxChange`, which goes through the same `setConfig` path as
+            the Box form fields, so the preview repost + debounced save
+            already wired up run exactly as they would for a typed edit. */}
+        <div className="relative h-full w-full">
+          <iframe ref={iframeRef} src={PREVIEW_SRC} title="Preview"
+            onLoad={() => { previewReady.current = true; postPreview(configRef.current); }}
+            className="h-full w-full rounded border border-gray-300 bg-white" />
+          <StageAuthoringLayer iframeRef={iframeRef} selected={selected} onSelect={handleSelect}
+            onBoxChange={handleBoxChange} targets={targets} />
+        </div>
       </div>
     </div>
   );
@@ -261,9 +338,14 @@ function Section({ title, onAdd, addLabel, children }: { title: string; onAdd?: 
   );
 }
 
-function Row({ children, onRemove }: { children: React.ReactNode; onRemove: () => void }) {
+/** `dataRowKey`/`highlighted` back Task 12's stage-authoring selection:
+ *  when a designer selects an overlay/stage-input on the live preview,
+ *  StageAuthoringLayer's `onSelect` scrolls the row whose `data-row-key`
+ *  matches into view (see `handleSelect` above) and this outlines it. */
+function Row({ children, onRemove, dataRowKey, highlighted }: { children: React.ReactNode; onRemove: () => void; dataRowKey?: string; highlighted?: boolean }) {
   return (
-    <div className="rounded border border-gray-100 bg-gray-50 p-3">
+    <div data-row-key={dataRowKey} className="rounded border border-gray-100 bg-gray-50 p-3"
+      style={highlighted ? { outline: "2px solid var(--rds-info)", outlineOffset: "1px" } : undefined}>
       <div className="flex justify-end"><button onClick={onRemove} className="btn-danger-link btn-sm">Remove</button></div>
       <div className="grid grid-cols-2 gap-2">{children}</div>
     </div>
@@ -382,8 +464,8 @@ function useRowKeys(initialLength: number) {
 
 /* ---------- sections ---------- */
 
-function InputsSection({ inputs, otherIds, onChange, onRenameId }: {
-  inputs: EInput[]; otherIds: Set<string>; onChange: (v: EInput[]) => void; onRenameId: (oldId: string, newId: string) => void;
+function InputsSection({ inputs, otherIds, selected, onChange, onRenameId }: {
+  inputs: EInput[]; otherIds: Set<string>; selected: string | null; onChange: (v: EInput[]) => void; onRenameId: (oldId: string, newId: string) => void;
 }) {
   const rowKeys = useRowKeys(inputs.length);
   const update = (i: number, p: Partial<EInput>) => onChange(inputs.map((x, j) => (j === i ? { ...x, ...p } : x)));
@@ -396,7 +478,8 @@ function InputsSection({ inputs, otherIds, onChange, onRenameId }: {
         onChange([...inputs, { id, label, type: "slider", min: 0, max: 10, step: 1, defaultValue: 5 }]);
       }}>
       {inputs.map((inp, i) => (
-        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(inputs.filter((_, j) => j !== i)); }}>
+        <Row key={rowKeys.keys[i]} dataRowKey={`input:${inp.id}`} highlighted={selected === `input:${inp.id}`}
+          onRemove={() => { rowKeys.remove(i); onChange(inputs.filter((_, j) => j !== i)); }}>
           <TextField label="Label" value={inp.label} onChange={(label) => update(i, { label })} />
           <SelectField label="Type" value={inp.type}
             options={["slider", "number", "toggle", "select"].map((t) => ({ value: t, label: t }))}
@@ -505,8 +588,8 @@ function ChartsSection({ charts, inputs, outputs, onChange }: { charts: EChart[]
   );
 }
 
-function VisualSection({ visual, outputs, assets, onChange }: {
-  visual: EConfig["visual"]; outputs: EOutput[]; assets: AssetRef[]; onChange: (v: EConfig["visual"]) => void;
+function VisualSection({ visual, outputs, assets, selected, onChange }: {
+  visual: EConfig["visual"]; outputs: EOutput[]; assets: AssetRef[]; selected: string | null; onChange: (v: EConfig["visual"]) => void;
 }) {
   const v = visual ?? { overlays: [] };
   const rowKeys = useRowKeys(v.overlays.length);
@@ -535,7 +618,8 @@ function VisualSection({ visual, outputs, assets, onChange }: {
       <SelectField label="Background image" value={v.backgroundAssetId ?? ""}
         options={assetOptions} onChange={(id) => onChange({ ...v, backgroundAssetId: id || undefined })} />
       {v.overlays.map((ov, i) => (
-        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange({ ...v, overlays: v.overlays.filter((_, j) => j !== i) }); }}>
+        <Row key={rowKeys.keys[i]} dataRowKey={`overlay:${ov.id}`} highlighted={selected === `overlay:${ov.id}`}
+          onRemove={() => { rowKeys.remove(i); onChange({ ...v, overlays: v.overlays.filter((_, j) => j !== i) }); }}>
           <SelectField label="Type" value={ov.type}
             options={[{ value: "fill", label: "fill (rising level)" }, { value: "swap", label: "swap (image per range)" }, { value: "transform", label: "transform (move/rotate/scale/fade)" }]}
             onChange={(type) => {
