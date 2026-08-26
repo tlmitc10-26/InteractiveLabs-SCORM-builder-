@@ -13,6 +13,7 @@
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "jszip": "^3.10.1",
     "next": "16.3.3",
@@ -29,11 +30,12 @@
     "@types/react-dom": "^19",
     "@types/sanitize-html": "^2.16.1",
     "@vitest/coverage-v8": "^4.1.11",
+    "dotenv": "^17.4.2",
     "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "jsdom": "^29.1.1",
-    "prisma": "^8.0.0-rc.10",
+    "prisma": "^7.10.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "^5",

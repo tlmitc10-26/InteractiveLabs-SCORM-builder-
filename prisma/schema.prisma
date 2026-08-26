@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Project {
+  id           String        @id @default(cuid())
+  title        String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  interactives Interactive[]
+  assets       Asset[]
+}
+
+model Interactive {
+  id            String         @id @default(cuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  engineId      String
+  engineVersion String
+  title         String
+  configJson    String         @default("{}")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  exports       ExportRecord[]
+}
+
+model Asset {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  filename    String
+  mimeType    String
+  byteSize    Int
+  contentHash String
+  createdAt   DateTime @default(now())
+}
+
+model Policy {
+  id                Int    @id @default(1)
+  allowlistJson     String @default("[]")
+  maxAssetBytes     Int    @default(5242880)
+  allowedAssetTypes String @default("image/png,image/jpeg,image/webp")
+  version           Int    @default(1)
+}
+
+model ExportRecord {
+  id            String      @id @default(cuid())
+  interactiveId String
+  interactive   Interactive @relation(fields: [interactiveId], references: [id], onDelete: Cascade)
+  passed        Boolean
+  reportJson    String
+  createdAt    DateTime    @default(now())
+}
