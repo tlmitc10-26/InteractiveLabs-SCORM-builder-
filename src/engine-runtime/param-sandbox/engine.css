@@ -57,7 +57,13 @@
   outline: 3px solid var(--rds-info);
   outline-offset: 2px;
 }
-.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; }
+/* margin-left/right: auto centers the stage in its grid cell once a
+   background image caps its width (see main.ts's stageDimensions /
+   STAGE_MAX_HEIGHT_PX) -- a grid item's width otherwise stretches to fill
+   its column (justify-self default), so these margins are inert (no extra
+   space to distribute) for the no-background/uncapped stage and only take
+   effect once max-width actually leaves room beside the stage. */
+.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; margin-left: auto; margin-right: auto; }
 .ilb-stage-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .ilb-overlay { position: absolute; }
 /* Stage-zone controls: a layer of small cards positioned by box percents,

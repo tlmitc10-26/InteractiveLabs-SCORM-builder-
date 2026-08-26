@@ -6,6 +6,48 @@ import { chartLayout, CHART_FONT_PX } from "./chart-layout";
 type Overlay = NonNullable<RuntimeSandboxConfig["visual"]>["overlays"][number];
 type SuspendPayload = { values?: Record<string, number>; best?: number; completed?: boolean };
 
+/** Defect fix: a background image was once a 24x24 placeholder, and with
+ *  `.ilb-stage`'s aspect-ratio matched to it 1:1, a "stage-focus"/full-width
+ *  column blew that square up to fill the whole page width -- a giant flat
+ *  rectangle, since nothing capped how tall the stage could grow. This is
+ *  the CSS-pixel height ceiling no stage may exceed regardless of the
+ *  background image's own dimensions. */
+export const STAGE_MAX_HEIGHT_PX = 480;
+
+/** Pure sizing math for the stage's background-image `load` handler, split
+ *  out so it's unit-testable without a real <img>/layout. Returns the CSS
+ *  `aspect-ratio` to match the image (so overlay percent boxes stay exactly
+ *  coincident with the image's own box -- unaffected by `maxWidth`, since
+ *  both dimensions scale together), plus an optional `maxWidth` that caps
+ *  the stage's rendered width so its aspect-ratio-derived height can never
+ *  exceed `capPx`.
+ *
+ *  A landscape image (wider than tall) is left uncapped: its height already
+ *  grows slower than its width, so within the page's own overall width
+ *  constraints it's in no danger of the runaway growth this fix targets.
+ *  A square or portrait image (height >= width) is exactly the risky shape
+ *  -- at ANY rendered width >= capPx its height would be >= that width,
+ *  i.e. already at or past the cap -- so it gets a maxWidth: the width at
+ *  which its aspect-ratio-derived height lands exactly on capPx. */
+export function stageDimensions(
+  naturalW: number,
+  naturalH: number,
+  capPx: number = STAGE_MAX_HEIGHT_PX,
+): { aspectRatio: string; maxWidth?: string } {
+  // Degenerate (zero/negative/non-finite) dimensions: nothing sane to ratio
+  // against, so fall back to a neutral 1:1 box rather than emitting NaN or
+  // Infinity into a style property.
+  if (!(naturalW > 0) || !(naturalH > 0)) {
+    return { aspectRatio: "1 / 1" };
+  }
+  const aspectRatio = `${naturalW} / ${naturalH}`;
+  if (naturalH >= naturalW) {
+    const maxWidth = `${Math.round((capPx * naturalW) / naturalH)}px`;
+    return { aspectRatio, maxWidth };
+  }
+  return { aspectRatio };
+}
+
 // Preloaded swap-band image URLs, shared across mounts in this document
 // (e.g. repeated remounts in an editor preview) so the same band image is
 // never re-fetched/re-preloaded more than once.
@@ -371,7 +413,13 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       // doesn't carry extra height beyond the image's own proportions.
       bg.addEventListener("load", () => {
         if (bg.naturalWidth && bg.naturalHeight) {
-          stage!.style.aspectRatio = `${bg.naturalWidth} / ${bg.naturalHeight}`;
+          const dims = stageDimensions(bg.naturalWidth, bg.naturalHeight);
+          stage!.style.aspectRatio = dims.aspectRatio;
+          // Explicitly clear (not just omit) maxWidth for a landscape image
+          // that doesn't need capping, in case this stage previously held a
+          // capped (square/portrait) image -- e.g. a live authoring preview
+          // swapping the background asset.
+          stage!.style.maxWidth = dims.maxWidth ?? "";
           // Override (not merely clear) the CSS class's default min-height:
           // an inline "" would leave the 240px class rule in effect, which
           // could force the stage taller than the image's own proportions.

@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { mountSandbox } from "@/engine-runtime/param-sandbox/main";
+import { mountSandbox, stageDimensions, STAGE_MAX_HEIGHT_PX } from "@/engine-runtime/param-sandbox/main";
 import { chartLayout, type MeasureTextLike } from "@/engine-runtime/param-sandbox/chart-layout";
 import { validateSandboxConfig, toRuntimeConfig, emptySandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
@@ -565,6 +565,66 @@ describe("mountSandbox", () => {
       const rect = chartLayout(stubCtx(6), "0", "100", 40, 30);
       expect(rect.w).toBeGreaterThanOrEqual(10);
       expect(rect.h).toBeGreaterThanOrEqual(10);
+    });
+  });
+
+  describe("stageDimensions (stage height cap defect fix)", () => {
+    // Defect: a 24x24 placeholder image, aspect-ratio-matched 1:1 onto a
+    // full-width "stage-focus" column, blew up into a giant flat square
+    // filling the page. stageDimensions caps the stage's rendered width so
+    // its aspect-ratio-derived height can never exceed STAGE_MAX_HEIGHT_PX,
+    // while the CSS aspect-ratio itself always matches the image exactly
+    // (so overlay percent boxes stay coincident with the image regardless
+    // of whether maxWidth kicks in).
+
+    it("does not cap a wide/landscape image", () => {
+      const dims = stageDimensions(1600, 900);
+      expect(dims.aspectRatio).toBe("1600 / 900");
+      expect(dims.maxWidth).toBeUndefined();
+    });
+
+    it("caps a square image at the height cap (480px == 480px wide for a 1:1 ratio)", () => {
+      const dims = stageDimensions(24, 24);
+      expect(dims.aspectRatio).toBe("24 / 24");
+      expect(dims.maxWidth).toBe("480px");
+    });
+
+    it("caps a tall/portrait image so its height never exceeds the cap", () => {
+      const dims = stageDimensions(600, 1200);
+      expect(dims.aspectRatio).toBe("600 / 1200");
+      expect(dims.maxWidth).toBe("240px"); // 480 * 600/1200
+    });
+
+    it("respects a custom capPx", () => {
+      const dims = stageDimensions(600, 1200, 240);
+      expect(dims.maxWidth).toBe("120px");
+    });
+
+    it("guards degenerate (zero) natural dimensions without producing NaN/Infinity", () => {
+      expect(stageDimensions(0, 0)).toEqual({ aspectRatio: "1 / 1" });
+      expect(stageDimensions(100, 0)).toEqual({ aspectRatio: "1 / 1" });
+      expect(stageDimensions(0, 100)).toEqual({ aspectRatio: "1 / 1" });
+    });
+
+    it("exports the default cap as 480", () => {
+      expect(STAGE_MAX_HEIGHT_PX).toBe(480);
+    });
+  });
+
+  describe("stage background load applies the height cap (main.ts integration)", () => {
+    it("sets aspectRatio and maxWidth on the stage once the background image loads", () => {
+      mountSandbox(document.getElementById("root")!, {
+        ...config,
+        visual: { backgroundUrl: "beaker.png", overlays: [] },
+      });
+      const stage = document.querySelector(".ilb-stage") as HTMLElement;
+      const bg = stage.querySelector(".ilb-stage-bg") as HTMLImageElement;
+      Object.defineProperty(bg, "naturalWidth", { value: 24, configurable: true });
+      Object.defineProperty(bg, "naturalHeight", { value: 24, configurable: true });
+      bg.dispatchEvent(new Event("load"));
+      expect(stage.style.aspectRatio).toBe("24 / 24");
+      expect(stage.style.maxWidth).toBe("480px");
+      expect(stage.style.minHeight).toBe("0px");
     });
   });
 
