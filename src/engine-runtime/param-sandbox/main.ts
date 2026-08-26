@@ -5,6 +5,11 @@ import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 type Overlay = NonNullable<RuntimeSandboxConfig["visual"]>["overlays"][number];
 type SuspendPayload = { values?: Record<string, number>; best?: number; completed?: boolean };
 
+// Preloaded swap-band image URLs, shared across mounts in this document
+// (e.g. repeated remounts in an editor preview) so the same band image is
+// never re-fetched/re-preloaded more than once.
+const preloadedBandUrls = new Set<string>();
+
 /** Mount the Parameter Sandbox. Labels/units via textContent (never innerHTML);
  *  only `intro` may contain markup and it arrives pre-sanitized from the builder. */
 export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): void {
@@ -27,6 +32,7 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   let interacted = false;
   let bestPct = 0;
   let reportedComplete = false;
+  let scoreReported = false;
   let warnedSuspendLimit = false;
   const scorm = typeof window !== "undefined" ? window.ILBScorm : undefined;
 
@@ -36,6 +42,14 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   // option; coerce toggles to 0/1. interacted is set only if something
   // actually applied (otherwise a "resume" with nothing to restore would
   // wrongly start reporting scores for a learner who hasn't touched anything).
+  //
+  // Note: suspend payloads saved by builds before commit 1553af4 predate the
+  // `best`/`completed` fields, so a resume from one of those will silently
+  // skip the score/completion re-assert below (bestPct stays 0). Acceptable
+  // today because no packages built on those earlier engine versions have
+  // shipped; if that ever changes, the fallback would be to read the
+  // learner's existing score/completion directly from the LMS's own
+  // cmi.core.score.raw / cmi.core.lesson_status instead of suspend_data.
   const saved = scorm?.loadSuspendData<SuspendPayload>();
   if (saved) {
     if (saved.values) {
@@ -62,11 +76,20 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     if (saved.completed) reportedComplete = true;
   }
 
-  // A previously-completed attempt must never appear "downgraded" on resume,
-  // even before the learner interacts again.
-  if (scorm && scorm.mode === "scorm" && reportedComplete) {
-    scorm.setScore(bestPct);
-    scorm.setCompleted();
+  // A previously-reported score/completion must never appear "downgraded" or
+  // "forgotten" on resume, even before the learner interacts again: re-assert
+  // the score whenever there's a nonzero high-water mark OR the attempt was
+  // already completed (a completed attempt can have bestPct 0 in principle,
+  // e.g. a zero-challenge sandbox never wired that path — belt and braces).
+  // Re-assert completion only when it was actually recorded as completed.
+  if (scorm && scorm.mode === "scorm") {
+    if (bestPct > 0 || reportedComplete) {
+      scorm.setScore(bestPct);
+      scoreReported = true;
+    }
+    if (reportedComplete) {
+      scorm.setCompleted();
+    }
   }
 
   // ---------- header ----------
@@ -148,10 +171,16 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       const bg = document.createElement("img");
       bg.className = "ilb-stage-bg"; bg.alt = ""; bg.src = config.visual.backgroundUrl;
       // Keep the % overlay boxes coincident with the image's own box by
-      // matching the stage's aspect ratio to the loaded image.
+      // matching the stage's aspect ratio to the loaded image; drop the
+      // default min-height once the ratio takes over sizing so the stage
+      // doesn't carry extra height beyond the image's own proportions.
       bg.addEventListener("load", () => {
         if (bg.naturalWidth && bg.naturalHeight) {
           stage!.style.aspectRatio = `${bg.naturalWidth} / ${bg.naturalHeight}`;
+          // Override (not merely clear) the CSS class's default min-height:
+          // an inline "" would leave the 240px class rule in effect, which
+          // could force the stage taller than the image's own proportions.
+          stage!.style.minHeight = "0";
         }
       });
       stage.appendChild(bg);
@@ -171,8 +200,10 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
         holder.appendChild(img);
         if (ov.type === "swap") {
           // Preload every band image at mount so switching bands doesn't
-          // stall on a network fetch.
+          // stall on a network fetch (deduped across mounts, module-level).
           for (const band of ov.bands) {
+            if (preloadedBandUrls.has(band.url)) continue;
+            preloadedBandUrls.add(band.url);
             const preload = new Image();
             preload.src = band.url;
           }
@@ -185,23 +216,44 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   }
 
   // ---------- outputs ----------
+  // The visible values update instantly and are NOT themselves a live
+  // region (role/aria-live live on a separate hidden summary below) — that
+  // avoids announcing every keystroke of a slider drag. Each card still
+  // keeps a per-output aria-hidden dash + sr-only fallback for browse-mode
+  // screen reader navigation.
   const outputsPanel = el("div", "ilb-outputs");
-  outputsPanel.setAttribute("role", "status");
-  outputsPanel.setAttribute("aria-live", "polite");
   layout.appendChild(outputsPanel);
+  const outputNodes = new Map<string, { num: HTMLElement; dash: HTMLElement; sr: HTMLElement }>();
   for (const out of config.outputs) {
     const card = el("div", "ilb-output");
     card.dataset.output = out.id;
-    card.setAttribute("aria-atomic", "true");
     const lab = el("div", "ilb-output-label"); lab.textContent = out.label;
     const val = el("div", "ilb-output-value");
+    const num = document.createElement("span");
+    const dash = document.createElement("span");
+    dash.setAttribute("aria-hidden", "true");
+    val.appendChild(num); val.appendChild(dash);
     const unit = el("span", "ilb-output-units"); unit.textContent = out.units ?? "";
-    const unavailable = el("span", "ilb-sr-only");
-    card.appendChild(lab); card.appendChild(val); card.appendChild(unit); card.appendChild(unavailable);
+    const sr = el("span", "ilb-sr-only");
+    card.appendChild(lab); card.appendChild(val); card.appendChild(unit); card.appendChild(sr);
     outputsPanel.appendChild(card);
+    outputNodes.set(out.id, { num, dash, sr });
   }
+  // Debounced, visually-hidden live-region summary of all outputs: mirrors
+  // the instant visual values on a trailing timer so a screen reader hears
+  // one settled announcement after input stops, not one per tick.
+  const outputsSummary = el("div", "ilb-sr-only");
+  outputsSummary.setAttribute("role", "status");
+  outputsSummary.setAttribute("aria-live", "polite");
+  outputsPanel.appendChild(outputsSummary);
+  let outputsSummaryTimer: ReturnType<typeof setTimeout> | null = null;
+  const OUTPUTS_SUMMARY_DEBOUNCE_MS = 500;
 
   // ---------- charts ----------
+  // Charts live OUTSIDE the outputs region entirely (their own container,
+  // not aria-live) — a canvas redraw / aria-label refresh on every render
+  // must never trigger the outputs live region to re-announce.
+  const chartsPanel = el("div", "ilb-charts");
   const chartCanvases = new Map<string, HTMLCanvasElement>();
   for (const chart of config.charts) {
     const wrap = el("div", "ilb-chart");
@@ -211,11 +263,13 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     canvas.setAttribute("role", "img");
     canvas.setAttribute("aria-label", `${chart.title} chart`);
     wrap.appendChild(title); wrap.appendChild(canvas);
-    outputsPanel.appendChild(wrap);
+    chartsPanel.appendChild(wrap);
     chartCanvases.set(chart.id, canvas);
   }
+  if (config.charts.length) layout.appendChild(chartsPanel);
 
   // ---------- challenges ----------
+  const challengeNodes = new Map<string, HTMLElement>();
   if (config.challenges.length) {
     const panel = el("div", "ilb-challenges");
     panel.setAttribute("aria-live", "polite");
@@ -230,6 +284,7 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       const text = el("span"); text.textContent = ch.prompt;
       row.appendChild(mark); row.appendChild(status); row.appendChild(text);
       panel.appendChild(row);
+      challengeNodes.set(ch.id, status);
     }
     root.appendChild(panel);
   }
@@ -250,25 +305,35 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     return results;
   }
 
+  function formatOutput(out: RuntimeSandboxConfig["outputs"][number], v: number | null): string {
+    return v === null ? "not available" : String(Number(v.toFixed(out.decimals ?? 2)));
+  }
+
   function render(): void {
     const results = computeOutputs(values);
     for (const out of config.outputs) {
       const v = results[out.id];
-      const card = root.querySelector(`[data-output="${out.id}"]`) as HTMLElement;
-      const elv = card.querySelector(".ilb-output-value") as HTMLElement;
-      const sr = card.querySelector(".ilb-sr-only") as HTMLElement;
+      const nodes = outputNodes.get(out.id)!;
       if (v === null) {
-        elv.textContent = "";
-        const dash = document.createElement("span");
-        dash.setAttribute("aria-hidden", "true");
-        dash.textContent = "—";
-        elv.appendChild(dash);
-        sr.textContent = "value not available";
+        setText(nodes.num, "");
+        setText(nodes.dash, "—");
+        setText(nodes.sr, "value not available");
       } else {
-        elv.textContent = String(Number(v.toFixed(out.decimals ?? 2)));
-        sr.textContent = "";
+        setText(nodes.num, String(Number(v.toFixed(out.decimals ?? 2))));
+        setText(nodes.dash, "");
+        setText(nodes.sr, "");
       }
     }
+    // Debounce the live-region summary: reset the trailing timer on every
+    // render so a fast drag produces exactly one announcement, ~500ms after
+    // input settles, and identical text never re-fires the region.
+    const summaryText = config.outputs.map((out) => `${out.label}: ${formatOutput(out, results[out.id])}`).join(". ");
+    if (outputsSummaryTimer !== null) clearTimeout(outputsSummaryTimer);
+    outputsSummaryTimer = setTimeout(() => {
+      outputsSummaryTimer = null;
+      setText(outputsSummary, summaryText);
+    }, OUTPUTS_SUMMARY_DEBOUNCE_MS);
+
     if (stage && config.visual) {
       for (const ov of config.visual.overlays) renderOverlay(ov, results[ov.outputId]);
     }
@@ -282,8 +347,8 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       if (ok) met++;
       const row = root.querySelector(`[data-challenge="${ch.id}"]`);
       row?.classList.toggle("met", ok);
-      const sr = row?.querySelector(".ilb-sr-only");
-      if (sr) sr.textContent = ok ? "Met" : "Not met yet";
+      const sr = challengeNodes.get(ch.id);
+      if (sr) setText(sr, ok ? "Met" : "Not met yet");
     }
     for (const chart of config.charts) drawChart(chart, chartCanvases.get(chart.id)!, results);
     reportScorm(met);
@@ -322,7 +387,7 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const inp = config.inputs.find((i) => i.id === chart.xInputId);
     if (!inp || inp.min === undefined || inp.max === undefined) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      canvas.setAttribute("aria-label", `${chart.title}: chart unavailable`);
+      setAttr(canvas, "aria-label", `${chart.title}: chart unavailable`);
       return;
     }
     type Pt = [number, number] | null;
@@ -336,7 +401,7 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const pts = raw.filter((p): p is [number, number] => p !== null);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (pts.length < 2) {
-      canvas.setAttribute("aria-label", `${chart.title}: not enough data to plot`);
+      setAttr(canvas, "aria-label", `${chart.title}: not enough data to plot`);
       return;
     }
     const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
@@ -374,7 +439,8 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);
     ctx.fillText(String(round2(yMax)), 2, pad + 8);
     ctx.fillText(String(round2(yMin)), 2, canvas.height - pad);
-    canvas.setAttribute(
+    setAttr(
+      canvas,
       "aria-label",
       `${chart.title}: x from ${round2(xMin)} to ${round2(xMax)}, y from ${round2(yMin)} to ${round2(yMax)}, ${curLabel}`,
     );
@@ -382,15 +448,19 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
 
   /** Reports score/completion to the LMS as a monotonic high-water mark: the
    *  reported score never decreases even if the learner un-meets a challenge
-   *  afterward, and completion, once reported, is never retracted. */
+   *  afterward, and completion, once reported, is never retracted. Also
+   *  guarantees at least one setScore call as soon as the learner interacts
+   *  — even a score of 0 — because an attempt with no score written at all
+   *  reads to Canvas as "not attempted", not "attempted, scored zero". */
   function reportScorm(challengesMet: number): void {
     if (!scorm || scorm.mode !== "scorm") return;
     if (!interacted) return;
     const total = config.challenges.length;
     const pct = total === 0 ? 100 : (challengesMet / total) * 100;
     const metAll = total === 0 || challengesMet === total;
-    if (pct > bestPct) {
-      bestPct = pct;
+    if (pct > bestPct || !scoreReported) {
+      bestPct = Math.max(bestPct, pct);
+      scoreReported = true;
       scorm.setScore(bestPct);
     }
     if (metAll && !reportedComplete) {
@@ -416,6 +486,16 @@ function el(tag: string, className?: string): HTMLElement {
   const e = document.createElement(tag);
   if (className) e.className = className;
   return e;
+}
+/** Assigns textContent only when it actually changes, to avoid needless
+ *  mutations inside aria-live regions (which would otherwise re-announce
+ *  identical content on every render). */
+function setText(node: Element, text: string): void {
+  if (node.textContent !== text) node.textContent = text;
+}
+/** Same idea as setText, for attributes (e.g. a canvas's aria-label). */
+function setAttr(node: Element, name: string, value: string): void {
+  if (node.getAttribute(name) !== value) node.setAttribute(name, value);
 }
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
 const round2 = (n: number) => Math.round(n * 100) / 100;

@@ -230,6 +230,7 @@
   }
 
   // src/engine-runtime/param-sandbox/main.ts
+  var preloadedBandUrls = /* @__PURE__ */ new Set();
   function mountSandbox(root, config) {
     var _a, _b, _c, _d, _e, _f;
     root.innerHTML = "";
@@ -245,6 +246,7 @@
     let interacted = false;
     let bestPct = 0;
     let reportedComplete = false;
+    let scoreReported = false;
     let warnedSuspendLimit = false;
     const scorm = typeof window !== "undefined" ? window.ILBScorm : void 0;
     const saved = scorm == null ? void 0 : scorm.loadSuspendData();
@@ -272,9 +274,14 @@
       }
       if (saved.completed) reportedComplete = true;
     }
-    if (scorm && scorm.mode === "scorm" && reportedComplete) {
-      scorm.setScore(bestPct);
-      scorm.setCompleted();
+    if (scorm && scorm.mode === "scorm") {
+      if (bestPct > 0 || reportedComplete) {
+        scorm.setScore(bestPct);
+        scoreReported = true;
+      }
+      if (reportedComplete) {
+        scorm.setCompleted();
+      }
     }
     const header = el("div", "ilb-header");
     const h2 = el("h2", "ilb-title");
@@ -364,6 +371,7 @@
         bg.addEventListener("load", () => {
           if (bg.naturalWidth && bg.naturalHeight) {
             stage.style.aspectRatio = `${bg.naturalWidth} / ${bg.naturalHeight}`;
+            stage.style.minHeight = "0";
           }
         });
         stage.appendChild(bg);
@@ -386,6 +394,8 @@
           holder.appendChild(img);
           if (ov.type === "swap") {
             for (const band of ov.bands) {
+              if (preloadedBandUrls.has(band.url)) continue;
+              preloadedBandUrls.add(band.url);
               const preload = new Image();
               preload.src = band.url;
             }
@@ -397,25 +407,36 @@
       layout.classList.add("ilb-has-stage");
     }
     const outputsPanel = el("div", "ilb-outputs");
-    outputsPanel.setAttribute("role", "status");
-    outputsPanel.setAttribute("aria-live", "polite");
     layout.appendChild(outputsPanel);
+    const outputNodes = /* @__PURE__ */ new Map();
     for (const out of config.outputs) {
       const card = el("div", "ilb-output");
       card.dataset.output = out.id;
-      card.setAttribute("aria-atomic", "true");
       const lab = el("div", "ilb-output-label");
       lab.textContent = out.label;
       const val = el("div", "ilb-output-value");
+      const num = document.createElement("span");
+      const dash = document.createElement("span");
+      dash.setAttribute("aria-hidden", "true");
+      val.appendChild(num);
+      val.appendChild(dash);
       const unit = el("span", "ilb-output-units");
       unit.textContent = (_f = out.units) != null ? _f : "";
-      const unavailable = el("span", "ilb-sr-only");
+      const sr = el("span", "ilb-sr-only");
       card.appendChild(lab);
       card.appendChild(val);
       card.appendChild(unit);
-      card.appendChild(unavailable);
+      card.appendChild(sr);
       outputsPanel.appendChild(card);
+      outputNodes.set(out.id, { num, dash, sr });
     }
+    const outputsSummary = el("div", "ilb-sr-only");
+    outputsSummary.setAttribute("role", "status");
+    outputsSummary.setAttribute("aria-live", "polite");
+    outputsPanel.appendChild(outputsSummary);
+    let outputsSummaryTimer = null;
+    const OUTPUTS_SUMMARY_DEBOUNCE_MS = 500;
+    const chartsPanel = el("div", "ilb-charts");
     const chartCanvases = /* @__PURE__ */ new Map();
     for (const chart of config.charts) {
       const wrap = el("div", "ilb-chart");
@@ -429,9 +450,11 @@
       canvas.setAttribute("aria-label", `${chart.title} chart`);
       wrap.appendChild(title);
       wrap.appendChild(canvas);
-      outputsPanel.appendChild(wrap);
+      chartsPanel.appendChild(wrap);
       chartCanvases.set(chart.id, canvas);
     }
+    if (config.charts.length) layout.appendChild(chartsPanel);
+    const challengeNodes = /* @__PURE__ */ new Map();
     if (config.challenges.length) {
       const panel = el("div", "ilb-challenges");
       panel.setAttribute("aria-live", "polite");
@@ -451,6 +474,7 @@
         row.appendChild(status);
         row.appendChild(text);
         panel.appendChild(row);
+        challengeNodes.set(ch.id, status);
       }
       root.appendChild(panel);
     }
@@ -473,26 +497,32 @@
       }
       return results;
     }
+    function formatOutput(out, v) {
+      var _a2;
+      return v === null ? "not available" : String(Number(v.toFixed((_a2 = out.decimals) != null ? _a2 : 2)));
+    }
     function render() {
       var _a2, _b2, _c2, _d2, _e2;
       const results = computeOutputs(values);
       for (const out of config.outputs) {
         const v = results[out.id];
-        const card = root.querySelector(`[data-output="${out.id}"]`);
-        const elv = card.querySelector(".ilb-output-value");
-        const sr = card.querySelector(".ilb-sr-only");
+        const nodes = outputNodes.get(out.id);
         if (v === null) {
-          elv.textContent = "";
-          const dash = document.createElement("span");
-          dash.setAttribute("aria-hidden", "true");
-          dash.textContent = "\u2014";
-          elv.appendChild(dash);
-          sr.textContent = "value not available";
+          setText(nodes.num, "");
+          setText(nodes.dash, "\u2014");
+          setText(nodes.sr, "value not available");
         } else {
-          elv.textContent = String(Number(v.toFixed((_a2 = out.decimals) != null ? _a2 : 2)));
-          sr.textContent = "";
+          setText(nodes.num, String(Number(v.toFixed((_a2 = out.decimals) != null ? _a2 : 2))));
+          setText(nodes.dash, "");
+          setText(nodes.sr, "");
         }
       }
+      const summaryText = config.outputs.map((out) => `${out.label}: ${formatOutput(out, results[out.id])}`).join(". ");
+      if (outputsSummaryTimer !== null) clearTimeout(outputsSummaryTimer);
+      outputsSummaryTimer = setTimeout(() => {
+        outputsSummaryTimer = null;
+        setText(outputsSummary, summaryText);
+      }, OUTPUTS_SUMMARY_DEBOUNCE_MS);
       if (stage && config.visual) {
         for (const ov of config.visual.overlays) renderOverlay(ov, results[ov.outputId]);
       }
@@ -503,8 +533,8 @@
         if (ok) met++;
         const row = root.querySelector(`[data-challenge="${ch.id}"]`);
         row == null ? void 0 : row.classList.toggle("met", ok);
-        const sr = row == null ? void 0 : row.querySelector(".ilb-sr-only");
-        if (sr) sr.textContent = ok ? "Met" : "Not met yet";
+        const sr = challengeNodes.get(ch.id);
+        if (sr) setText(sr, ok ? "Met" : "Not met yet");
       }
       for (const chart of config.charts) drawChart(chart, chartCanvases.get(chart.id), results);
       reportScorm(met);
@@ -538,7 +568,7 @@
       const inp = config.inputs.find((i) => i.id === chart.xInputId);
       if (!inp || inp.min === void 0 || inp.max === void 0) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        canvas.setAttribute("aria-label", `${chart.title}: chart unavailable`);
+        setAttr(canvas, "aria-label", `${chart.title}: chart unavailable`);
         return;
       }
       const raw = [];
@@ -551,7 +581,7 @@
       const pts = raw.filter((p) => p !== null);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (pts.length < 2) {
-        canvas.setAttribute("aria-label", `${chart.title}: not enough data to plot`);
+        setAttr(canvas, "aria-label", `${chart.title}: not enough data to plot`);
         return;
       }
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
@@ -595,7 +625,8 @@
       ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);
       ctx.fillText(String(round2(yMax)), 2, pad + 8);
       ctx.fillText(String(round2(yMin)), 2, canvas.height - pad);
-      canvas.setAttribute(
+      setAttr(
+        canvas,
         "aria-label",
         `${chart.title}: x from ${round2(xMin)} to ${round2(xMax)}, y from ${round2(yMin)} to ${round2(yMax)}, ${curLabel}`
       );
@@ -606,8 +637,9 @@
       const total = config.challenges.length;
       const pct = total === 0 ? 100 : challengesMet / total * 100;
       const metAll = total === 0 || challengesMet === total;
-      if (pct > bestPct) {
-        bestPct = pct;
+      if (pct > bestPct || !scoreReported) {
+        bestPct = Math.max(bestPct, pct);
+        scoreReported = true;
         scorm.setScore(bestPct);
       }
       if (metAll && !reportedComplete) {
@@ -630,6 +662,12 @@
     const e = document.createElement(tag);
     if (className) e.className = className;
     return e;
+  }
+  function setText(node, text) {
+    if (node.textContent !== text) node.textContent = text;
+  }
+  function setAttr(node, name, value) {
+    if (node.getAttribute(name) !== value) node.setAttribute(name, value);
   }
   var clamp01 = (t) => Math.max(0, Math.min(1, t));
   var round2 = (n) => Math.round(n * 100) / 100;

@@ -145,5 +145,40 @@ describe("mountSandbox", () => {
       expect(scorm.setScore).toHaveBeenCalledWith(100);
       expect(scorm.setCompleted).toHaveBeenCalledTimes(1);
     });
+
+    it("writes a score of 0 once when the learner interacts without meeting any challenge", () => {
+      const scorm = createScormMock();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).ILBScorm = scorm as unknown as ScormSession;
+
+      mountSandbox(document.getElementById("root")!, config);
+      const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+
+      // double = 10, challenge requires >= 12: still unmet, but an absent
+      // score reads as "not attempted" in Canvas, not zero — must be written.
+      slider.value = "5";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(scorm.setScore).toHaveBeenCalledTimes(1);
+      expect(scorm.setScore).toHaveBeenCalledWith(0);
+      expect(scorm.setCompleted).not.toHaveBeenCalled();
+
+      // Interacting again while still unmet at the same 0% must not add a
+      // duplicate call.
+      slider.value = "3";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(scorm.setScore).toHaveBeenCalledTimes(1);
+    });
+
+    it("re-asserts a restored partial score on mount even when not completed", () => {
+      const scorm = createScormMock({ values: { mass: 4 }, best: 50, completed: false });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).ILBScorm = scorm as unknown as ScormSession;
+
+      mountSandbox(document.getElementById("root")!, config);
+
+      expect(scorm.setScore).toHaveBeenCalledTimes(1);
+      expect(scorm.setScore).toHaveBeenCalledWith(50);
+      expect(scorm.setCompleted).not.toHaveBeenCalled();
+    });
   });
 });
