@@ -73,6 +73,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         }
         const ext = EXT_BY_MIME[asset.mimeType as ImageMime];
         try {
+          // FOLLOW-UP (not done here, already tracked in src/lib/assets/store.ts):
+          // LocalDiskAssetStore reads from local disk, which isn't durable
+          // storage on Vercel/serverless. Out of scope for this route.
           const data = await assetStore.get(assetKey(asset.contentHash, ext));
           return { data, ext };
         } catch (err) {
@@ -84,11 +87,22 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       },
     });
   } catch (err) {
+    // Log the real error server-side (parity with the other catches in this
+    // route); the client only gets the clear, path-free message assembled
+    // by assemblePackage / the resolveAsset wrappers above.
+    console.error("export: package assembly failed", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "package assembly failed" },
       { status: 422 },
     );
   }
+  // FOLLOW-UP (not done here): an assembly failure caught above never
+  // creates an ExportRecord — only a completed scan (pass or fail) does,
+  // below. The audit trail is missing a row for "export attempted but
+  // couldn't even be assembled" (e.g. too-many-assets, unknown asset,
+  // missing engine build). Adding that would need a schema change
+  // (ExportRecord.reportJson/passed assume a real ScanReport exists;
+  // an assembly failure has no report to store).
 
   const report = scanPackage(assembled.files, {
     engineChecksums: assembled.engineChecksums,

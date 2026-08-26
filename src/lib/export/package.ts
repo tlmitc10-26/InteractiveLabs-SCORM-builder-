@@ -8,6 +8,18 @@ import { SandboxConfig, toRuntimeConfig, collectAssetIds } from "@/lib/engines/p
 
 export interface ResolvedAsset { data: Buffer; ext: string }
 
+// Memory guards. The sandbox schema permits up to ~144 distinct asset
+// references in a single config (12 overlays x 12 swap bands each), and
+// each resolved asset can be as large as the admin's policy.maxAssetBytes
+// (default 5MB) -- unbounded, that's ~700MB buffered in one export request,
+// an OOM risk on a serverless instance. Two independent caps: a count cap
+// (cheap, checked before any bytes are read) and a cumulative-bytes cap
+// (checked after resolution, since actual size isn't known until then).
+// Both throw a plain Error with a client-safe message; the route's
+// assembly try/catch turns that into a 422.
+export const MAX_PACKAGE_ASSETS = 40;
+export const MAX_PACKAGE_ASSET_BYTES = 50 * 1024 * 1024; // 50 MB
+
 export interface AssembleOptions {
   identifier: string;
   title: string;
@@ -58,11 +70,30 @@ export async function assemblePackage(opts: AssembleOptions): Promise<AssembledP
     engineChecksums[`engine/${name}`] = hash;
   }
 
-  // Assets: bundled under assets/, referenced by hashed filename
+  // Assets: bundled under assets/, referenced by hashed filename.
   const assetIds = collectAssetIds(opts.config);
+  if (assetIds.length > MAX_PACKAGE_ASSETS) {
+    throw new Error(`too many assets referenced (max ${MAX_PACKAGE_ASSETS})`);
+  }
+  // Sort ids before resolving (not just before zipping) so insertion order
+  // into `files` — and therefore anything downstream that iterates the map
+  // before zipPackage's own final sort — is deterministic regardless of
+  // resolution order/timing under Promise.all.
+  const sortedAssetIds = [...assetIds].sort();
+  // Bounded concurrency: capped at MAX_PACKAGE_ASSETS (40) above, so a
+  // flat Promise.all is fine — no need for a semaphore/queue at this size.
+  // Per-asset ownership (asset.projectId === interactive.projectId) is
+  // enforced by the caller's resolveAsset (see the export route), not here.
+  const resolved = await Promise.all(
+    sortedAssetIds.map(async (id) => ({ id, ...(await opts.resolveAsset(id)) })),
+  );
+  let totalAssetBytes = 0;
+  for (const { data } of resolved) totalAssetBytes += data.length;
+  if (totalAssetBytes > MAX_PACKAGE_ASSET_BYTES) {
+    throw new Error(`package assets exceed ${MAX_PACKAGE_ASSET_BYTES / (1024 * 1024)} MB total`);
+  }
   const assetPathById = new Map<string, string>();
-  for (const id of assetIds) {
-    const { data, ext } = await opts.resolveAsset(id);
+  for (const { id, data, ext } of resolved) {
     const p = `assets/${id}.${ext}`;
     files.set(p, data);
     assetPathById.set(id, p);
