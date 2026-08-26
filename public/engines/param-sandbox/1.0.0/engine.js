@@ -231,6 +231,12 @@
 
   // src/engine-runtime/param-sandbox/main.ts
   var preloadedBandUrls = /* @__PURE__ */ new Set();
+  var ILB_CHART_COLORS = {
+    line: "#8c1d40",
+    marker: "#747474",
+    axisText: "#484848",
+    frame: "#bfbfbf"
+  };
   function mountSandbox(root, config) {
     var _a, _b, _c, _d, _e, _f;
     root.innerHTML = "";
@@ -590,10 +596,10 @@
       const pad = 28;
       const px = (x) => pad + (x - xMin) / (xMax - xMin || 1) * (canvas.width - 2 * pad);
       const py = (y) => canvas.height - pad - (y - yMin) / (yMax - yMin || 1) * (canvas.height - 2 * pad);
-      ctx.strokeStyle = "#9aa0a6";
+      ctx.strokeStyle = ILB_CHART_COLORS.frame;
       ctx.lineWidth = 1;
       ctx.strokeRect(pad, pad, canvas.width - 2 * pad, canvas.height - 2 * pad);
-      ctx.strokeStyle = "#8C1D40";
+      ctx.strokeStyle = ILB_CHART_COLORS.line;
       ctx.lineWidth = 2;
       ctx.beginPath();
       let needMove = true;
@@ -613,13 +619,13 @@
       const curX = values[chart.xInputId];
       let curLabel = "no current point";
       if (cur !== null && curX >= xMin && curX <= xMax) {
-        ctx.fillStyle = "#B8860B";
+        ctx.fillStyle = ILB_CHART_COLORS.marker;
         ctx.beginPath();
         ctx.arc(px(curX), py(cur), 4, 0, 2 * Math.PI);
         ctx.fill();
         curLabel = `current point (${round2(curX)}, ${round2(cur)})`;
       }
-      ctx.fillStyle = "#5f6368";
+      ctx.fillStyle = ILB_CHART_COLORS.axisText;
       ctx.font = "11px sans-serif";
       ctx.fillText(String(round2(xMin)), pad, canvas.height - 8);
       ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);

@@ -10,6 +10,21 @@ type SuspendPayload = { values?: Record<string, number>; best?: number; complete
 // never re-fetched/re-preloaded more than once.
 const preloadedBandUrls = new Set<string>();
 
+// Canvas 2D drawing cannot resolve CSS custom properties, so chart colors
+// are hardcoded hex here rather than read from var(--rds-*). These mirror
+// the token palette (src/lib/design/tokens.json) directly:
+//   line     -> --rds-primary  (#8c1d40)
+//   marker   -> --rds-dark-1   (#747474; 4.6:1 on white, replaces the old
+//                #B8860B marker which read too light against #fff8e1/white)
+//   axisText -> --rds-dark-2   (#484848)
+//   frame    -> --rds-light-5  (#bfbfbf)
+const ILB_CHART_COLORS = {
+  line: "#8c1d40",
+  marker: "#747474",
+  axisText: "#484848",
+  frame: "#bfbfbf",
+} as const;
+
 /** Mount the Parameter Sandbox. Labels/units via textContent (never innerHTML);
  *  only `intro` may contain markup and it arrives pre-sanitized from the builder. */
 export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): void {
@@ -410,9 +425,9 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const pad = 28;
     const px = (x: number) => pad + ((x - xMin) / (xMax - xMin || 1)) * (canvas.width - 2 * pad);
     const py = (y: number) => canvas.height - pad - ((y - yMin) / (yMax - yMin || 1)) * (canvas.height - 2 * pad);
-    ctx.strokeStyle = "#9aa0a6"; ctx.lineWidth = 1;
+    ctx.strokeStyle = ILB_CHART_COLORS.frame; ctx.lineWidth = 1;
     ctx.strokeRect(pad, pad, canvas.width - 2 * pad, canvas.height - 2 * pad);
-    ctx.strokeStyle = "#8C1D40"; ctx.lineWidth = 2;
+    ctx.strokeStyle = ILB_CHART_COLORS.line; ctx.lineWidth = 2;
     ctx.beginPath();
     // Break the polyline across samples where the formula failed, rather
     // than drawing a misleading straight line across the gap.
@@ -430,11 +445,11 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const curX = values[chart.xInputId];
     let curLabel = "no current point";
     if (cur !== null && curX >= xMin && curX <= xMax) {
-      ctx.fillStyle = "#B8860B";
+      ctx.fillStyle = ILB_CHART_COLORS.marker;
       ctx.beginPath(); ctx.arc(px(curX), py(cur), 4, 0, 2 * Math.PI); ctx.fill();
       curLabel = `current point (${round2(curX)}, ${round2(cur)})`;
     }
-    ctx.fillStyle = "#5f6368"; ctx.font = "11px sans-serif";
+    ctx.fillStyle = ILB_CHART_COLORS.axisText; ctx.font = "11px sans-serif";
     ctx.fillText(String(round2(xMin)), pad, canvas.height - 8);
     ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);
     ctx.fillText(String(round2(yMax)), 2, pad + 8);

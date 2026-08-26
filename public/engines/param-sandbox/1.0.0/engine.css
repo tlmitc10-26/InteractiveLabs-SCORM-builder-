@@ -23,34 +23,36 @@
   --ilb-min-target: 24px;
 }
 
-.ilb-sandbox { font-family: Georgia, "Times New Roman", serif; color: #1b1b1b; max-width: 960px; margin: 0 auto; padding: 16px; }
-.ilb-sandbox h2 { color: #8C1D40; font-size: 1.1rem; margin: 16px 0 8px; }
-.ilb-sandbox h2.ilb-title { font-size: 1.6rem; margin: 0 0 8px; }
-.ilb-intro { background: #fff8e1; border-left: 4px solid #B8860B; padding: 8px 12px; margin-bottom: 12px; }
+.ilb-sandbox { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 960px; margin: 0 auto; padding: 16px; }
+.ilb-sandbox h2 { font-family: var(--ilb-font-heading); color: var(--rds-primary); font-weight: 700; line-height: 1.2; font-size: 18px; margin: 16px 0 8px; }
+@media (min-width: 992px) { .ilb-sandbox h2 { font-size: 24px; } }
+.ilb-sandbox h2.ilb-title { font-size: 24px; margin: 0 0 8px; }
+@media (min-width: 992px) { .ilb-sandbox h2.ilb-title { font-size: 36px; } }
+.ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: 8px 12px; margin-bottom: 12px; }
 .ilb-layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
 @media (min-width: 760px) { .ilb-layout { grid-template-columns: 260px 1fr; } .ilb-layout.ilb-has-stage { grid-template-columns: 260px 1fr 1fr; } }
-.ilb-inputs, .ilb-outputs, .ilb-challenges, .ilb-charts { background: #fff; border: 1px solid #D6D2CC; border-radius: 8px; padding: 12px; }
+.ilb-inputs, .ilb-outputs, .ilb-challenges, .ilb-charts { background: #fff; border: 1px solid var(--rds-light-4); border-radius: 8px; padding: 12px; }
 .ilb-input-row { display: block; margin-bottom: 14px; }
 .ilb-input-label { display: block; font-weight: bold; font-size: 0.9rem; margin-bottom: 4px; }
 .ilb-input-control { display: flex; align-items: center; gap: 8px; }
-.ilb-input-control input[type="range"] { flex: 1; accent-color: #8C1D40; }
+.ilb-input-control input[type="range"] { flex: 1; accent-color: var(--rds-primary); }
 .ilb-input-value { min-width: 3ch; font-variant-numeric: tabular-nums; }
-.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: #f7f5f2; align-self: start; }
+.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; }
 .ilb-stage-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .ilb-overlay { position: absolute; }
 .ilb-fill { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; opacity: 0.65; transition: height 120ms ease; }
 .ilb-overlay-img { width: 100%; height: 100%; object-fit: contain; transition: transform 120ms ease, opacity 120ms ease; }
 .ilb-output { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid #eee; }
 .ilb-output-label { flex: 1; }
-.ilb-output-value { font-size: 1.3rem; font-weight: bold; color: #8C1D40; font-variant-numeric: tabular-nums; }
+.ilb-output-value { font-size: 1.3rem; font-weight: bold; color: var(--rds-primary); font-variant-numeric: tabular-nums; }
 .ilb-output-units { color: #5f6368; font-size: 0.85rem; }
 .ilb-chart { margin-top: 12px; }
 .ilb-chart:first-child { margin-top: 0; }
 .ilb-chart canvas { width: 100%; height: auto; }
 .ilb-chart-title { font-size: 0.9rem; font-weight: bold; margin-bottom: 4px; }
 .ilb-challenge { display: flex; gap: 8px; align-items: center; padding: 6px 0; }
-.ilb-challenge-mark::before { content: "○"; color: #6b7075; }
-.ilb-challenge.met .ilb-challenge-mark::before { content: "●"; color: #2e7d32; }
+.ilb-challenge-mark::before { content: "○"; color: var(--rds-dark-1); }
+.ilb-challenge.met .ilb-challenge-mark::before { content: "●"; color: var(--rds-success); }
 
 /* Visually-hidden but screen-reader-accessible text. */
 .ilb-sr-only {
