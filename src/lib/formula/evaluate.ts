@@ -27,10 +27,18 @@ function lookupVar(name: string, vars: Record<string, number>): number {
   throw new FormulaError(`unknown variable "${name}"`);
 }
 
+/**
+ * Throws FormulaError on any evaluation failure; never returns NaN/Infinity.
+ */
 export function evaluateFormula(ast: AstNode, vars: Record<string, number>): number {
-  const result = evalNode(ast, vars);
-  if (!Number.isFinite(result)) throw new FormulaError("result is not a finite number");
-  return result;
+  try {
+    const result = evalNode(ast, vars);
+    if (!Number.isFinite(result)) throw new FormulaError("result is not a finite number");
+    return result;
+  } catch (e) {
+    if (e instanceof FormulaError) throw e;
+    throw new FormulaError(e instanceof Error ? e.message : String(e));
+  }
 }
 
 function evalNode(node: AstNode, vars: Record<string, number>): number {

@@ -28,10 +28,14 @@ function tokenize(src: string): Token[] {
     if (/[0-9.]/.test(c)) {
       const m = /^[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?/.exec(src.slice(i));
       if (!m) throw new Error(`invalid number at position ${i}`);
-      tokens.push({ type: "num", value: Number(m[0]) });
+      const value = Number(m[0]);
+      if (!Number.isFinite(value)) throw new Error(`number literal too large at position ${i}`);
+      tokens.push({ type: "num", value });
       i += m[0].length;
       continue;
     }
+    // ASCII-only identifiers are deliberate: keeps formulas portable across the
+    // authoring UI and the SCORM-bundled runtime without Unicode edge cases.
     if (/[a-zA-Z_]/.test(c)) {
       const m = /^[a-zA-Z_][a-zA-Z0-9_]*/.exec(src.slice(i))!;
       tokens.push({ type: "ident", name: m[0] });
@@ -44,8 +48,17 @@ function tokenize(src: string): Token[] {
   return tokens;
 }
 
+const MAX_FORMULA_LENGTH = 1000;
+
 export function parseFormula(src: string): ParseResult {
   try {
+    // Self-contained input bound: this library must be safe on its own terms
+    // even if an upstream caller's own cap (e.g. a Zod schema) is bypassed or
+    // absent. Also keeps pathological inputs (e.g. deeply nested parens) from
+    // ever reaching the recursive-descent parser in the first place.
+    if (src.length > MAX_FORMULA_LENGTH) {
+      throw new Error(`formula too long (max ${MAX_FORMULA_LENGTH} characters)`);
+    }
     const tokens = tokenize(src);
     if (tokens.length === 0) throw new Error("empty formula");
     let pos = 0;
@@ -108,9 +121,12 @@ export function parseFormula(src: string): ParseResult {
     }
 
     const ast = expr();
-    if (pos !== tokens.length) throw new Error("unexpected trailing input");
+    if (pos !== tokens.length) throw new Error(`unexpected trailing input at token ${pos}`);
     return { ok: true, ast };
   } catch (e) {
+    // Catches parser errors above as well as any RangeError (e.g. "Maximum
+    // call stack size exceeded") from pathological deeply-nested input —
+    // parseFormula must always return a result, never throw.
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

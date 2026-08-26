@@ -58,4 +58,21 @@ describe("parseFormula/evaluateFormula", () => {
     if (!r.ok) throw new Error("should parse");
     expect(() => evaluateFormula(r.ast, {})).toThrow(/unknown variable/i);
   });
+  it("rejects zero-arg function calls", () => {
+    expect(parseFormula("min()").ok).toBe(false);
+  });
+  it("rejects overflowing numeric literals at parse time", () => {
+    const r = parseFormula("1e309");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/too large/i);
+  });
+  it("degrades gracefully on deeply nested input instead of throwing", () => {
+    const r = parseFormula("(".repeat(5000) + "1" + ")".repeat(5000));
+    expect(r.ok).toBe(false);
+  });
+  it("rejects formulas longer than the length cap", () => {
+    const r = parseFormula("x".repeat(1001));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/too long/i);
+  });
 });
