@@ -164,7 +164,20 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
             (/engines/param-sandbox/...), so there is no isolation benefit to
             sandboxing it here — verified empirically that omitting `sandbox`
             is required for the ready-ping/config handshake to work. */}
+        {/* Belt-and-suspenders for the handshake: preview.html's own inline
+            listener + ready-ping is registered as soon as it's parsed, but
+            in practice (esp. dev-mode hydration racing a much lighter static
+            iframe load) that ready-ping can arrive before this page's message
+            listener effect has attached. The iframe's `load` event fires
+            once its document (including that inline script) has finished
+            executing, so posting the current config here reaches a listener
+            that's already live either way. Also flips `previewReady` (same
+            as the message handler) so later edits keep posting live updates
+            through the debounce effect even on a run where the ready-ping
+            message is never received at all — this is a superset of the
+            message-based path, not a replacement for it. */}
         <iframe ref={iframeRef} src={PREVIEW_SRC} title="Preview"
+          onLoad={() => { previewReady.current = true; postPreview(configRef.current); }}
           className="h-full w-full rounded border border-gray-300 bg-white" />
       </div>
     </div>
@@ -401,9 +414,19 @@ function VisualSection({ visual, outputs, assets, onChange }: {
             options={[{ value: "fill", label: "fill (rising level)" }, { value: "swap", label: "swap (image per range)" }, { value: "transform", label: "transform (move/rotate/scale/fade)" }]}
             onChange={(type) => {
               const box = ov.box;
-              if (type === "fill") updateOverlay(i, { type: "fill", outputId: ov.outputId, inMin: 0, inMax: 100, color: "#4a90d9", box } as EOverlay);
-              else if (type === "swap") updateOverlay(i, { type: "swap", outputId: ov.outputId, box, bands: [] } as unknown as EOverlay);
-              else updateOverlay(i, { type: "transform", outputId: ov.outputId, box, assetId: "", property: "translateY", inMin: 0, inMax: 100, outMin: 0, outMax: 100 } as EOverlay);
+              // Replace the row wholesale rather than going through
+              // updateOverlay's `{...x, ...p}` merge: merging would leave
+              // the OLD type's fields (e.g. fill's inMin/inMax/color)
+              // sitting alongside the new type's fields, and the strict
+              // discriminated-union schema rejects that as unrecognized
+              // keys. A direct replace at the same index keeps the row's
+              // React key (tracked separately in `rowKeys`) stable while
+              // fully swapping the object's shape.
+              const fresh: EOverlay =
+                type === "fill" ? { id: ov.id, type: "fill", outputId: ov.outputId, inMin: 0, inMax: 100, color: "#4a90d9", box }
+                : type === "swap" ? { id: ov.id, type: "swap", outputId: ov.outputId, box, bands: [] }
+                : { id: ov.id, type: "transform", outputId: ov.outputId, box, assetId: "", property: "translateY", inMin: 0, inMax: 100, outMin: 0, outMax: 100 };
+              onChange({ ...v, overlays: v.overlays.map((x, j) => (j === i ? fresh : x)) });
             }} />
           <SelectField label="Driven by output" value={ov.outputId} options={outputOptions} onChange={(outputId) => updateOverlay(i, { outputId })} />
           {boxFields(i, ov.box)}
