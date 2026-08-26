@@ -30,6 +30,13 @@ const ILB_CHART_COLORS = {
 export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): void {
   root.innerHTML = "";
   root.classList.add("ilb-sandbox");
+  // The sandbox is the entire content of its host page (an iframe SCO with
+  // no other page furniture — see buildIndexHtml), so it IS that page's main
+  // landmark; without this, axe's "region" rule correctly flags every node
+  // here as unlandmarked content (nothing else on the page could contain
+  // it). role="main" instead of a bare <main> tag because `root` is caller-
+  // supplied (could be any element, including one already `<main>`).
+  root.setAttribute("role", "main");
 
   // Unique per-mount id prefix so <label for> associations never collide if
   // more than one sandbox instance is mounted in the same document.

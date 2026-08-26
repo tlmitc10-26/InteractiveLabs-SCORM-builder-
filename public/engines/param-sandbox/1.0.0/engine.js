@@ -241,6 +241,7 @@
     var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     root.innerHTML = "";
     root.classList.add("ilb-sandbox");
+    root.setAttribute("role", "main");
     const mountId = `ilb-${Math.random().toString(36).slice(2, 9)}`;
     const asts = /* @__PURE__ */ new Map();
     for (const out of config.outputs) {
