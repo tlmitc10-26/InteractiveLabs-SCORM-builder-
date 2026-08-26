@@ -14,3 +14,9 @@ public/engines/** -text
 
 # Golden export fixture is compared byte-for-byte; keep it verbatim too.
 tests/fixtures/golden-config.json -text
+
+# Windows launcher scripts need CRLF (multi-line if/parenthesis blocks misparse
+# under LF); the app icon is binary and must never be EOL-normalized.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ico binary
