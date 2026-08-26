@@ -1,6 +1,7 @@
 import { parseFormula, type AstNode } from "@/lib/formula/parser";
 import { evaluateFormula } from "@/lib/formula/evaluate";
 import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { chartLayout, CHART_FONT_PX } from "./chart-layout";
 
 type Overlay = NonNullable<RuntimeSandboxConfig["visual"]>["overlays"][number];
 type SuspendPayload = { values?: Record<string, number>; best?: number; completed?: boolean };
@@ -479,7 +480,7 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const wrap = el("div", "ilb-chart");
     const title = el("div", "ilb-chart-title"); title.textContent = chart.title;
     const canvas = document.createElement("canvas");
-    canvas.width = 480; canvas.height = 220; canvas.dataset.chart = chart.id;
+    canvas.dataset.chart = chart.id;
     canvas.setAttribute("role", "img");
     canvas.setAttribute("aria-label", `${chart.title} chart`);
     wrap.appendChild(title); wrap.appendChild(canvas);
@@ -520,12 +521,22 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     }
   }
 
-  // ---------- challenges ----------
+  // ---------- challenges / score status ----------
+  // The score status strip (defect fix: learners had no visible indication
+  // of what was graded or achieved) always exists, even for a no-challenge
+  // "exploration" config -- in that case it has no challenges panel to live
+  // in, so it's appended directly to root instead. When challenges DO
+  // exist, it lives inside the challenges panel (which already carries
+  // aria-live="polite") so its text updates are announced alongside
+  // challenge-met changes -- one live region, text changes together, no
+  // separate/duplicate announcement.
   const challengeNodes = new Map<string, HTMLElement>();
+  const scoreStatus = el("div", "ilb-score-status");
   if (config.challenges.length) {
     const panel = el("div", "ilb-challenges");
     panel.setAttribute("aria-live", "polite");
     const h = el("h2"); h.textContent = "Challenges"; panel.appendChild(h);
+    panel.appendChild(scoreStatus);
     for (const ch of config.challenges) {
       const row = el("div", "ilb-challenge");
       row.dataset.challenge = ch.id;
@@ -539,6 +550,8 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       challengeNodes.set(ch.id, status);
     }
     root.appendChild(panel);
+  } else {
+    root.appendChild(scoreStatus);
   }
 
   // ---------- compute & render ----------
@@ -636,9 +649,23 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   ): void {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    // DPR-aware crisp rendering (defect fix: chart was blurry): size the
+    // canvas BACKING STORE from its laid-out CSS width * devicePixelRatio,
+    // then draw everything below in CSS-pixel coordinates via setTransform.
+    // clientWidth is 0 in environments with no real layout (e.g. jsdom) --
+    // fall back to a sensible default rather than producing a 0-size canvas.
+    const cssWidth = canvas.clientWidth || 480;
+    const cssHeight = Math.round(cssWidth * 0.46);
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    canvas.style.height = `${cssHeight}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
     const inp = config.inputs.find((i) => i.id === chart.xInputId);
     if (!inp || inp.min === undefined || inp.max === undefined) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
       setAttr(canvas, "aria-label", `${chart.title}: chart unavailable`);
       return;
     }
@@ -651,7 +678,7 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       raw.push(y === null ? null : [x, y]);
     }
     const pts = raw.filter((p): p is [number, number] => p !== null);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
     if (pts.length < 2) {
       setAttr(canvas, "aria-label", `${chart.title}: not enough data to plot`);
       return;
@@ -659,11 +686,19 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
     const [xMin, xMax] = [Math.min(...xs), Math.max(...xs)];
     const [yMin, yMax] = [Math.min(...ys), Math.max(...ys)];
-    const pad = 28;
-    const px = (x: number) => pad + ((x - xMin) / (xMax - xMin || 1)) * (canvas.width - 2 * pad);
-    const py = (y: number) => canvas.height - pad - ((y - yMin) / (yMax - yMin || 1)) * (canvas.height - 2 * pad);
+
+    // Label layout that can never clip (defect fix): the left gutter and
+    // top/bottom padding are computed from the actual measured label text
+    // and font size, rather than a single fixed pad on all sides.
+    ctx.font = `${CHART_FONT_PX}px sans-serif`;
+    const yMinLabel = String(round2(yMin));
+    const yMaxLabel = String(round2(yMax));
+    const rect = chartLayout(ctx, yMinLabel, yMaxLabel, cssWidth, cssHeight);
+
+    const px = (x: number) => rect.x + ((x - xMin) / (xMax - xMin || 1)) * rect.w;
+    const py = (y: number) => rect.y + rect.h - ((y - yMin) / (yMax - yMin || 1)) * rect.h;
     ctx.strokeStyle = ILB_CHART_COLORS.frame; ctx.lineWidth = 1;
-    ctx.strokeRect(pad, pad, canvas.width - 2 * pad, canvas.height - 2 * pad);
+    ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
     ctx.strokeStyle = ILB_CHART_COLORS.line; ctx.lineWidth = 2;
     ctx.beginPath();
     // Break the polyline across samples where the formula failed, rather
@@ -686,11 +721,28 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       ctx.beginPath(); ctx.arc(px(curX), py(cur), 4, 0, 2 * Math.PI); ctx.fill();
       curLabel = `current point (${round2(curX)}, ${round2(cur)})`;
     }
-    ctx.fillStyle = ILB_CHART_COLORS.axisText; ctx.font = "11px sans-serif";
-    ctx.fillText(String(round2(xMin)), pad, canvas.height - 8);
-    ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);
-    ctx.fillText(String(round2(yMax)), 2, pad + 8);
-    ctx.fillText(String(round2(yMin)), 2, canvas.height - pad);
+
+    ctx.fillStyle = ILB_CHART_COLORS.axisText;
+    ctx.font = `${CHART_FONT_PX}px sans-serif`;
+    // Y labels: right-aligned in the left gutter, vertically centered on
+    // the plot's top/bottom edge so the y-max label's own top-padding
+    // (baked into chartLayout's topPad) keeps it clear of the canvas edge.
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillText(yMaxLabel, rect.x - 6, rect.y);
+    ctx.fillText(yMinLabel, rect.x - 6, rect.y + rect.h);
+    // X labels: min left-aligned at the plot's left edge, max right-aligned
+    // at the plot's right edge, both below the axis frame.
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    ctx.fillText(String(round2(xMin)), rect.x, rect.y + rect.h + 6);
+    ctx.textAlign = "right";
+    ctx.fillText(String(round2(xMax)), rect.x + rect.w, rect.y + rect.h + 6);
+    // Restore canvas text defaults so nothing downstream inherits this
+    // alignment/baseline.
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
     setAttr(
       canvas,
       "aria-label",
@@ -698,37 +750,96 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     );
   }
 
+  /** Score status strip text (defect fix: learner had no visible indication
+   *  of what was graded or achieved). Always reflects `bestPct` — the
+   *  recorded high-water score — rather than the current/live percentage,
+   *  so it never goes DOWN as the learner keeps exploring, matching exactly
+   *  what's actually reported to the gradebook. `met` is the CURRENT count
+   *  of satisfied challenges (that part is allowed to fluctuate live);
+   *  "Lesson complete." uses the sticky `reportedComplete` flag, not the
+   *  current met-all state, for the same never-goes-backward reason. */
+  function updateScoreStatus(met: number): void {
+    const total = config.challenges.length;
+    let text: string;
+    const complete = total > 0 && reportedComplete;
+    if (total === 0) {
+      text = "Exploration lesson — interacting records a score of 100%.";
+    } else {
+      text = `Score: ${Math.round(bestPct)}% — ${met} of ${total} challenges met.`;
+      if (complete) text += " Lesson complete.";
+    }
+    if (!scorm || scorm.mode !== "scorm") {
+      text += " (preview — grades record only in the course)";
+    }
+    setText(scoreStatus, text);
+    scoreStatus.classList.toggle("complete", complete);
+  }
+
   /** Reports score/completion to the LMS as a monotonic high-water mark: the
    *  reported score never decreases even if the learner un-meets a challenge
    *  afterward, and completion, once reported, is never retracted. Also
    *  guarantees at least one setScore call as soon as the learner interacts
    *  — even a score of 0 — because an attempt with no score written at all
-   *  reads to Canvas as "not attempted", not "attempted, scored zero". */
+   *  reads to Canvas as "not attempted", not "attempted, scored zero".
+   *
+   *  The high-water tracking itself (bestPct/reportedComplete) runs
+   *  whenever the learner has interacted, regardless of SCORM mode, so the
+   *  score status strip stays accurate in standalone/preview too — only the
+   *  actual LMS calls are gated on being in real SCORM mode. */
   function reportScorm(challengesMet: number): void {
-    if (!scorm || scorm.mode !== "scorm") return;
-    if (!interacted) return;
     const total = config.challenges.length;
     const pct = total === 0 ? 100 : (challengesMet / total) * 100;
     const metAll = total === 0 || challengesMet === total;
-    if (pct > bestPct || !scoreReported) {
-      bestPct = Math.max(bestPct, pct);
-      scoreReported = true;
-      scorm.setScore(bestPct);
+
+    if (interacted) {
+      const improved = pct > bestPct;
+      if (improved) bestPct = pct;
+      const newlyCompleted = metAll && !reportedComplete;
+      if (newlyCompleted) reportedComplete = true;
+
+      if (scorm && scorm.mode === "scorm") {
+        if (improved || !scoreReported) {
+          scoreReported = true;
+          scorm.setScore(bestPct);
+        }
+        if (newlyCompleted) {
+          scorm.setCompleted();
+        }
+        const ok = scorm.saveSuspendData<SuspendPayload>({ values, best: bestPct, completed: reportedComplete });
+        if (!ok && !warnedSuspendLimit) {
+          warnedSuspendLimit = true;
+          console.warn("progress exceeds SCORM suspend limit; resume disabled");
+        }
+      }
     }
-    if (metAll && !reportedComplete) {
-      reportedComplete = true;
-      scorm.setCompleted();
-    }
-    const ok = scorm.saveSuspendData<SuspendPayload>({ values, best: bestPct, completed: reportedComplete });
-    if (!ok && !warnedSuspendLimit) {
-      warnedSuspendLimit = true;
-      console.warn("progress exceeds SCORM suspend limit; resume disabled");
-    }
+
+    updateScoreStatus(challengesMet);
   }
 
   function onInteract(): void {
     interacted = true;
     render();
+  }
+
+  // Re-render charts (only) when the layout's laid-out width actually
+  // changes -- crisp DPR sizing (see drawChart) depends on clientWidth, so
+  // a responsive resize (e.g. rotating a tablet, an editor preview pane
+  // being dragged wider) must redraw the canvas backing store, not just
+  // stretch a stale bitmap. jsdom (tests) has no ResizeObserver/real
+  // layout, hence the typeof guard.
+  if (config.charts.length && typeof ResizeObserver !== "undefined") {
+    let lastWidth = layout.clientWidth;
+    const ro = new ResizeObserver(() => {
+      const w = layout.clientWidth;
+      if (w === lastWidth) return;
+      lastWidth = w;
+      const results = computeOutputs(values);
+      for (const chart of config.charts) {
+        const canvas = chartCanvases.get(chart.id);
+        if (canvas) drawChart(chart, canvas, results);
+      }
+    });
+    ro.observe(layout);
   }
 
   render();

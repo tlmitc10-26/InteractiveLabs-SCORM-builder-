@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { mountSandbox } from "@/engine-runtime/param-sandbox/main";
+import { chartLayout, type MeasureTextLike } from "@/engine-runtime/param-sandbox/chart-layout";
 import { validateSandboxConfig, toRuntimeConfig, emptySandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import type { ScormSession } from "@/engine-runtime/scorm-adapter";
@@ -504,6 +505,105 @@ describe("mountSandbox", () => {
       expect(document.querySelector(".ilb-inputs")).toBeTruthy();
       expect(document.querySelector(".ilb-outputs")).toBeTruthy();
       expect(document.querySelector(".ilb-outputs-live")).toBeNull();
+    });
+  });
+
+  describe("charts (crisp DPR rendering + non-clipping labels)", () => {
+    const chartConfig: RuntimeSandboxConfig = {
+      title: "Chart test",
+      inputs: [{ id: "x", label: "X", type: "slider", min: 0, max: 10, step: 1, defaultValue: 5 }],
+      outputs: [{ id: "y", label: "Y", formula: "x * 2" }],
+      charts: [{ id: "c", title: "Y vs X", xInputId: "x", yOutputId: "y", samples: 10 }],
+      challenges: [],
+    };
+
+    it("mounts and re-renders a chart without crashing even though jsdom's canvas has no real layout (clientWidth 0, no 2D context)", () => {
+      expect(() => mountSandbox(document.getElementById("root")!, chartConfig)).not.toThrow();
+      const canvas = document.querySelector('canvas[data-chart="c"]') as HTMLCanvasElement;
+      expect(canvas).toBeTruthy();
+      // Interacting recomputes and redraws the chart — must not throw when
+      // canvas.clientWidth is 0 (falls back to 480) and getContext("2d")
+      // returns null (jsdom has no canvas backend installed).
+      const slider = document.querySelector('input[type="range"][data-input="x"]') as HTMLInputElement;
+      expect(() => {
+        slider.value = "8";
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+      }).not.toThrow();
+    });
+  });
+
+  describe("chartLayout (pure gutter math, extracted so it's testable without a real canvas)", () => {
+    // Stub measureText: N characters * a fixed per-character width, close
+    // enough to a monospace-ish estimate for testing gutter sizing without
+    // needing real font metrics (unavailable in jsdom).
+    function stubCtx(charWidthPx: number): MeasureTextLike {
+      return { measureText: (text: string) => ({ width: text.length * charWidthPx }) };
+    }
+
+    it("sizes the left gutter from the wider of the two y-axis labels", () => {
+      // "15.87" is 5 chars * 6px = 30px wide -> leftGutter = ceil(30) + 12 = 42
+      const rect = chartLayout(stubCtx(6), "0", "15.87", 480, 220);
+      expect(rect.x).toBe(42);
+    });
+
+    it("keeps a positive top padding so a y-max label (baseline middle, drawn at rect.y) never clips the canvas's top edge", () => {
+      const rect = chartLayout(stubCtx(6), "0", "100", 480, 220);
+      expect(rect.y).toBeGreaterThan(0);
+      expect(rect.y).toBe(12); // ceil(12px font / 2) + 6px pad
+    });
+
+    it("keeps the plot rect strictly inside the canvas bounds regardless of label width", () => {
+      const cssWidth = 480, cssHeight = 220;
+      const rect = chartLayout(stubCtx(6), "-12.34", "987.65", cssWidth, cssHeight);
+      expect(rect.x).toBeGreaterThan(0);
+      expect(rect.y).toBeGreaterThan(0);
+      expect(rect.x + rect.w).toBeLessThan(cssWidth);
+      expect(rect.y + rect.h).toBeLessThan(cssHeight);
+    });
+
+    it("never collapses the plot to a non-positive size even for a tiny canvas", () => {
+      const rect = chartLayout(stubCtx(6), "0", "100", 40, 30);
+      expect(rect.w).toBeGreaterThanOrEqual(10);
+      expect(rect.h).toBeGreaterThanOrEqual(10);
+    });
+  });
+
+  describe("score status strip (visible grading feedback)", () => {
+    afterEach(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).ILBScorm;
+    });
+
+    it("shows the initial ungraded state with the standalone/preview suffix", () => {
+      mountSandbox(document.getElementById("root")!, config); // module-level fixture: 1 challenge, unmet by default
+      const status = document.querySelector(".ilb-score-status")!;
+      expect(status.textContent).toBe(
+        "Score: 0% — 0 of 1 challenges met. (preview — grades record only in the course)",
+      );
+      expect(status.classList.contains("complete")).toBe(false);
+    });
+
+    it("updates to the completed state, with no preview suffix, once the challenge is met in real SCORM mode", () => {
+      const scorm = createScormMock();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).ILBScorm = scorm as unknown as ScormSession;
+
+      mountSandbox(document.getElementById("root")!, config);
+      const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      slider.value = "7"; // double = 14 >= 12: meets challenge c1
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+
+      const status = document.querySelector(".ilb-score-status")!;
+      expect(status.textContent).toBe("Score: 100% — 1 of 1 challenges met. Lesson complete.");
+      expect(status.classList.contains("complete")).toBe(true);
+    });
+
+    it("shows the exploration-lesson line (no challenge count) when the config has no challenges", () => {
+      mountSandbox(document.getElementById("root")!, { ...config, challenges: [] });
+      const status = document.querySelector(".ilb-score-status")!;
+      expect(status.textContent).toBe(
+        "Exploration lesson — interacting records a score of 100%. (preview — grades record only in the course)",
+      );
     });
   });
 });

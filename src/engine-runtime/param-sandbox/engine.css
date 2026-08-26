@@ -94,6 +94,21 @@
 .ilb-challenge-mark::before { content: "○"; color: var(--rds-dark-1); }
 .ilb-challenge.met .ilb-challenge-mark::before { content: "●"; color: var(--rds-success); }
 
+/* Score status strip (learner-visible grading feedback): always shows what
+   was graded and what's been achieved, using the high-water score so it
+   never appears to go down. #446d12 (--rds-success) on white is 6.1:1. */
+.ilb-score-status {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rds-light-4);
+  font-size: 14px;
+  color: var(--rds-dark-2);
+}
+.ilb-score-status.complete {
+  color: var(--rds-success);
+  font-weight: 700;
+}
+
 /* Visually-hidden but screen-reader-accessible text. */
 .ilb-sr-only {
   position: absolute;

@@ -229,6 +229,22 @@
     }
   }
 
+  // src/engine-runtime/param-sandbox/chart-layout.ts
+  var CHART_FONT_PX = 12;
+  var CHART_LABEL_PAD = 6;
+  function chartLayout(ctx, yMinLabel, yMaxLabel, cssWidth, cssHeight) {
+    const yLabelWidth = Math.max(ctx.measureText(yMinLabel).width, ctx.measureText(yMaxLabel).width);
+    const leftGutter = Math.ceil(yLabelWidth) + CHART_LABEL_PAD * 2;
+    const rightPad = CHART_LABEL_PAD * 2;
+    const bottomGutter = CHART_FONT_PX + CHART_LABEL_PAD * 2;
+    const topPad = Math.ceil(CHART_FONT_PX / 2) + CHART_LABEL_PAD;
+    const x = leftGutter;
+    const y = topPad;
+    const w = Math.max(10, cssWidth - leftGutter - rightPad);
+    const h = Math.max(10, cssHeight - topPad - bottomGutter);
+    return { x, y, w, h };
+  }
+
   // src/engine-runtime/param-sandbox/main.ts
   var preloadedBandUrls = /* @__PURE__ */ new Set();
   var ILB_CHART_COLORS = {
@@ -577,8 +593,6 @@
       const title = el("div", "ilb-chart-title");
       title.textContent = chart.title;
       const canvas = document.createElement("canvas");
-      canvas.width = 480;
-      canvas.height = 220;
       canvas.dataset.chart = chart.id;
       canvas.setAttribute("role", "img");
       canvas.setAttribute("aria-label", `${chart.title} chart`);
@@ -614,12 +628,14 @@
       }
     }
     const challengeNodes = /* @__PURE__ */ new Map();
+    const scoreStatus = el("div", "ilb-score-status");
     if (config.challenges.length) {
       const panel = el("div", "ilb-challenges");
       panel.setAttribute("aria-live", "polite");
       const h = el("h2");
       h.textContent = "Challenges";
       panel.appendChild(h);
+      panel.appendChild(scoreStatus);
       for (const ch of config.challenges) {
         const row = el("div", "ilb-challenge");
         row.dataset.challenge = ch.id;
@@ -636,6 +652,8 @@
         challengeNodes.set(ch.id, status);
       }
       root.appendChild(panel);
+    } else {
+      root.appendChild(scoreStatus);
     }
     function computeOutputs(vars) {
       const scope = { ...vars };
@@ -724,9 +742,16 @@
     function drawChart(chart, canvas, currentResults) {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+      const cssWidth = canvas.clientWidth || 480;
+      const cssHeight = Math.round(cssWidth * 0.46);
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = cssWidth * dpr;
+      canvas.height = cssHeight * dpr;
+      canvas.style.height = `${cssHeight}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const inp = config.inputs.find((i) => i.id === chart.xInputId);
       if (!inp || inp.min === void 0 || inp.max === void 0) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, cssWidth, cssHeight);
         setAttr(canvas, "aria-label", `${chart.title}: chart unavailable`);
         return;
       }
@@ -738,7 +763,7 @@
         raw.push(y === null ? null : [x, y]);
       }
       const pts = raw.filter((p) => p !== null);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
       if (pts.length < 2) {
         setAttr(canvas, "aria-label", `${chart.title}: not enough data to plot`);
         return;
@@ -746,12 +771,15 @@
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
       const [xMin, xMax] = [Math.min(...xs), Math.max(...xs)];
       const [yMin, yMax] = [Math.min(...ys), Math.max(...ys)];
-      const pad = 28;
-      const px = (x) => pad + (x - xMin) / (xMax - xMin || 1) * (canvas.width - 2 * pad);
-      const py = (y) => canvas.height - pad - (y - yMin) / (yMax - yMin || 1) * (canvas.height - 2 * pad);
+      ctx.font = `${CHART_FONT_PX}px sans-serif`;
+      const yMinLabel = String(round2(yMin));
+      const yMaxLabel = String(round2(yMax));
+      const rect = chartLayout(ctx, yMinLabel, yMaxLabel, cssWidth, cssHeight);
+      const px = (x) => rect.x + (x - xMin) / (xMax - xMin || 1) * rect.w;
+      const py = (y) => rect.y + rect.h - (y - yMin) / (yMax - yMin || 1) * rect.h;
       ctx.strokeStyle = ILB_CHART_COLORS.frame;
       ctx.lineWidth = 1;
-      ctx.strokeRect(pad, pad, canvas.width - 2 * pad, canvas.height - 2 * pad);
+      ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
       ctx.strokeStyle = ILB_CHART_COLORS.line;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -779,41 +807,83 @@
         curLabel = `current point (${round2(curX)}, ${round2(cur)})`;
       }
       ctx.fillStyle = ILB_CHART_COLORS.axisText;
-      ctx.font = "11px sans-serif";
-      ctx.fillText(String(round2(xMin)), pad, canvas.height - 8);
-      ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);
-      ctx.fillText(String(round2(yMax)), 2, pad + 8);
-      ctx.fillText(String(round2(yMin)), 2, canvas.height - pad);
+      ctx.font = `${CHART_FONT_PX}px sans-serif`;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(yMaxLabel, rect.x - 6, rect.y);
+      ctx.fillText(yMinLabel, rect.x - 6, rect.y + rect.h);
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
+      ctx.fillText(String(round2(xMin)), rect.x, rect.y + rect.h + 6);
+      ctx.textAlign = "right";
+      ctx.fillText(String(round2(xMax)), rect.x + rect.w, rect.y + rect.h + 6);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
       setAttr(
         canvas,
         "aria-label",
         `${chart.title}: x from ${round2(xMin)} to ${round2(xMax)}, y from ${round2(yMin)} to ${round2(yMax)}, ${curLabel}`
       );
     }
+    function updateScoreStatus(met) {
+      const total = config.challenges.length;
+      let text;
+      const complete = total > 0 && reportedComplete;
+      if (total === 0) {
+        text = "Exploration lesson \u2014 interacting records a score of 100%.";
+      } else {
+        text = `Score: ${Math.round(bestPct)}% \u2014 ${met} of ${total} challenges met.`;
+        if (complete) text += " Lesson complete.";
+      }
+      if (!scorm || scorm.mode !== "scorm") {
+        text += " (preview \u2014 grades record only in the course)";
+      }
+      setText(scoreStatus, text);
+      scoreStatus.classList.toggle("complete", complete);
+    }
     function reportScorm(challengesMet) {
-      if (!scorm || scorm.mode !== "scorm") return;
-      if (!interacted) return;
       const total = config.challenges.length;
       const pct = total === 0 ? 100 : challengesMet / total * 100;
       const metAll = total === 0 || challengesMet === total;
-      if (pct > bestPct || !scoreReported) {
-        bestPct = Math.max(bestPct, pct);
-        scoreReported = true;
-        scorm.setScore(bestPct);
+      if (interacted) {
+        const improved = pct > bestPct;
+        if (improved) bestPct = pct;
+        const newlyCompleted = metAll && !reportedComplete;
+        if (newlyCompleted) reportedComplete = true;
+        if (scorm && scorm.mode === "scorm") {
+          if (improved || !scoreReported) {
+            scoreReported = true;
+            scorm.setScore(bestPct);
+          }
+          if (newlyCompleted) {
+            scorm.setCompleted();
+          }
+          const ok = scorm.saveSuspendData({ values, best: bestPct, completed: reportedComplete });
+          if (!ok && !warnedSuspendLimit) {
+            warnedSuspendLimit = true;
+            console.warn("progress exceeds SCORM suspend limit; resume disabled");
+          }
+        }
       }
-      if (metAll && !reportedComplete) {
-        reportedComplete = true;
-        scorm.setCompleted();
-      }
-      const ok = scorm.saveSuspendData({ values, best: bestPct, completed: reportedComplete });
-      if (!ok && !warnedSuspendLimit) {
-        warnedSuspendLimit = true;
-        console.warn("progress exceeds SCORM suspend limit; resume disabled");
-      }
+      updateScoreStatus(challengesMet);
     }
     function onInteract() {
       interacted = true;
       render();
+    }
+    if (config.charts.length && typeof ResizeObserver !== "undefined") {
+      let lastWidth = layout.clientWidth;
+      const ro = new ResizeObserver(() => {
+        const w = layout.clientWidth;
+        if (w === lastWidth) return;
+        lastWidth = w;
+        const results = computeOutputs(values);
+        for (const chart of config.charts) {
+          const canvas = chartCanvases.get(chart.id);
+          if (canvas) drawChart(chart, canvas, results);
+        }
+      });
+      ro.observe(layout);
     }
     render();
   }
