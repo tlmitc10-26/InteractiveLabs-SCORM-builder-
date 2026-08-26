@@ -23,3 +23,28 @@ body {
   color: var(--foreground);
   font-family: var(--font-app, Arial, Helvetica, sans-serif);
 }
+
+/* RDS buttons: pill, Arial 16px/700, 8px 16px padding. Variants per RDS Base. */
+.btn { border-radius: var(--radius-pill, 50rem); font-weight: 700; font-size: 16px;
+  padding: 8px 16px; min-height: 24px; min-width: 24px; display: inline-flex;
+  align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+  border: 2px solid transparent; }
+.btn:focus-visible { outline: 3px solid var(--rds-info); outline-offset: 2px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--rds-primary); color: #fff; border-color: var(--rds-primary); }
+.btn-primary:hover { background: #741434; }
+.btn-secondary { background: var(--rds-secondary); color: #000; border-color: var(--rds-secondary); }
+.btn-secondary:hover { background: #e6b323; }
+.btn-light-2 { background: var(--rds-light-2); color: #000; border-color: var(--rds-light-2); }
+.btn-dark-3 { background: var(--rds-dark-3); color: #fff; border-color: var(--rds-dark-3); }
+.btn-danger-link { background: none; border: none; color: var(--rds-danger); text-decoration: underline; padding: 4px 8px; min-height: 24px; }
+.btn-sm { font-size: 14px; padding: 4px 12px; }
+/* App headings (Arial per RDS Base) */
+.app-h1 { font-weight: 700; font-size: 24px; line-height: 1.2; color: var(--rds-primary); }
+@media (min-width: 992px) { .app-h1 { font-size: 36px; } }
+.app-h2 { font-weight: 700; font-size: 18px; line-height: 1.2; }
+@media (min-width: 992px) { .app-h2 { font-size: 24px; } }
+
+/* Branded app shell */
+.app-header { background: var(--rds-primary); color: #fff; padding: 12px 24px; font-weight: 700; font-size: 18px; }
+.app-link { color: var(--rds-primary); text-decoration: underline; }

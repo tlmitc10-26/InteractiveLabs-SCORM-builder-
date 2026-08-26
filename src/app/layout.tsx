@@ -16,7 +16,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // stack only, so the app makes zero third-party requests.
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        {children}
+        <header className="app-header">Interactive Lesson Builder</header>
+        <main className="flex-1">{children}</main>
       </body>
     </html>
   );

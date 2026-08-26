@@ -210,7 +210,7 @@ function Section({ title, onAdd, addLabel, children }: { title: string; onAdd?: 
     <div className="rounded border border-gray-200 bg-white p-4">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">{title}</h2>
-        {onAdd && <button onClick={onAdd} className="rounded bg-gray-100 px-2 py-1 text-sm hover:bg-gray-200">+ {addLabel}</button>}
+        {onAdd && <button onClick={onAdd} className="btn btn-light-2 btn-sm">+ {addLabel}</button>}
       </div>
       <div className="mt-2 space-y-3">{children}</div>
     </div>
@@ -220,7 +220,7 @@ function Section({ title, onAdd, addLabel, children }: { title: string; onAdd?: 
 function Row({ children, onRemove }: { children: React.ReactNode; onRemove: () => void }) {
   return (
     <div className="rounded border border-gray-100 bg-gray-50 p-3">
-      <div className="flex justify-end"><button onClick={onRemove} className="text-xs text-red-700 hover:underline">Remove</button></div>
+      <div className="flex justify-end"><button onClick={onRemove} className="btn-danger-link btn-sm">Remove</button></div>
       <div className="grid grid-cols-2 gap-2">{children}</div>
     </div>
   );
@@ -528,7 +528,7 @@ function ExportButton({ interactiveId, disabled }: { interactiveId: string; disa
   return (
     <div className="rounded border border-gray-200 bg-white p-4">
       <button onClick={doExport} disabled={disabled || busy}
-        className="rounded bg-[#8C1D40] px-4 py-2 text-white disabled:opacity-40">
+        className="btn btn-primary">
         {busy ? "Exporting…" : "Export SCORM package"}
       </button>
       {disabled && <p className="mt-1 text-xs text-gray-500">Fix validation issues above to enable export.</p>}

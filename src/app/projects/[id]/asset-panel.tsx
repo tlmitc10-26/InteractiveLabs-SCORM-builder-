@@ -51,7 +51,7 @@ export function AssetPanel({ projectId, assets }: {
       <h2 className="font-semibold">Images (backgrounds and state images)</h2>
       <div className="mt-2 flex items-center gap-2">
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="text-sm" />
-        <button onClick={upload} disabled={busy} className="rounded bg-[#8C1D40] px-3 py-1.5 text-sm text-white disabled:opacity-40">
+        <button onClick={upload} disabled={busy} className="btn btn-secondary btn-sm">
           {busy ? "Uploading…" : "Upload"}
         </button>
       </div>

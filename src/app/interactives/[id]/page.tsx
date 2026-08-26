@@ -26,9 +26,9 @@ export default async function InteractivePage({ params }: { params: Promise<{ id
   }
 
   return (
-    <main className="p-4">
+    <div className="p-4">
       <div className="mb-3 flex items-center gap-4">
-        <Link href={`/projects/${interactive.projectId}`} className="text-sm text-gray-500 hover:underline">&larr; Project</Link>
+        <Link href={`/projects/${interactive.projectId}`} className="app-link text-sm">&larr; Project</Link>
         <span className="text-sm text-gray-400">Parameter Sandbox v{interactive.engineVersion}</span>
       </div>
       <Editor
@@ -37,6 +37,6 @@ export default async function InteractivePage({ params }: { params: Promise<{ id
         initialConfig={initialConfig}
         assets={assets.map((a) => ({ id: a.id, filename: a.filename }))}
       />
-    </main>
+    </div>
   );
 }
