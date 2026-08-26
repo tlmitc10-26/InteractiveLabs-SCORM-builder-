@@ -5,8 +5,12 @@ import { sanitizeRichText, sanitizePlainText } from "@/lib/sanitize";
 
 const idPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const safeId = z.string().min(1).max(40).regex(idPattern, "ids must be letters/digits/underscore");
-const plain = (max: number) => z.string().max(max).transform(sanitizePlainText);
-const rich = (max: number) => z.string().max(max).transform(sanitizeRichText);
+// Pre-transform cap fails fast on giant inputs; the post-transform `.pipe()`
+// cap enforces the declared max on the STORED value, since entity escaping
+// (sanitizePlainText) can inflate length past the original input's cap
+// (e.g. "&" x120 -> "&amp;" x120 = 600 chars).
+const plain = (max: number) => z.string().max(max).transform(sanitizePlainText).pipe(z.string().max(max));
+const rich = (max: number) => z.string().max(max).transform(sanitizeRichText).pipe(z.string().max(max));
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 const inputSchema = z.object({
@@ -116,25 +120,64 @@ export function validateSandboxConfig(raw: unknown): ValidationResult {
 
   const outputIdSet = new Set(outputIds);
   const inputIdSet = new Set(inputIds);
+  const inputById = new Map(config.inputs.map((i) => [i.id, i]));
+
+  // Within-collection duplicate-id checks (runtime keys DOM nodes on these ids).
+  const dupesWithin = (ids: string[]): string[] =>
+    [...new Set(ids.filter((id, i, all) => all.indexOf(id) !== i))];
+  const chartDupes = dupesWithin(config.charts.map((c) => c.id));
+  if (chartDupes.length) errors.push(`duplicate chart ids: ${chartDupes.join(", ")}`);
+  const challengeDupes = dupesWithin(config.challenges.map((c) => c.id));
+  if (challengeDupes.length) errors.push(`duplicate challenge ids: ${challengeDupes.join(", ")}`);
+  const overlayDupes = dupesWithin((config.visual?.overlays ?? []).map((o) => o.id));
+  if (overlayDupes.length) errors.push(`duplicate overlay ids: ${overlayDupes.join(", ")}`);
+
   for (const c of config.charts) {
-    if (!inputIdSet.has(c.xInputId)) errors.push(`chart "${c.id}": unknown xInputId "${c.xInputId}"`);
+    if (!inputIdSet.has(c.xInputId)) {
+      errors.push(`chart "${c.id}": unknown xInputId "${c.xInputId}"`);
+    } else {
+      const xInput = inputById.get(c.xInputId)!;
+      if (xInput.type !== "slider" && xInput.type !== "number") {
+        errors.push(`chart "${c.id}": xInputId "${c.xInputId}" must reference a slider or number input (got "${xInput.type}")`);
+      }
+    }
     if (!outputIdSet.has(c.yOutputId)) errors.push(`chart "${c.id}": unknown yOutputId "${c.yOutputId}"`);
   }
   for (const ov of config.visual?.overlays ?? []) {
     if (!outputIdSet.has(ov.outputId)) errors.push(`overlay "${ov.id}": unknown outputId "${ov.outputId}"`);
+    if ((ov.type === "fill" || ov.type === "transform") && ov.inMin === ov.inMax) {
+      errors.push(`overlay "${ov.id}": inMin and inMax must differ`);
+    }
+    if (ov.type === "swap") {
+      const ups = ov.bands.map((b) => b.upTo);
+      const sortedAscending = ups.every((v, i) => i === 0 || ups[i - 1] < v);
+      if (!sortedAscending) errors.push(`overlay "${ov.id}": bands must be sorted ascending by upTo`);
+    }
   }
   for (const ch of config.challenges) {
     if (!outputIdSet.has(ch.outputId)) errors.push(`challenge "${ch.id}": unknown outputId "${ch.outputId}"`);
-    if (ch.comparator === "between" && (ch.min === undefined || ch.max === undefined))
-      errors.push(`challenge "${ch.id}": "between" requires min and max`);
+    if (ch.comparator === "between") {
+      if (ch.min === undefined || ch.max === undefined) errors.push(`challenge "${ch.id}": "between" requires min and max`);
+      else if (!(ch.min < ch.max)) errors.push(`challenge "${ch.id}": "between" requires min < max`);
+    }
     if ((ch.comparator === "gte" || ch.comparator === "lte") && ch.value === undefined)
       errors.push(`challenge "${ch.id}": "${ch.comparator}" requires value`);
   }
   for (const inp of config.inputs) {
-    if ((inp.type === "slider" || inp.type === "number") && (inp.min === undefined || inp.max === undefined))
-      errors.push(`input "${inp.id}": ${inp.type} requires min and max`);
-    if (inp.type === "select" && !(inp.options && inp.options.length))
-      errors.push(`input "${inp.id}": select requires options`);
+    if (inp.type === "slider" || inp.type === "number") {
+      if (inp.min === undefined || inp.max === undefined) {
+        errors.push(`input "${inp.id}": ${inp.type} requires min and max`);
+      } else {
+        if (!(inp.min < inp.max)) errors.push(`input "${inp.id}": min must be less than max`);
+        if (inp.defaultValue < inp.min || inp.defaultValue > inp.max)
+          errors.push(`input "${inp.id}": defaultValue must be within [min, max]`);
+      }
+    }
+    if (inp.type === "select") {
+      if (!(inp.options && inp.options.length)) errors.push(`input "${inp.id}": select requires options`);
+      else if (!inp.options.some((o) => o.value === inp.defaultValue))
+        errors.push(`input "${inp.id}": defaultValue must match one of the option values`);
+    }
   }
 
   return errors.length ? { ok: false, errors } : { ok: true, config };
