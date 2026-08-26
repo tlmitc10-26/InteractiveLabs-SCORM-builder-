@@ -7,15 +7,17 @@ import { saveInteractiveConfig } from "@/app/actions";
 // sanitize-html, no formula parser) — importing those from schema.ts here
 // would drag their weight into this route's client bundle for no benefit,
 // since the editor never validates, only resolves/reshapes for preview.
-import { toDisplayColorRef, toRuntimeConfig, type SandboxConfigLike } from "@/lib/engines/param-sandbox/runtime-config";
+import { toRuntimeConfig, type SandboxConfigLike, type ColorRef } from "@/lib/engines/param-sandbox/runtime-config";
+import { colorHex } from "@/lib/design/tokens";
+import { ColorField } from "./color-field";
 
 /* Editing shape mirrors the Zod input (pre-validation). */
 type EInput = { id: string; label: string; type: "slider" | "number" | "toggle" | "select"; min?: number; max?: number; step?: number; defaultValue: number; units?: string; options?: Array<{ label: string; value: number }> };
 type EOutput = { id: string; label: string; formula: string; units?: string; decimals?: number };
 type EChart = { id: string; title: string; xInputId: string; yOutputId: string; samples: number };
 /* Hybrid verifiable color model (schema.ts ColorRef): a named RDS token or a
- * verified custom hex. TODO(Task 7): color-field.tsx replaces this raw
- * TextField bridge with token swatches + a live contrast readout. */
+ * verified custom hex. Rendered/edited via color-field.tsx's token swatches
+ * + live contrast readout (see VisualSection below). */
 type EColorRef = { token: string } | { hex: string };
 type EOverlay =
   | { id: string; type: "fill"; outputId: string; inMin: number; inMax: number; color: EColorRef; box: Box }
@@ -257,17 +259,6 @@ function splitFirstEquals(line: string): [string, string] {
   return [line.slice(0, idx), line.slice(idx + 1)];
 }
 
-/** Defensive display helper for the crude color-field bridge: the editing
- *  shape (EConfig) is never re-validated on load, so despite the EColorRef
- *  type a fill overlay's `color` could in practice still be a raw legacy
- *  hex string. `toDisplayColorRef` wraps that case into `{hex}` first, so
- *  the `"token" in` check below never runs directly on a string (which
- *  would throw) — no `in`-operator on a possibly-string value anywhere. */
-function colorFieldDisplayValue(color: EColorRef | string): string {
-  const c = toDisplayColorRef(color as Parameters<typeof toDisplayColorRef>[0]);
-  return "token" in c ? `token:${c.token}` : c.hex;
-}
-
 /** Collision-safe id generator: increments until `prefix_N` isn't already in
  *  the caller's current id set (callers pass their section's own ids). No
  *  Date.now() suffix, so ids stay clean (input_1, input_2, ...). */
@@ -443,14 +434,19 @@ function VisualSection({ visual, outputs, assets, onChange }: {
           {ov.type === "fill" && (<>
             <NumField label="Value at empty" value={ov.inMin} onChange={(inMin) => updateOverlay(i, { inMin } as Partial<EOverlay>)} />
             <NumField label="Value at full" value={ov.inMax} onChange={(inMax) => updateOverlay(i, { inMax } as Partial<EOverlay>)} />
-            {/* Crude bridge onto the hybrid ColorRef shape ({token} | {hex});
-                Task 7's ColorField (token swatches + live contrast readout)
-                replaces this raw text input. */}
-            <TextField label="Color (#rrggbb or token:name)"
-              value={colorFieldDisplayValue(ov.color)}
-              onChange={(val) => updateOverlay(i, {
-                color: val.startsWith("token:") ? { token: val.slice(6) } : { hex: val },
-              } as Partial<EOverlay>)} />
+            <div className="col-span-2">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Fill color</span>
+              {/* ov.color's `token` field is a plain (unvalidated-as-typed)
+                  string here, per this file's EColorRef; ColorField takes the
+                  narrower runtime-config ColorRef (token: TokenName) since it
+                  only ever offers the 16 real token names via its own
+                  swatches/onChange — this cast is a supertype-to-subtype
+                  narrowing, safe for the same reason the postPreview cast
+                  above is: a mid-edit draft can't violate it through this
+                  component's own UI. */}
+              <ColorField value={ov.color as ColorRef} backgroundHex={colorHex("light-1")} imagePresent={!!v.backgroundAssetId}
+                onChange={(color) => updateOverlay(i, { color } as Partial<EOverlay>)} />
+            </div>
           </>)}
           {ov.type === "swap" && (
             <Field label="Bands (upTo=assetId, one per line; ascending)">
