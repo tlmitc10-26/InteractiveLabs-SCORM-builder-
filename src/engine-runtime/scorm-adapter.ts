@@ -15,12 +15,18 @@ export interface ScormSession {
   mode: "scorm" | "standalone";
   setScore(raw: number): void;
   setCompleted(): void;
-  saveSuspendData(state: unknown): boolean;
-  loadSuspendData(): unknown | null;
+  saveSuspendData<T>(state: T): boolean;
+  loadSuspendData<T>(): T | null;
   finish(): void;
 }
 
+// SCORM 1.2 cmi.suspend_data has a hard 4096-character limit (UTF-16 code
+// units, i.e. JS string .length) enforced by the spec and most LMSes.
 const MAX_SUSPEND = 4096;
+
+// Coalesce rapid LMSSetValue bursts (e.g. drag ticks, autosave) into at most
+// one LMSCommit per this window, rather than committing on every write.
+const COMMIT_THROTTLE_MS = 500;
 
 function findApi(win: Window): Scorm12Api | null {
   let w: Window | null = win;
@@ -45,21 +51,75 @@ function findApi(win: Window): Scorm12Api | null {
   return null;
 }
 
+function standaloneSession(): ScormSession {
+  return {
+    mode: "standalone",
+    setScore() {},
+    setCompleted() {},
+    saveSuspendData<T>(state: T): boolean { void state; return true; },
+    loadSuspendData<T>(): T | null { return null; },
+    finish() {},
+  };
+}
+
 export function createScormSession(win: Window): ScormSession {
   const api = findApi(win);
-  if (!api) {
-    return {
-      mode: "standalone",
-      setScore() {}, setCompleted() {},
-      saveSuspendData() { return true; },
-      loadSuspendData() { return null; },
-      finish() {},
-    };
+  if (!api) return standaloneSession();
+
+  const initResult = api.LMSInitialize("");
+  if (initResult === "false") {
+    const code = api.LMSGetLastError();
+    console.warn(
+      `SCORM LMSInitialize failed (error ${code}): ${api.LMSGetErrorString(code)} — falling back to standalone mode`
+    );
+    return standaloneSession();
   }
-  api.LMSInitialize("");
+
+  let completed = false;
   let finished = false;
-  const set = (k: string, v: string) => api.LMSSetValue(k, v);
-  const commit = () => api.LMSCommit("");
+  let commitTimer: ReturnType<typeof setTimeout> | null = null;
+  // Warn at most once per session per operation kind — LMSSetValue fires on
+  // every keystroke/drag tick and we don't want to spam the console.
+  let warnedSetValue = false;
+  let warnedCommit = false;
+
+  const warnLmsError = (action: string) => {
+    const code = api.LMSGetLastError();
+    console.warn(`SCORM ${action} failed (error ${code}): ${api.LMSGetErrorString(code)}`);
+  };
+
+  const set = (key: string, value: string) => {
+    const result = api.LMSSetValue(key, value);
+    if (result === "false" && !warnedSetValue) {
+      warnedSetValue = true;
+      warnLmsError(`LMSSetValue("${key}")`);
+    }
+    return result;
+  };
+
+  // Cancels any pending scheduled commit and commits immediately.
+  const flush = () => {
+    if (commitTimer !== null) {
+      clearTimeout(commitTimer);
+      commitTimer = null;
+    }
+    const result = api.LMSCommit("");
+    if (result === "false" && !warnedCommit) {
+      warnedCommit = true;
+      warnLmsError("LMSCommit");
+    }
+  };
+
+  // Schedules a single flush() COMMIT_THROTTLE_MS from now, unless one is
+  // already pending.
+  const scheduleCommit = () => {
+    if (commitTimer !== null) return;
+    commitTimer = setTimeout(flush, COMMIT_THROTTLE_MS);
+  };
+
+  // An abandoned attempt should read "incomplete", not "not attempted".
+  set("cmi.core.lesson_status", "incomplete");
+  scheduleCommit();
 
   return {
     mode: "scorm",
@@ -68,40 +128,48 @@ export function createScormSession(win: Window): ScormSession {
       set("cmi.core.score.raw", String(clamped));
       set("cmi.core.score.min", "0");
       set("cmi.core.score.max", "100");
-      commit();
+      scheduleCommit();
     },
     setCompleted() {
+      completed = true;
       set("cmi.core.lesson_status", "completed");
-      commit();
+      // Completion is rare and important enough to commit right away rather
+      // than risk losing it in the throttle window.
+      flush();
     },
-    saveSuspendData(state: unknown): boolean {
+    saveSuspendData<T>(state: T): boolean {
       const json = JSON.stringify(state);
       if (json.length > MAX_SUSPEND) return false;
       set("cmi.suspend_data", json);
-      commit();
+      scheduleCommit();
       return true;
     },
-    loadSuspendData(): unknown | null {
+    loadSuspendData<T>(): T | null {
       const raw = api.LMSGetValue("cmi.suspend_data");
       if (!raw) return null;
-      try { return JSON.parse(raw); } catch { return null; }
+      try { return JSON.parse(raw) as T; } catch { return null; }
     },
     finish() {
       if (finished) return;
       finished = true;
-      set("cmi.core.exit", "");
-      commit();
+      // "suspend" tells the LMS to preserve suspend_data for resume; only an
+      // explicitly completed attempt exits clean.
+      set("cmi.core.exit", completed ? "" : "suspend");
+      flush();
       api.LMSFinish("");
     },
   };
 }
 
-/* Bundle entry behavior: attach to window and finish on unload. */
+/* Bundle entry behavior: attach to window and finish on unload/hide. */
 declare global {
   interface Window { ILBScorm?: ScormSession }
 }
 if (typeof window !== "undefined" && typeof document !== "undefined" && !("__vitest_worker__" in globalThis)) {
   const session = createScormSession(window);
   window.ILBScorm = session;
+  // finish() is idempotent, so it's safe for both events to fire.
   window.addEventListener("beforeunload", () => session.finish());
+  // pagehide is more reliable than beforeunload on iOS/Canvas mobile webviews.
+  window.addEventListener("pagehide", () => session.finish());
 }
