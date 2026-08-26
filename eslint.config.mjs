@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated/bundled engine runtime output (esbuild), committed as
+    // checksummed audited artifacts, not authored source.
+    "public/engines/**",
   ]),
 ]);
 
