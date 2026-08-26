@@ -196,6 +196,22 @@ describe("mountSandbox", () => {
         /\.ilb-sandbox[^{]*input:focus-visible[^{]*,[^{]*select:focus-visible[^{]*,[^{]*button:focus-visible[^{]*\{[^}]*outline:\s*3px solid var\(--rds-info\)[^}]*outline-offset:\s*2px/,
       );
     });
+
+    // Regression guard (caught only by real-browser layout, not jsdom): CSS
+    // Grid switches a grid item's sizing from stretch to content-based the
+    // instant an auto margin is present on that axis. .ilb-stage's only
+    // children are position:absolute (no intrinsic width), so adding
+    // margin-left/right:auto to center a width-capped stage -- without also
+    // pinning width:100% -- collapsed EVERY stage (capped or not) to 0x0.
+    it("pins .ilb-stage to width:100% alongside its centering auto margins", () => {
+      // Anchored to a line starting with the bare ".ilb-stage" selector, so
+      // this doesn't accidentally match ".ilb-layout...> .ilb-stage { ... }"
+      // (a different rule, grid-column placement only) earlier in the file.
+      const stageRule = css.match(/^\.ilb-stage\s*\{[^}]*\}/m)?.[0] ?? "";
+      expect(stageRule).toMatch(/width:\s*100%/);
+      expect(stageRule).toMatch(/margin-left:\s*auto/);
+      expect(stageRule).toMatch(/margin-right:\s*auto/);
+    });
   });
 
   it("renders a fill overlay whose height tracks the output", () => {
