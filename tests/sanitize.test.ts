@@ -69,4 +69,12 @@ describe("sanitizePlainText", () => {
   it("escapes all HTML", () => {
     expect(sanitizePlainText('<b>x</b>')).toBe("&lt;b&gt;x&lt;/b&gt;");
   });
+
+  it("escapes double and single quotes so the value can never break out of an attribute position", () => {
+    // e.g. a units field of `kg" onmouseover="x` must not be able to
+    // close a `title="..."` attribute even if a future call site places
+    // this value there instead of a text node.
+    expect(sanitizePlainText(`a"b'c`)).toBe("a&quot;b&#39;c");
+    expect(sanitizePlainText(`kg" onmouseover="alert(1)`)).toBe("kg&quot; onmouseover=&quot;alert(1)");
+  });
 });

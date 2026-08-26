@@ -201,6 +201,22 @@ function scanForbiddenUrlSchemes(text: string, file: string, violations: Violati
   }
 }
 
+/** Shared with both the per-file text scan and the decoded authoring-config
+ *  string walk (below) so both paths apply the exact same forbidden-
+ *  pattern rules — see the config-string walk's comment for why a
+ *  JSON-decoded string value needs this too: a dangerous substring like
+ *  `kg" onmouseover="x` only reads as `kg\" onmouseover=\"x` in the
+ *  serialized content/config.json bytes (the backslash defeats the
+ *  quoted-attribute regex there), but the AUTHORED string value itself —
+ *  what a runtime that reads the config object directly, or a future
+ *  export path that doesn't go through JSON.stringify, would actually see
+ *  — contains the real unescaped quotes and must still be caught. */
+function scanForbiddenPatterns(text: string, file: string, violations: Violation[]): void {
+  for (const { re, label } of FORBIDDEN_PATTERNS) {
+    if (re.test(text)) violations.push({ file, rule: "forbidden-pattern", detail: label });
+  }
+}
+
 /** Recursively collect every string value out of an arbitrary JSON-shaped
  *  value (the authoring config). Guards against cycles defensively — the
  *  config is normally JSON-safe, but ctx.authoringConfig is typed
@@ -318,9 +334,7 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
     const text = buf.toString("utf8");
 
     // Rule: forbidden patterns (common, all text files — engine files included)
-    for (const { re, label } of FORBIDDEN_PATTERNS) {
-      if (re.test(text)) violations.push({ file: path, rule: "forbidden-pattern", detail: label });
-    }
+    scanForbiddenPatterns(text, path, violations);
     // javascript:/data: scheme check: run against the whole-text
     // whitespace-stripped copy (N1/N2/N3, part b) — a literal tab/newline
     // embedded INSIDE the scheme keyword itself (`jav\tascript:`) must not
@@ -407,10 +421,25 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
   // runtime (JSON/JS string escapes decoded back to the real characters,
   // then the URL parser's own whitespace-stripping), independent of which
   // file the value round-trips through.
+  //
+  // Same reasoning extends to the forbidden-pattern checks (inline on*=
+  // handlers, eval/new Function/iframe/document.write/dynamic import):
+  // once content/config.json is serialized, a value like
+  // `kg" onmouseover="alert(1)` round-trips as `kg\" onmouseover=\"x` —
+  // the JSON-escaped backslash-quote defeats the quoted-attribute-form
+  // regex in FORBIDDEN_PATTERNS when it's applied to the serialized file
+  // bytes, even though the actual authored value (and whatever consumes
+  // the config object directly, unescaped) contains the real dangerous
+  // substring. Running the SAME forbidden-pattern checks against each
+  // decoded string value closes that gap. Run on the raw (not
+  // whitespace-stripped) decoded string — these patterns don't depend on
+  // URL whitespace handling and stripping first could theoretically
+  // collapse an on*= match's surrounding characters.
   for (const raw of collectStrings(ctx.authoringConfig, [], new Set())) {
     const decoded = stripUrlWhitespace(raw);
     scanForbiddenUrlSchemes(decoded, "content/config.json", violations);
     scanUrlTokensForAllowlist(decoded, "content/config.json", ctx.urlAllowlist, violations);
+    scanForbiddenPatterns(raw, "content/config.json", violations);
   }
 
   // Rule: config revalidation + sanitizer idempotence

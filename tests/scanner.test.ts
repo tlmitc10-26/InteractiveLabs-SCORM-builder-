@@ -372,6 +372,26 @@ describe("scanPackage", () => {
     )).toBe(true);
   });
 
+  it("catches a quote-escaped inline-handler substring that only reads as JSON-escaped (backslash-quote) in the serialized file, via the decoded-value walk", () => {
+    // JSON.stringify escapes the embedded `"` as `\"` in content/config.json's
+    // actual bytes, e.g. `...onmouseover=\"alert(1)...` — the quoted-
+    // attribute-form regex in FORBIDDEN_PATTERNS requires a REAL quote
+    // character immediately after "=" (by design, to avoid false positives
+    // on unrelated JSON text), so it does NOT match a backslash sitting in
+    // that position. Only walking the DECODED string value (the real
+    // authored `kg" onmouseover="alert(1)` with its real quote character,
+    // exactly what JSON.parse hands back) catches this.
+    const p = goodPackage();
+    const bad = { ...goodConfig, outputs: [{ id: "y", label: "y", units: 'kg" onmouseover="alert(1)' }] };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const authoringConfig = JSON.parse(p.get("content/config.json")!.toString());
+    const r = scanPackage(p, ctx({ authoringConfig }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) =>
+      v.rule === "forbidden-pattern" && v.file === "content/config.json" && /inline event handler/i.test(v.detail)
+    )).toBe(true);
+  });
+
   it("the manifest-namespace exemption does not apply outside imsmanifest.xml (exact-URL-in-wrong-file is still caught)", () => {
     // Same exact string as one of the exempt namespace URIs, but placed in
     // content/config.json instead -- must NOT be exempt there.

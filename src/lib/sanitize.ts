@@ -67,7 +67,21 @@ export function sanitizeRichText(input: string): string {
   return sanitizeHtml(input, RICH_TEXT_OPTIONS);
 }
 
-/** Escape everything: for labels, units, titles. */
+/**
+ * Escape everything: for labels, units, titles.
+ *
+ * sanitize-html's "escape" mode only escapes tag/entity-forming characters
+ * (`<`, `>`, `&`) — verified directly against sanitize-html: it leaves `"`
+ * and `'` untouched. That's fine as long as the value is only ever placed
+ * in an HTML text position, but plain-text fields (label/units/title) are
+ * exactly the kind of field a future call site could plausibly interpolate
+ * into an HTML attribute (e.g. a title="..." tooltip). A value like
+ * `kg" onmouseover="x` would then break out of the attribute and inject a
+ * live handler even though it contains no `<`/`>`/`&` at all. Escaping
+ * quotes here too closes that off regardless of which position (text or
+ * attribute) the caller ends up using.
+ */
 export function sanitizePlainText(input: string): string {
-  return sanitizeHtml(input, { allowedTags: [], allowedAttributes: {}, disallowedTagsMode: "escape" });
+  const escaped = sanitizeHtml(input, { allowedTags: [], allowedAttributes: {}, disallowedTagsMode: "escape" });
+  return escaped.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
