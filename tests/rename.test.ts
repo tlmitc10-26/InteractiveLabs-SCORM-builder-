@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renameInFormula, renameIdentifier, type RenameableConfig } from "@/lib/engines/param-sandbox/rename";
+import { parseFormula } from "@/lib/formula/parser";
+import { validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 
 describe("renameInFormula", () => {
   it("renames a whole identifier", () => {
@@ -27,6 +29,20 @@ describe("renameInFormula", () => {
     // pathological input, but round(e) should never be touched by a rename
     // of some unrelated id that happens to share no characters here.
     expect(renameInFormula("round(pi) + mass", "mass", "m")).toBe("round(pi) + m");
+  });
+
+  it("renames a bare variable but leaves a same-named builtin function call alone", () => {
+    // Reachable in practice: slugify("Max") produces the id "max", which
+    // collides in spelling with the builtin `max(...)` function. A bare "\b"
+    // regex would rewrite both; the call must survive untouched.
+    expect(renameInFormula("max + max(1, 2)", "max", "peak")).toBe("peak + max(1, 2)");
+  });
+
+  it("still skips the call form even with whitespace before the parenthesis", () => {
+    // The tokenizer treats whitespace as insignificant, so "max (1, 2)" is
+    // parsed as the exact same call as "max(1, 2)" — the lookahead must
+    // tolerate that whitespace too.
+    expect(renameInFormula("max (1, 2) + max", "max", "peak")).toBe("max (1, 2) + peak");
   });
 });
 
@@ -108,5 +124,31 @@ describe("renameIdentifier", () => {
     delete cfg.visual;
     const out = renameIdentifier(cfg, "mass", "object_mass");
     expect(out.visual).toBeUndefined();
+  });
+
+  it("end-to-end: renaming an input id spelled like a builtin function keeps the config valid", () => {
+    // "max" is both a legal (if unfortunate) input id and the name of a
+    // builtin formula function. The output's formula references the
+    // variable AND calls the builtin of the same name — exactly the
+    // reachable collision the bug report describes (slugify("Max") -> "max").
+    const config = {
+      title: "Builtin-name collision",
+      inputs: [{ id: "max", label: "Max", type: "slider", min: 0, max: 10, step: 1, defaultValue: 5 }],
+      outputs: [{ id: "capped", label: "Capped", formula: "max(max, 3)" }],
+      charts: [],
+      challenges: [],
+    };
+
+    // Sanity: the ORIGINAL formula parses (the builtin call is legal).
+    expect(parseFormula(config.outputs[0].formula).ok).toBe(true);
+
+    const renamed = renameIdentifier(config, "max", "peak");
+    expect(renamed.inputs[0].id).toBe("peak");
+    // The variable argument is renamed; the builtin call keeps its name.
+    expect(renamed.outputs[0].formula).toBe("max(peak, 3)");
+    expect(parseFormula(renamed.outputs[0].formula).ok).toBe(true);
+
+    const result = validateSandboxConfig(renamed);
+    expect(result.ok, !result.ok ? result.errors.join("; ") : "").toBe(true);
   });
 });

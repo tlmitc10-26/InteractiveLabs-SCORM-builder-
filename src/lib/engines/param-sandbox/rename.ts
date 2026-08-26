@@ -42,12 +42,26 @@ export type RenameableConfig = {
  *  produces a formula that fails to parse the same way the input did. Word
  *  boundaries in the replace itself rely on `\b`, which — since formula
  *  identifiers are exactly `[a-zA-Z_][a-zA-Z0-9_]*` (the same character
- *  class `\w` uses) — only matches where a real identifier starts/ends. */
+ *  class `\w` uses) — only matches where a real identifier starts/ends.
+ *
+ *  The replacement is additionally guarded with a negative lookahead,
+ *  `(?!\s*\()`, that skips any occurrence immediately followed by an
+ *  (optionally whitespace-separated) "(" — i.e. a function CALL. This is
+ *  grammar-sound for this formula language, not a heuristic: the tokenizer
+ *  treats whitespace as insignificant, so `ident` followed by `(` is always
+ *  parsed as a call (see parser.ts's `primary()`), and `parseFormula`
+ *  rejects any call whose name isn't in `FORMULA_FUNCTIONS` — so a variable
+ *  can never legally appear immediately before "(" in a formula that
+ *  parses. That means a variable named e.g. "max" can only ever appear
+ *  bare, never as `max(...)` — so this lookahead can never accidentally
+ *  skip a real variable reference, only the builtin call that happens to
+ *  share the same name (`renameInFormula("max + max(1, 2)", "max", "peak")`
+ *  must rename the variable but leave the `max(1, 2)` call alone). */
 export function renameInFormula(formula: string, oldId: string, newId: string): string {
   const parsed = parseFormula(formula);
   if (!parsed.ok) return formula; // don't touch formulas we can't safely analyze
   if (!collectIdentifiers(parsed.ast).includes(oldId)) return formula;
-  const pattern = new RegExp(`\\b${escapeRegExp(oldId)}\\b`, "g");
+  const pattern = new RegExp(`\\b${escapeRegExp(oldId)}\\b(?!\\s*\\()`, "g");
   return formula.replace(pattern, newId);
 }
 
