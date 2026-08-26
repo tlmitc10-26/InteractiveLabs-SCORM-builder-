@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 export interface EngineManifest {
-  generatedAt: string;
   engines: Array<{ id: string; version: string; title: string; files: Record<string, string> }>;
   scorm: { version: string; files: Record<string, string> };
 }

@@ -130,6 +130,20 @@ describe("createScormSession", () => {
     expect(api.LMSFinish).toHaveBeenCalledTimes(1);
   });
 
+  it("calling setCompleted twice produces exactly one commit and one lesson_status write", () => {
+    const api = mockApi();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).API = api;
+    const s = createScormSession(window);
+    api.LMSCommit.mockClear();
+    api.LMSSetValue.mockClear();
+    s.setCompleted();
+    s.setCompleted();
+    expect(api.data["cmi.core.lesson_status"]).toBe("completed");
+    expect(api.LMSCommit).toHaveBeenCalledTimes(1);
+    expect(api.LMSSetValue).toHaveBeenCalledTimes(1);
+  });
+
   it("LMSInitialize returning 'false' yields standalone mode", () => {
     const api = mockApi();
     api.LMSInitialize = vi.fn(() => "false");

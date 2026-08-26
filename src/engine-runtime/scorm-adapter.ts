@@ -131,6 +131,9 @@ export function createScormSession(win: Window): ScormSession {
       scheduleCommit();
     },
     setCompleted() {
+      // Idempotent: a second call must not re-write/re-commit (avoids commit
+      // storms if the engine's own completion guard is ever bypassed).
+      if (completed) return;
       completed = true;
       set("cmi.core.lesson_status", "completed");
       // Completion is rare and important enough to commit right away rather

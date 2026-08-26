@@ -231,9 +231,10 @@
 
   // src/engine-runtime/param-sandbox/main.ts
   function mountSandbox(root, config) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     root.innerHTML = "";
     root.classList.add("ilb-sandbox");
+    const mountId = `ilb-${Math.random().toString(36).slice(2, 9)}`;
     const asts = /* @__PURE__ */ new Map();
     for (const out of config.outputs) {
       const r = parseFormula(out.formula);
@@ -242,19 +243,43 @@
     const values = {};
     for (const inp of config.inputs) values[inp.id] = inp.defaultValue;
     let interacted = false;
+    let bestPct = 0;
+    let reportedComplete = false;
+    let warnedSuspendLimit = false;
     const scorm = typeof window !== "undefined" ? window.ILBScorm : void 0;
     const saved = scorm == null ? void 0 : scorm.loadSuspendData();
-    if (saved && saved.values) {
-      for (const inp of config.inputs) {
-        const v = saved.values[inp.id];
-        if (typeof v === "number") values[inp.id] = v;
+    if (saved) {
+      if (saved.values) {
+        for (const inp of config.inputs) {
+          const raw = saved.values[inp.id];
+          if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+          let v = raw;
+          if (inp.type === "slider" || inp.type === "number") {
+            if (inp.min !== void 0) v = Math.max(inp.min, v);
+            if (inp.max !== void 0) v = Math.min(inp.max, v);
+          } else if (inp.type === "select") {
+            const valid = ((_a = inp.options) != null ? _a : []).some((o) => o.value === v);
+            if (!valid) v = inp.defaultValue;
+          } else if (inp.type === "toggle") {
+            v = v ? 1 : 0;
+          }
+          values[inp.id] = v;
+          interacted = true;
+        }
       }
-      interacted = true;
+      if (typeof saved.best === "number" && Number.isFinite(saved.best)) {
+        bestPct = Math.max(0, Math.min(100, saved.best));
+      }
+      if (saved.completed) reportedComplete = true;
+    }
+    if (scorm && scorm.mode === "scorm" && reportedComplete) {
+      scorm.setScore(bestPct);
+      scorm.setCompleted();
     }
     const header = el("div", "ilb-header");
-    const h1 = el("h1");
-    h1.textContent = config.title;
-    header.appendChild(h1);
+    const h2 = el("h2", "ilb-title");
+    h2.textContent = config.title;
+    header.appendChild(h2);
     if (config.intro) {
       const intro = el("div", "ilb-intro");
       intro.innerHTML = config.intro;
@@ -266,15 +291,19 @@
     const inputsPanel = el("div", "ilb-inputs");
     layout.appendChild(inputsPanel);
     for (const inp of config.inputs) {
-      const row = el("label", "ilb-input-row");
-      const lab = el("span", "ilb-input-label");
+      const inputId = `${mountId}-${inp.id}`;
+      const row = el("div", "ilb-input-row");
+      const lab = document.createElement("label");
+      lab.className = "ilb-input-label";
+      lab.htmlFor = inputId;
       lab.textContent = inp.units ? `${inp.label} (${inp.units})` : inp.label;
       row.appendChild(lab);
       let control;
       if (inp.type === "select") {
         const sel = document.createElement("select");
+        sel.id = inputId;
         sel.dataset.input = inp.id;
-        for (const opt of (_a = inp.options) != null ? _a : []) {
+        for (const opt of (_b = inp.options) != null ? _b : []) {
           const o = document.createElement("option");
           o.value = String(opt.value);
           o.textContent = opt.label;
@@ -289,6 +318,7 @@
       } else if (inp.type === "toggle") {
         const cb = document.createElement("input");
         cb.type = "checkbox";
+        cb.id = inputId;
         cb.dataset.input = inp.id;
         cb.checked = values[inp.id] !== 0;
         cb.addEventListener("change", () => {
@@ -299,15 +329,19 @@
       } else {
         const num = document.createElement("input");
         num.type = inp.type === "slider" ? "range" : "number";
+        num.id = inputId;
         num.dataset.input = inp.id;
-        num.min = String((_b = inp.min) != null ? _b : 0);
-        num.max = String((_c = inp.max) != null ? _c : 100);
-        num.step = String((_d = inp.step) != null ? _d : "any");
+        num.min = String((_c = inp.min) != null ? _c : 0);
+        num.max = String((_d = inp.max) != null ? _d : 100);
+        num.step = String((_e = inp.step) != null ? _e : "any");
         num.value = String(values[inp.id]);
         const valueBadge = el("span", "ilb-input-value");
         valueBadge.textContent = String(values[inp.id]);
         num.addEventListener("input", () => {
-          values[inp.id] = Number(num.value);
+          if (num.value === "") return;
+          const v = Number(num.value);
+          if (!Number.isFinite(v)) return;
+          values[inp.id] = v;
           valueBadge.textContent = num.value;
           onInteract();
         });
@@ -327,6 +361,11 @@
         bg.className = "ilb-stage-bg";
         bg.alt = "";
         bg.src = config.visual.backgroundUrl;
+        bg.addEventListener("load", () => {
+          if (bg.naturalWidth && bg.naturalHeight) {
+            stage.style.aspectRatio = `${bg.naturalWidth} / ${bg.naturalHeight}`;
+          }
+        });
         stage.appendChild(bg);
       }
       for (const ov of config.visual.overlays) {
@@ -345,24 +384,36 @@
           img.className = "ilb-overlay-img";
           img.alt = "";
           holder.appendChild(img);
+          if (ov.type === "swap") {
+            for (const band of ov.bands) {
+              const preload = new Image();
+              preload.src = band.url;
+            }
+          }
         }
         stage.appendChild(holder);
       }
       layout.appendChild(stage);
+      layout.classList.add("ilb-has-stage");
     }
     const outputsPanel = el("div", "ilb-outputs");
+    outputsPanel.setAttribute("role", "status");
+    outputsPanel.setAttribute("aria-live", "polite");
     layout.appendChild(outputsPanel);
     for (const out of config.outputs) {
       const card = el("div", "ilb-output");
       card.dataset.output = out.id;
+      card.setAttribute("aria-atomic", "true");
       const lab = el("div", "ilb-output-label");
       lab.textContent = out.label;
       const val = el("div", "ilb-output-value");
       const unit = el("span", "ilb-output-units");
-      unit.textContent = (_e = out.units) != null ? _e : "";
+      unit.textContent = (_f = out.units) != null ? _f : "";
+      const unavailable = el("span", "ilb-sr-only");
       card.appendChild(lab);
       card.appendChild(val);
       card.appendChild(unit);
+      card.appendChild(unavailable);
       outputsPanel.appendChild(card);
     }
     const chartCanvases = /* @__PURE__ */ new Map();
@@ -374,6 +425,8 @@
       canvas.width = 480;
       canvas.height = 220;
       canvas.dataset.chart = chart.id;
+      canvas.setAttribute("role", "img");
+      canvas.setAttribute("aria-label", `${chart.title} chart`);
       wrap.appendChild(title);
       wrap.appendChild(canvas);
       outputsPanel.appendChild(wrap);
@@ -381,6 +434,7 @@
     }
     if (config.challenges.length) {
       const panel = el("div", "ilb-challenges");
+      panel.setAttribute("aria-live", "polite");
       const h = el("h2");
       h.textContent = "Challenges";
       panel.appendChild(h);
@@ -388,9 +442,13 @@
         const row = el("div", "ilb-challenge");
         row.dataset.challenge = ch.id;
         const mark = el("span", "ilb-challenge-mark");
+        mark.setAttribute("aria-hidden", "true");
+        const status = el("span", "ilb-sr-only");
+        status.textContent = "Not met yet";
         const text = el("span");
         text.textContent = ch.prompt;
         row.appendChild(mark);
+        row.appendChild(status);
         row.appendChild(text);
         panel.appendChild(row);
       }
@@ -416,12 +474,24 @@
       return results;
     }
     function render() {
-      var _a2, _b2, _c2, _d2, _e2, _f;
+      var _a2, _b2, _c2, _d2, _e2;
       const results = computeOutputs(values);
       for (const out of config.outputs) {
         const v = results[out.id];
-        const elv = root.querySelector(`[data-output="${out.id}"] .ilb-output-value`);
-        elv.textContent = v === null ? "\u2014" : v.toFixed((_a2 = out.decimals) != null ? _a2 : 2).replace(/\.?0+$/, "") || "0";
+        const card = root.querySelector(`[data-output="${out.id}"]`);
+        const elv = card.querySelector(".ilb-output-value");
+        const sr = card.querySelector(".ilb-sr-only");
+        if (v === null) {
+          elv.textContent = "";
+          const dash = document.createElement("span");
+          dash.setAttribute("aria-hidden", "true");
+          dash.textContent = "\u2014";
+          elv.appendChild(dash);
+          sr.textContent = "value not available";
+        } else {
+          elv.textContent = String(Number(v.toFixed((_a2 = out.decimals) != null ? _a2 : 2)));
+          sr.textContent = "";
+        }
       }
       if (stage && config.visual) {
         for (const ov of config.visual.overlays) renderOverlay(ov, results[ov.outputId]);
@@ -431,9 +501,12 @@
         const v = results[ch.outputId];
         const ok = v !== null && (ch.comparator === "gte" && v >= ((_b2 = ch.value) != null ? _b2 : 0) || ch.comparator === "lte" && v <= ((_c2 = ch.value) != null ? _c2 : 0) || ch.comparator === "between" && v >= ((_d2 = ch.min) != null ? _d2 : 0) && v <= ((_e2 = ch.max) != null ? _e2 : 0));
         if (ok) met++;
-        (_f = root.querySelector(`[data-challenge="${ch.id}"]`)) == null ? void 0 : _f.classList.toggle("met", ok);
+        const row = root.querySelector(`[data-challenge="${ch.id}"]`);
+        row == null ? void 0 : row.classList.toggle("met", ok);
+        const sr = row == null ? void 0 : row.querySelector(".ilb-sr-only");
+        if (sr) sr.textContent = ok ? "Met" : "Not met yet";
       }
-      for (const chart of config.charts) drawChart(chart, chartCanvases.get(chart.id));
+      for (const chart of config.charts) drawChart(chart, chartCanvases.get(chart.id), results);
       reportScorm(met);
     }
     function renderOverlay(ov, value) {
@@ -459,20 +532,28 @@
         else img.style.transform = `translateY(${out}%)`;
       }
     }
-    function drawChart(chart, canvas) {
+    function drawChart(chart, canvas, currentResults) {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const inp = config.inputs.find((i) => i.id === chart.xInputId);
-      if (!inp || inp.min === void 0 || inp.max === void 0) return;
-      const pts = [];
+      if (!inp || inp.min === void 0 || inp.max === void 0) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.setAttribute("aria-label", `${chart.title}: chart unavailable`);
+        return;
+      }
+      const raw = [];
       for (let s = 0; s < chart.samples; s++) {
         const x = inp.min + s / (chart.samples - 1) * (inp.max - inp.min);
         const r = computeOutputs({ ...values, [chart.xInputId]: x });
         const y = r[chart.yOutputId];
-        if (y !== null) pts.push([x, y]);
+        raw.push(y === null ? null : [x, y]);
       }
+      const pts = raw.filter((p) => p !== null);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (pts.length < 2) return;
+      if (pts.length < 2) {
+        canvas.setAttribute("aria-label", `${chart.title}: not enough data to plot`);
+        return;
+      }
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
       const [xMin, xMax] = [Math.min(...xs), Math.max(...xs)];
       const [yMin, yMax] = [Math.min(...ys), Math.max(...ys)];
@@ -485,15 +566,28 @@
       ctx.strokeStyle = "#8C1D40";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      pts.forEach(([x, y], i) => i ? ctx.lineTo(px(x), py(y)) : ctx.moveTo(px(x), py(y)));
+      let needMove = true;
+      for (const p of raw) {
+        if (p === null) {
+          needMove = true;
+          continue;
+        }
+        const [x, y] = p;
+        if (needMove) {
+          ctx.moveTo(px(x), py(y));
+          needMove = false;
+        } else ctx.lineTo(px(x), py(y));
+      }
       ctx.stroke();
-      const cur = computeOutputs(values)[chart.yOutputId];
+      const cur = currentResults[chart.yOutputId];
       const curX = values[chart.xInputId];
+      let curLabel = "no current point";
       if (cur !== null && curX >= xMin && curX <= xMax) {
         ctx.fillStyle = "#B8860B";
         ctx.beginPath();
         ctx.arc(px(curX), py(cur), 4, 0, 2 * Math.PI);
         ctx.fill();
+        curLabel = `current point (${round2(curX)}, ${round2(cur)})`;
       }
       ctx.fillStyle = "#5f6368";
       ctx.font = "11px sans-serif";
@@ -501,22 +595,34 @@
       ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);
       ctx.fillText(String(round2(yMax)), 2, pad + 8);
       ctx.fillText(String(round2(yMin)), 2, canvas.height - pad);
+      canvas.setAttribute(
+        "aria-label",
+        `${chart.title}: x from ${round2(xMin)} to ${round2(xMax)}, y from ${round2(yMin)} to ${round2(yMax)}, ${curLabel}`
+      );
     }
     function reportScorm(challengesMet) {
       if (!scorm || scorm.mode !== "scorm") return;
       if (!interacted) return;
-      if (config.challenges.length === 0) {
-        scorm.setScore(100);
+      const total = config.challenges.length;
+      const pct = total === 0 ? 100 : challengesMet / total * 100;
+      const metAll = total === 0 || challengesMet === total;
+      if (pct > bestPct) {
+        bestPct = pct;
+        scorm.setScore(bestPct);
+      }
+      if (metAll && !reportedComplete) {
+        reportedComplete = true;
         scorm.setCompleted();
-      } else {
-        scorm.setScore(challengesMet / config.challenges.length * 100);
-        if (challengesMet === config.challenges.length) scorm.setCompleted();
+      }
+      const ok = scorm.saveSuspendData({ values, best: bestPct, completed: reportedComplete });
+      if (!ok && !warnedSuspendLimit) {
+        warnedSuspendLimit = true;
+        console.warn("progress exceeds SCORM suspend limit; resume disabled");
       }
     }
     function onInteract() {
       interacted = true;
       render();
-      scorm == null ? void 0 : scorm.saveSuspendData({ values });
     }
     render();
   }

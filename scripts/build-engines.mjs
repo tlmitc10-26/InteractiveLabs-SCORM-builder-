@@ -38,8 +38,14 @@ copyFileSync(path.join(ROOT, "src/engine-runtime/param-sandbox/preview.html"), p
 
 const sha256 = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
 
+// No timestamp field: rebuilds must be byte-identical given identical
+// source, since a later export-pipeline task gates on `git status` being
+// clean after `npm run build:engines`.
+//
+// preview.html is deliberately NOT hashed here: it's an editor-only preview
+// harness and never ships inside an exported SCORM package (an exported
+// package gets a generated index.html from Task 11 instead).
 const manifest = {
-  generatedAt: new Date().toISOString(),
   engines: [
     {
       id: "param-sandbox",

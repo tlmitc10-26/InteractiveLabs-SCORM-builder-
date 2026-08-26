@@ -3,12 +3,17 @@ import { evaluateFormula } from "@/lib/formula/evaluate";
 import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 
 type Overlay = NonNullable<RuntimeSandboxConfig["visual"]>["overlays"][number];
+type SuspendPayload = { values?: Record<string, number>; best?: number; completed?: boolean };
 
 /** Mount the Parameter Sandbox. Labels/units via textContent (never innerHTML);
  *  only `intro` may contain markup and it arrives pre-sanitized from the builder. */
 export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): void {
   root.innerHTML = "";
   root.classList.add("ilb-sandbox");
+
+  // Unique per-mount id prefix so <label for> associations never collide if
+  // more than one sandbox instance is mounted in the same document.
+  const mountId = `ilb-${Math.random().toString(36).slice(2, 9)}`;
 
   const asts = new Map<string, AstNode>();
   for (const out of config.outputs) {
@@ -20,21 +25,53 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   for (const inp of config.inputs) values[inp.id] = inp.defaultValue;
 
   let interacted = false;
+  let bestPct = 0;
+  let reportedComplete = false;
+  let warnedSuspendLimit = false;
   const scorm = typeof window !== "undefined" ? window.ILBScorm : undefined;
 
   // Resume: restore saved input values from SCORM suspend data (spec 6).
-  const saved = scorm?.loadSuspendData<{ values?: Record<string, number> }>();
-  if (saved && saved.values) {
-    for (const inp of config.inputs) {
-      const v = saved.values[inp.id];
-      if (typeof v === "number") values[inp.id] = v;
+  // Hygiene: only accept finite numbers; clamp into range for slider/number;
+  // fall back to defaultValue for a select whose stored value matches no
+  // option; coerce toggles to 0/1. interacted is set only if something
+  // actually applied (otherwise a "resume" with nothing to restore would
+  // wrongly start reporting scores for a learner who hasn't touched anything).
+  const saved = scorm?.loadSuspendData<SuspendPayload>();
+  if (saved) {
+    if (saved.values) {
+      for (const inp of config.inputs) {
+        const raw = saved.values[inp.id];
+        if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+        let v = raw;
+        if (inp.type === "slider" || inp.type === "number") {
+          if (inp.min !== undefined) v = Math.max(inp.min, v);
+          if (inp.max !== undefined) v = Math.min(inp.max, v);
+        } else if (inp.type === "select") {
+          const valid = (inp.options ?? []).some((o) => o.value === v);
+          if (!valid) v = inp.defaultValue;
+        } else if (inp.type === "toggle") {
+          v = v ? 1 : 0;
+        }
+        values[inp.id] = v;
+        interacted = true;
+      }
     }
-    interacted = true;
+    if (typeof saved.best === "number" && Number.isFinite(saved.best)) {
+      bestPct = Math.max(0, Math.min(100, saved.best));
+    }
+    if (saved.completed) reportedComplete = true;
+  }
+
+  // A previously-completed attempt must never appear "downgraded" on resume,
+  // even before the learner interacts again.
+  if (scorm && scorm.mode === "scorm" && reportedComplete) {
+    scorm.setScore(bestPct);
+    scorm.setCompleted();
   }
 
   // ---------- header ----------
   const header = el("div", "ilb-header");
-  const h1 = el("h1"); h1.textContent = config.title; header.appendChild(h1);
+  const h2 = el("h2", "ilb-title"); h2.textContent = config.title; header.appendChild(h2);
   if (config.intro) {
     const intro = el("div", "ilb-intro");
     intro.innerHTML = config.intro; // sanitized at authoring + revalidated at export
@@ -49,14 +86,18 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   const inputsPanel = el("div", "ilb-inputs");
   layout.appendChild(inputsPanel);
   for (const inp of config.inputs) {
-    const row = el("label", "ilb-input-row");
-    const lab = el("span", "ilb-input-label");
+    const inputId = `${mountId}-${inp.id}`;
+    const row = el("div", "ilb-input-row");
+    const lab = document.createElement("label");
+    lab.className = "ilb-input-label";
+    lab.htmlFor = inputId;
     lab.textContent = inp.units ? `${inp.label} (${inp.units})` : inp.label;
     row.appendChild(lab);
 
     let control: HTMLElement;
     if (inp.type === "select") {
       const sel = document.createElement("select");
+      sel.id = inputId;
       sel.dataset.input = inp.id;
       for (const opt of inp.options ?? []) {
         const o = document.createElement("option");
@@ -68,19 +109,26 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       control = sel;
     } else if (inp.type === "toggle") {
       const cb = document.createElement("input");
-      cb.type = "checkbox"; cb.dataset.input = inp.id; cb.checked = values[inp.id] !== 0;
+      cb.type = "checkbox"; cb.id = inputId; cb.dataset.input = inp.id; cb.checked = values[inp.id] !== 0;
       cb.addEventListener("change", () => { values[inp.id] = cb.checked ? 1 : 0; onInteract(); });
       control = cb;
     } else {
       const num = document.createElement("input");
       num.type = inp.type === "slider" ? "range" : "number";
+      num.id = inputId;
       num.dataset.input = inp.id;
       num.min = String(inp.min ?? 0); num.max = String(inp.max ?? 100);
       num.step = String(inp.step ?? "any"); num.value = String(values[inp.id]);
       const valueBadge = el("span", "ilb-input-value");
       valueBadge.textContent = String(values[inp.id]);
       num.addEventListener("input", () => {
-        values[inp.id] = Number(num.value);
+        // Ignore an empty/non-finite intermediate typing state rather than
+        // writing 0 into the model (e.g. while the learner clears a <input
+        // type=number> field to type a new value).
+        if (num.value === "") return;
+        const v = Number(num.value);
+        if (!Number.isFinite(v)) return;
+        values[inp.id] = v;
         valueBadge.textContent = num.value;
         onInteract();
       });
@@ -99,6 +147,13 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     if (config.visual.backgroundUrl) {
       const bg = document.createElement("img");
       bg.className = "ilb-stage-bg"; bg.alt = ""; bg.src = config.visual.backgroundUrl;
+      // Keep the % overlay boxes coincident with the image's own box by
+      // matching the stage's aspect ratio to the loaded image.
+      bg.addEventListener("load", () => {
+        if (bg.naturalWidth && bg.naturalHeight) {
+          stage!.style.aspectRatio = `${bg.naturalWidth} / ${bg.naturalHeight}`;
+        }
+      });
       stage.appendChild(bg);
     }
     for (const ov of config.visual.overlays) {
@@ -114,22 +169,35 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
         const img = document.createElement("img");
         img.className = "ilb-overlay-img"; img.alt = "";
         holder.appendChild(img);
+        if (ov.type === "swap") {
+          // Preload every band image at mount so switching bands doesn't
+          // stall on a network fetch.
+          for (const band of ov.bands) {
+            const preload = new Image();
+            preload.src = band.url;
+          }
+        }
       }
       stage.appendChild(holder);
     }
     layout.appendChild(stage);
+    layout.classList.add("ilb-has-stage");
   }
 
   // ---------- outputs ----------
   const outputsPanel = el("div", "ilb-outputs");
+  outputsPanel.setAttribute("role", "status");
+  outputsPanel.setAttribute("aria-live", "polite");
   layout.appendChild(outputsPanel);
   for (const out of config.outputs) {
     const card = el("div", "ilb-output");
     card.dataset.output = out.id;
+    card.setAttribute("aria-atomic", "true");
     const lab = el("div", "ilb-output-label"); lab.textContent = out.label;
     const val = el("div", "ilb-output-value");
     const unit = el("span", "ilb-output-units"); unit.textContent = out.units ?? "";
-    card.appendChild(lab); card.appendChild(val); card.appendChild(unit);
+    const unavailable = el("span", "ilb-sr-only");
+    card.appendChild(lab); card.appendChild(val); card.appendChild(unit); card.appendChild(unavailable);
     outputsPanel.appendChild(card);
   }
 
@@ -140,6 +208,8 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const title = el("div", "ilb-chart-title"); title.textContent = chart.title;
     const canvas = document.createElement("canvas");
     canvas.width = 480; canvas.height = 220; canvas.dataset.chart = chart.id;
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", `${chart.title} chart`);
     wrap.appendChild(title); wrap.appendChild(canvas);
     outputsPanel.appendChild(wrap);
     chartCanvases.set(chart.id, canvas);
@@ -148,13 +218,17 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   // ---------- challenges ----------
   if (config.challenges.length) {
     const panel = el("div", "ilb-challenges");
+    panel.setAttribute("aria-live", "polite");
     const h = el("h2"); h.textContent = "Challenges"; panel.appendChild(h);
     for (const ch of config.challenges) {
       const row = el("div", "ilb-challenge");
       row.dataset.challenge = ch.id;
       const mark = el("span", "ilb-challenge-mark");
+      mark.setAttribute("aria-hidden", "true");
+      const status = el("span", "ilb-sr-only");
+      status.textContent = "Not met yet";
       const text = el("span"); text.textContent = ch.prompt;
-      row.appendChild(mark); row.appendChild(text);
+      row.appendChild(mark); row.appendChild(status); row.appendChild(text);
       panel.appendChild(row);
     }
     root.appendChild(panel);
@@ -180,8 +254,20 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const results = computeOutputs(values);
     for (const out of config.outputs) {
       const v = results[out.id];
-      const elv = root.querySelector(`[data-output="${out.id}"] .ilb-output-value`)!;
-      elv.textContent = v === null ? "—" : v.toFixed(out.decimals ?? 2).replace(/\.?0+$/, "") || "0";
+      const card = root.querySelector(`[data-output="${out.id}"]`) as HTMLElement;
+      const elv = card.querySelector(".ilb-output-value") as HTMLElement;
+      const sr = card.querySelector(".ilb-sr-only") as HTMLElement;
+      if (v === null) {
+        elv.textContent = "";
+        const dash = document.createElement("span");
+        dash.setAttribute("aria-hidden", "true");
+        dash.textContent = "—";
+        elv.appendChild(dash);
+        sr.textContent = "value not available";
+      } else {
+        elv.textContent = String(Number(v.toFixed(out.decimals ?? 2)));
+        sr.textContent = "";
+      }
     }
     if (stage && config.visual) {
       for (const ov of config.visual.overlays) renderOverlay(ov, results[ov.outputId]);
@@ -194,9 +280,12 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
         (ch.comparator === "lte" && v <= (ch.value ?? 0)) ||
         (ch.comparator === "between" && v >= (ch.min ?? 0) && v <= (ch.max ?? 0)));
       if (ok) met++;
-      root.querySelector(`[data-challenge="${ch.id}"]`)?.classList.toggle("met", ok);
+      const row = root.querySelector(`[data-challenge="${ch.id}"]`);
+      row?.classList.toggle("met", ok);
+      const sr = row?.querySelector(".ilb-sr-only");
+      if (sr) sr.textContent = ok ? "Met" : "Not met yet";
     }
-    for (const chart of config.charts) drawChart(chart, chartCanvases.get(chart.id)!);
+    for (const chart of config.charts) drawChart(chart, chartCanvases.get(chart.id)!, results);
     reportScorm(met);
   }
 
@@ -223,20 +312,33 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     }
   }
 
-  function drawChart(chart: RuntimeSandboxConfig["charts"][number], canvas: HTMLCanvasElement): void {
+  function drawChart(
+    chart: RuntimeSandboxConfig["charts"][number],
+    canvas: HTMLCanvasElement,
+    currentResults: Record<string, number | null>,
+  ): void {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const inp = config.inputs.find((i) => i.id === chart.xInputId);
-    if (!inp || inp.min === undefined || inp.max === undefined) return;
-    const pts: Array<[number, number]> = [];
+    if (!inp || inp.min === undefined || inp.max === undefined) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.setAttribute("aria-label", `${chart.title}: chart unavailable`);
+      return;
+    }
+    type Pt = [number, number] | null;
+    const raw: Pt[] = [];
     for (let s = 0; s < chart.samples; s++) {
       const x = inp.min + (s / (chart.samples - 1)) * (inp.max - inp.min);
       const r = computeOutputs({ ...values, [chart.xInputId]: x });
       const y = r[chart.yOutputId];
-      if (y !== null) pts.push([x, y]);
+      raw.push(y === null ? null : [x, y]);
     }
+    const pts = raw.filter((p): p is [number, number] => p !== null);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (pts.length < 2) return;
+    if (pts.length < 2) {
+      canvas.setAttribute("aria-label", `${chart.title}: not enough data to plot`);
+      return;
+    }
     const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
     const [xMin, xMax] = [Math.min(...xs), Math.max(...xs)];
     const [yMin, yMax] = [Math.min(...ys), Math.max(...ys)];
@@ -247,38 +349,64 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     ctx.strokeRect(pad, pad, canvas.width - 2 * pad, canvas.height - 2 * pad);
     ctx.strokeStyle = "#8C1D40"; ctx.lineWidth = 2;
     ctx.beginPath();
-    pts.forEach(([x, y], i) => (i ? ctx.lineTo(px(x), py(y)) : ctx.moveTo(px(x), py(y))));
+    // Break the polyline across samples where the formula failed, rather
+    // than drawing a misleading straight line across the gap.
+    let needMove = true;
+    for (const p of raw) {
+      if (p === null) { needMove = true; continue; }
+      const [x, y] = p;
+      if (needMove) { ctx.moveTo(px(x), py(y)); needMove = false; }
+      else ctx.lineTo(px(x), py(y));
+    }
     ctx.stroke();
-    // current-position marker
-    const cur = computeOutputs(values)[chart.yOutputId];
+    // current-position marker — reuses render()'s already-computed results
+    // instead of recomputing outputs a second time.
+    const cur = currentResults[chart.yOutputId];
     const curX = values[chart.xInputId];
+    let curLabel = "no current point";
     if (cur !== null && curX >= xMin && curX <= xMax) {
       ctx.fillStyle = "#B8860B";
       ctx.beginPath(); ctx.arc(px(curX), py(cur), 4, 0, 2 * Math.PI); ctx.fill();
+      curLabel = `current point (${round2(curX)}, ${round2(cur)})`;
     }
     ctx.fillStyle = "#5f6368"; ctx.font = "11px sans-serif";
     ctx.fillText(String(round2(xMin)), pad, canvas.height - 8);
     ctx.fillText(String(round2(xMax)), canvas.width - pad - 24, canvas.height - 8);
     ctx.fillText(String(round2(yMax)), 2, pad + 8);
     ctx.fillText(String(round2(yMin)), 2, canvas.height - pad);
+    canvas.setAttribute(
+      "aria-label",
+      `${chart.title}: x from ${round2(xMin)} to ${round2(xMax)}, y from ${round2(yMin)} to ${round2(yMax)}, ${curLabel}`,
+    );
   }
 
+  /** Reports score/completion to the LMS as a monotonic high-water mark: the
+   *  reported score never decreases even if the learner un-meets a challenge
+   *  afterward, and completion, once reported, is never retracted. */
   function reportScorm(challengesMet: number): void {
     if (!scorm || scorm.mode !== "scorm") return;
     if (!interacted) return;
-    if (config.challenges.length === 0) {
-      scorm.setScore(100);
+    const total = config.challenges.length;
+    const pct = total === 0 ? 100 : (challengesMet / total) * 100;
+    const metAll = total === 0 || challengesMet === total;
+    if (pct > bestPct) {
+      bestPct = pct;
+      scorm.setScore(bestPct);
+    }
+    if (metAll && !reportedComplete) {
+      reportedComplete = true;
       scorm.setCompleted();
-    } else {
-      scorm.setScore((challengesMet / config.challenges.length) * 100);
-      if (challengesMet === config.challenges.length) scorm.setCompleted();
+    }
+    const ok = scorm.saveSuspendData<SuspendPayload>({ values, best: bestPct, completed: reportedComplete });
+    if (!ok && !warnedSuspendLimit) {
+      warnedSuspendLimit = true;
+      console.warn("progress exceeds SCORM suspend limit; resume disabled");
     }
   }
 
   function onInteract(): void {
     interacted = true;
     render();
-    scorm?.saveSuspendData({ values });
   }
 
   render();

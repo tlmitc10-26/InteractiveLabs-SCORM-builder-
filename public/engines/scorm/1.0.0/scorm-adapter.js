@@ -97,6 +97,7 @@
         scheduleCommit();
       },
       setCompleted() {
+        if (completed) return;
         completed = true;
         set("cmi.core.lesson_status", "completed");
         flush();
