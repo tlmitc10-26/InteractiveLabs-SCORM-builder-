@@ -58,12 +58,27 @@ This pass adds and test-enforces:
 - One starter template ("Buoyancy explorer" — the existing demo config) offered at interactive creation alongside "blank," so authoring never starts from an empty x→2x stub. Full template gallery is a later milestone.
 - Inline validation stays gentle: draft always saves; issues panel wording task-focused.
 
-## 7. Out of scope for this pass
+## 7. Spatial authoring: drag-and-drop + placement model (decided)
+
+Designers get spatial flexibility where it helps and reliable UX where it matters, split along the line that protects accessibility:
+
+**7a. Direct manipulation on the visual stage (full freedom).**
+Overlays (fills, swap/transform images) and any future stage-anchored visual element are draggable and resizable directly in the live preview: click to select, drag to move, handles to resize, arrow-key nudge (1% steps, Shift = 10%) as the required non-drag alternative (WCAG 2.5.7 applies to the authoring tool too), snap-to-grid (2%) with alignment guides, and a live coordinate readout. The existing numeric box fields remain, synced two-way, as the precise/accessible path. Geometry stays percent-of-stage (responsive by construction) — dragging writes the same schema-validated `box` values the form writes today.
+
+**7b. Control placement: zones and presets, never free pixels.**
+- **Layout presets** (reliable UX, zero positioning effort): controls-beside-stage (default), controls-below-stage, stage-focused. Token-designed, responsive, accessible.
+- **Per-element zones** (flexibility): each input/output may be assigned to a zone — side panel, below stage, or **on-stage** using the same percent box model with drag placement. On-stage controls keep 24px minimum targets and get collision/overflow warnings.
+- **Invariant:** placement is visual only. DOM order (and therefore focus order and screen-reader order) always follows the logical authoring order, regardless of visual position (WCAG 1.3.2 / 2.4.3). The schema stores `placement` alongside each element; the runtime positions via CSS.
+
+**7c. Implementation boundary (security-preserving).**
+All authoring affordances — selection outlines, handles, guides, drag logic — live in the EDITOR, drawn over the same-origin preview iframe (the editor measures the running engine's stage directly). **No authoring code ships in the audited runtime.** The runtime only gains the ability to render `placement` from config — data, like everything else. Scanner, checksums, and export pipeline are unaffected in shape; the engine schema gains `placement` and the runtime is rebuilt/re-checksummed once.
+
+## 8. Out of scope for this pass
 
 Partner theme switching UI; template gallery beyond the one starter; new engines; auth; deployment. The token architecture must not preclude any of these.
 
-## 8. Testing / acceptance
+## 9. Testing / acceptance
 
 - All existing 126 tests stay green; token drift covered by the extended engine-drift test; golden export re-baselined once (engine.css changes).
-- New: contrast-math unit tests (known ratio fixtures), schema tests for the color union + migration, axe checks, target-size assertions.
-- Acceptance: Tamara opens the app via the desktop icon, authors a small interactive without touching an ID or hex code unless she wants to, previews it (Georgia-headed, ASU-branded), exports, and the package imports into Canvas looking identical to the preview.
+- New: contrast-math unit tests (known ratio fixtures), schema tests for the color union + `placement` + migration, axe checks, target-size assertions, drag-interaction tests (drag writes correct box values; arrow-key nudge parity; focus order independent of visual placement).
+- Acceptance: Tamara opens the app via the desktop icon, authors a small interactive without touching an ID or hex code unless she wants to, **drags the water fill into place over an uploaded beaker image**, places a slider on-stage beside it, previews it (Georgia-headed, ASU-branded, tab order sane), exports, and the package imports into Canvas looking identical to the preview.
