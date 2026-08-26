@@ -74,6 +74,39 @@ const FORBIDDEN_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /import\s*\(/, label: "dynamic import()" },
 ];
 
+/** Forbidden markup-injection tags, applied everywhere EXCEPT .html files
+ *  (see scanForbiddenNonHtmlMarkup below) and the decoded authoring-config
+ *  string walk. index.html legitimately contains real <script> tags (the
+ *  audited engine loaders) — that file is governed instead by byte-equality
+ *  against ctx.expectedIndexHtml plus the existing inline-script/
+ *  external-script/unapproved-code-file rules, so applying these patterns
+ *  there would either be redundant or produce false positives on the
+ *  legitimate engine <script src> tags.
+ *
+ *  Added because sanitizePlainText (src/lib/sanitize.ts) no longer entity-
+ *  escapes plain-text fields: an author who types the ENCODED form
+ *  "&lt;script&gt;alert(1)&lt;/script&gt;" into a label has that decoded by
+ *  the browser back into live markup the moment it's placed in the DOM
+ *  outside a text-node context (or read by any consumer that doesn't use
+ *  textContent) — content/config.json (and any non-html text file) must
+ *  not be able to carry that unflagged. <object>/<embed> included alongside
+ *  <script> since both can load/execute attacker-controlled content
+ *  (data:/plugin handlers) the same way <iframe> already does above. */
+const FORBIDDEN_MARKUP_PATTERNS_NON_HTML: Array<{ re: RegExp; label: string }> = [
+  { re: /<script\b/i, label: "script element" },
+  { re: /<object\b/i, label: "object element" },
+  { re: /<embed\b/i, label: "embed element" },
+];
+
+/** Shared by the per-file text scan (non-.html files only) and the decoded
+ *  authoring-config string walk — see FORBIDDEN_MARKUP_PATTERNS_NON_HTML's
+ *  comment for why .html is excluded. */
+function scanForbiddenNonHtmlMarkup(text: string, file: string, violations: Violation[]): void {
+  for (const { re, label } of FORBIDDEN_MARKUP_PATTERNS_NON_HTML) {
+    if (re.test(text)) violations.push({ file, rule: "forbidden-pattern", detail: label });
+  }
+}
+
 /** javascript:/data: URL schemes that can carry executable/markup content,
  *  checked against a tab/CR/LF-STRIPPED copy of the text (see
  *  `stripUrlWhitespace` below). Kept separate from FORBIDDEN_PATTERNS
@@ -343,6 +376,14 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
 
     // Rule: forbidden patterns (common, all text files — engine files included)
     scanForbiddenPatterns(text, path, violations);
+    // Rule: forbidden markup-injection tags (script/object/embed) — every
+    // non-html text file (config.json, xml, css, js; engine.js/scorm-
+    // adapter.js included — verified they contain none of these strings,
+    // so this cannot false-positive on a clean build). Deliberately
+    // excluded for .html: see FORBIDDEN_MARKUP_PATTERNS_NON_HTML's comment.
+    if (ext !== "html") {
+      scanForbiddenNonHtmlMarkup(text, path, violations);
+    }
     // javascript:/data: scheme check: run against the whole-text
     // whitespace-stripped copy (N1/N2/N3, part b) — a literal tab/newline
     // embedded INSIDE the scheme keyword itself (`jav\tascript:`) must not
@@ -448,6 +489,12 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
     scanForbiddenUrlSchemes(decoded, "content/config.json", violations);
     scanUrlTokensForAllowlist(decoded, "content/config.json", ctx.urlAllowlist, violations);
     scanForbiddenPatterns(raw, "content/config.json", violations);
+    // This IS the real hole the sanitizePlainText change opened: a label
+    // like "&lt;script&gt;alert(1)&lt;/script&gt;" decodes (sanitizePlainText
+    // no longer entity-escapes, see src/lib/sanitize.ts) to live markup
+    // stored verbatim in the authoring config. Catch it here, on the raw
+    // decoded string, same as scanForbiddenPatterns above.
+    scanForbiddenNonHtmlMarkup(raw, "content/config.json", violations);
   }
 
   // Rule: config revalidation + sanitizer idempotence
