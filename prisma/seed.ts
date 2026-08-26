@@ -1,10 +1,8 @@
 import "dotenv/config";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "@prisma/client";
+import { createSqliteAdapter } from "../src/lib/db-adapter";
 
-// Prisma 7 requires an explicit driver adapter, even for local SQLite.
-const adapter = new PrismaBetterSqlite3({ url: process.env.DATABASE_URL! });
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({ adapter: createSqliteAdapter() });
 
 async function main() {
   await prisma.policy.upsert({

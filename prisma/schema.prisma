@@ -26,6 +26,8 @@ model Interactive {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   exports       ExportRecord[]
+
+  @@index([projectId])
 }
 
 model Asset {
@@ -37,8 +39,11 @@ model Asset {
   byteSize    Int
   contentHash String
   createdAt   DateTime @default(now())
+
+  @@index([projectId])
 }
 
+// Singleton row: id is always 1. Admin-only security policy.
 model Policy {
   id                Int    @id @default(1)
   allowlistJson     String @default("[]")
@@ -53,5 +58,7 @@ model ExportRecord {
   interactive   Interactive @relation(fields: [interactiveId], references: [id], onDelete: Cascade)
   passed        Boolean
   reportJson    String
-  createdAt    DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+
+  @@index([interactiveId])
 }
