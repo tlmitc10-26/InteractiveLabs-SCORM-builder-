@@ -116,6 +116,33 @@ describe("mountSandbox", () => {
       expect(out.textContent).toBe("20"); // 10 * 2, clamped value drives outputs
     });
 
+    it("preserves in-progress typing in the number field instead of rewriting it mid-keystroke", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+
+      // A leading zero must not be snapped away mid-keystroke.
+      number.value = "07";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(number.value).toBe("07");
+      expect(range.value).toBe("7");
+
+      // A trailing zero after the decimal point must not be snapped away
+      // mid-keystroke either (typing "3.5" then "3.50").
+      number.value = "3.5";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      number.value = "3.50";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(number.value).toBe("3.50");
+      const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
+      expect(out.textContent).toBe("7"); // 3.5 * 2
+
+      // Only on blur is the displayed text normalized.
+      number.dispatchEvent(new Event("blur", { bubbles: true }));
+      expect(number.value).toBe("3.5");
+      expect(range.value).toBe("3.5");
+    });
+
     it("clamps an out-of-range number entry into [min, max] on Enter", () => {
       mountSandbox(document.getElementById("root")!, config);
       const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;

@@ -171,27 +171,49 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       num.value = range.value;
       num.setAttribute("aria-label", `${inp.label}, exact value`);
 
-      // Commit a raw string into the model + both controls. `clamp` is only
-      // true from the blur/Enter commit path below — mid-typing (the plain
-      // "input" event) never clamps, matching the existing number-field
-      // ignore-empty/NaN behavior.
-      const commit = (raw: string, clamp: boolean): void => {
-        if (raw === "") return;
-        let v = Number(raw);
+      // The range always carries a browser-sanitized, complete value (never
+      // a mid-edit string), so its input handler may freely mirror straight
+      // into the number field's text.
+      range.addEventListener("input", () => {
+        const v = Number(range.value);
         if (!Number.isFinite(v)) return;
-        if (clamp) {
-          if (inp.min !== undefined) v = Math.max(inp.min, v);
-          if (inp.max !== undefined) v = Math.min(inp.max, v);
-        }
+        values[inp.id] = v;
+        num.value = range.value;
+        onInteract();
+      });
+      // The number field, by contrast, can be mid-keystroke ("07", "3.50",
+      // a trailing "-" or "."): accept a finite value into the model and
+      // mirror it to the range, but never rewrite the number field's own
+      // text here — doing so would snap "07" -> "7" or "3.50" -> "3.5" out
+      // from under the learner's cursor on every keystroke. Ignore an
+      // empty/non-finite intermediate state rather than writing 0 into the
+      // model, matching the plain "number" type's handling below.
+      num.addEventListener("input", () => {
+        if (num.value === "") return;
+        const v = Number(num.value);
+        if (!Number.isFinite(v)) return;
         values[inp.id] = v;
         range.value = String(v);
-        num.value = String(v);
         onInteract();
+      });
+      // Only on blur/Enter do we clamp into [min, max] AND normalize the
+      // number field's displayed text (e.g. "3.50" -> "3.5", out-of-range
+      // -> the bound) — this is the one point where rewriting the field is
+      // safe, since the learner is done typing.
+      const commitClamp = (): void => {
+        if (num.value === "") return;
+        const raw = Number(num.value);
+        if (!Number.isFinite(raw)) return;
+        let v = raw;
+        if (inp.min !== undefined) v = Math.max(inp.min, v);
+        if (inp.max !== undefined) v = Math.min(inp.max, v);
+        if (v !== raw || String(v) !== num.value) {
+          values[inp.id] = v;
+          range.value = String(v);
+          num.value = String(v);
+          onInteract();
+        }
       };
-      const commitClamp = (): void => commit(num.value, true);
-
-      range.addEventListener("input", () => commit(range.value, false));
-      num.addEventListener("input", () => commit(num.value, false));
       num.addEventListener("blur", commitClamp);
       num.addEventListener("keydown", (e) => { if (e.key === "Enter") commitClamp(); });
 

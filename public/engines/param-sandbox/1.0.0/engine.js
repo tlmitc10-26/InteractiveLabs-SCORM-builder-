@@ -358,22 +358,35 @@
         num.step = range.step;
         num.value = range.value;
         num.setAttribute("aria-label", `${inp.label}, exact value`);
-        const commit = (raw, clamp) => {
-          if (raw === "") return;
-          let v = Number(raw);
+        range.addEventListener("input", () => {
+          const v = Number(range.value);
           if (!Number.isFinite(v)) return;
-          if (clamp) {
-            if (inp.min !== void 0) v = Math.max(inp.min, v);
-            if (inp.max !== void 0) v = Math.min(inp.max, v);
-          }
+          values[inp.id] = v;
+          num.value = range.value;
+          onInteract();
+        });
+        num.addEventListener("input", () => {
+          if (num.value === "") return;
+          const v = Number(num.value);
+          if (!Number.isFinite(v)) return;
           values[inp.id] = v;
           range.value = String(v);
-          num.value = String(v);
           onInteract();
+        });
+        const commitClamp = () => {
+          if (num.value === "") return;
+          const raw = Number(num.value);
+          if (!Number.isFinite(raw)) return;
+          let v = raw;
+          if (inp.min !== void 0) v = Math.max(inp.min, v);
+          if (inp.max !== void 0) v = Math.min(inp.max, v);
+          if (v !== raw || String(v) !== num.value) {
+            values[inp.id] = v;
+            range.value = String(v);
+            num.value = String(v);
+            onInteract();
+          }
         };
-        const commitClamp = () => commit(num.value, true);
-        range.addEventListener("input", () => commit(range.value, false));
-        num.addEventListener("input", () => commit(num.value, false));
         num.addEventListener("blur", commitClamp);
         num.addEventListener("keydown", (e) => {
           if (e.key === "Enter") commitClamp();
