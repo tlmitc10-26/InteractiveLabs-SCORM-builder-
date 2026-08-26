@@ -15,6 +15,9 @@ const eslintConfig = defineConfig([
     // Generated/bundled engine runtime output (esbuild), committed as
     // checksummed audited artifacts, not authored source.
     "public/engines/**",
+    // Claude Code working state (worktrees, build output from parallel
+    // sessions) — not project source.
+    ".claude/**",
   ]),
 ]);
 
