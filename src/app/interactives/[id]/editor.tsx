@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { saveInteractiveConfig } from "@/app/actions";
-import { colorRefToCss } from "@/lib/engines/param-sandbox/schema";
+// Light, zod-free import on purpose: this is a client component, and
+// runtime-config.ts pulls in only @/lib/design/tokens (no zod, no
+// sanitize-html, no formula parser) — importing those from schema.ts here
+// would drag their weight into this route's client bundle for no benefit,
+// since the editor never validates, only resolves/reshapes for preview.
+import { toDisplayColorRef, toRuntimeConfig, type SandboxConfigLike } from "@/lib/engines/param-sandbox/runtime-config";
 
 /* Editing shape mirrors the Zod input (pre-validation). */
 type EInput = { id: string; label: string; type: "slider" | "number" | "toggle" | "select"; min?: number; max?: number; step?: number; defaultValue: number; units?: string; options?: Array<{ label: string; value: number }> };
@@ -88,7 +93,15 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
   }, [interactiveId]);
 
   const postPreview = useCallback((cfg: EConfig) => {
-    const runtime = toPreviewRuntime(cfg);
+    // EConfig (this file's editing shape) is structurally the same authoring
+    // shape schema.ts's SandboxConfig satisfies (SandboxConfigLike), except
+    // its fill-overlay `color.token` is a plain `string` (not the narrower
+    // `TokenName`) since the editor doesn't validate token names as the
+    // designer types — and a mid-edit draft can be structurally invalid in
+    // other ways too (empty ids, out-of-range values). toRuntimeConfig only
+    // reshapes assetIds/colors and never asserts validity, so a best-effort
+    // preview of an invalid draft is unaffected; this is the one cast site.
+    const runtime = toRuntimeConfig(cfg as unknown as SandboxConfigLike, (assetId) => `/api/assets/${assetId}`);
     // Target the iframe's own origin explicitly (not "*"): preview.html only
     // accepts messages whose ev.origin matches its own origin, and since the
     // iframe is same-origin with this page, location.origin here is correct.
@@ -189,25 +202,6 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
   );
 }
 
-/* Maps assetId fields to preview URLs; mirrors toRuntimeConfig server-side. */
-function toPreviewRuntime(cfg: EConfig) {
-  const url = (assetId: string) => `/api/assets/${assetId}`;
-  const { visual, ...rest } = cfg;
-  if (!visual) return rest;
-  return {
-    ...rest,
-    visual: {
-      backgroundUrl: visual.backgroundAssetId ? url(visual.backgroundAssetId) : undefined,
-      overlays: visual.overlays.map((ov) => {
-        if (ov.type === "fill") return { ...ov, color: colorRefToCss(ov.color as Parameters<typeof colorRefToCss>[0]) };
-        if (ov.type === "swap") return { ...ov, bands: ov.bands.map((b) => ({ upTo: b.upTo, url: url(b.assetId) })) };
-        const { assetId, ...o } = ov;
-        return { ...o, url: url(assetId) };
-      }),
-    },
-  };
-}
-
 /* ---------- shared small components ---------- */
 
 function Section({ title, onAdd, addLabel, children }: { title: string; onAdd?: () => void; addLabel?: string; children: React.ReactNode }) {
@@ -261,6 +255,17 @@ function splitFirstEquals(line: string): [string, string] {
   const idx = line.indexOf("=");
   if (idx === -1) return [line, ""];
   return [line.slice(0, idx), line.slice(idx + 1)];
+}
+
+/** Defensive display helper for the crude color-field bridge: the editing
+ *  shape (EConfig) is never re-validated on load, so despite the EColorRef
+ *  type a fill overlay's `color` could in practice still be a raw legacy
+ *  hex string. `toDisplayColorRef` wraps that case into `{hex}` first, so
+ *  the `"token" in` check below never runs directly on a string (which
+ *  would throw) — no `in`-operator on a possibly-string value anywhere. */
+function colorFieldDisplayValue(color: EColorRef | string): string {
+  const c = toDisplayColorRef(color as Parameters<typeof toDisplayColorRef>[0]);
+  return "token" in c ? `token:${c.token}` : c.hex;
 }
 
 /** Collision-safe id generator: increments until `prefix_N` isn't already in
@@ -442,7 +447,7 @@ function VisualSection({ visual, outputs, assets, onChange }: {
                 Task 7's ColorField (token swatches + live contrast readout)
                 replaces this raw text input. */}
             <TextField label="Color (#rrggbb or token:name)"
-              value={"token" in ov.color ? `token:${ov.color.token}` : ov.color.hex}
+              value={colorFieldDisplayValue(ov.color)}
               onChange={(val) => updateOverlay(i, {
                 color: val.startsWith("token:") ? { token: val.slice(6) } : { hex: val },
               } as Partial<EOverlay>)} />

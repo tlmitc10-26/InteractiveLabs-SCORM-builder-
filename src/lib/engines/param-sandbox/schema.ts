@@ -2,8 +2,19 @@ import { z } from "zod";
 import { parseFormula } from "@/lib/formula/parser";
 import { collectIdentifiers } from "@/lib/formula/evaluate";
 import { sanitizeRichText, sanitizePlainText } from "@/lib/sanitize";
-import { isTokenName, colorHex, type TokenName } from "@/lib/design/tokens";
+import { isTokenName, colorHex } from "@/lib/design/tokens";
 import { contrastRatio, meetsNonText, ratioLabel } from "@/lib/design/contrast";
+import {
+  resolveColorHex, toRuntimeConfig as toRuntimeConfigImpl, collectAssetIds as collectAssetIdsImpl,
+  type RuntimeSandboxConfig as RuntimeSandboxConfigImpl,
+} from "@/lib/engines/param-sandbox/runtime-config";
+
+// Re-exported so no existing import site (tests, engine-runtime, editor)
+// breaks: the color-resolution/runtime-shape helpers now live in the light,
+// zod-free runtime-config.ts module (see its file comment for why), but
+// schema.ts remains the canonical place authoring code imports them from.
+export { resolveColorHex, colorRefToCss, migrateLegacyColors } from "@/lib/engines/param-sandbox/runtime-config";
+export type { ColorRef } from "@/lib/engines/param-sandbox/runtime-config";
 
 const idPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const safeId = z.string().min(1).max(40).regex(idPattern, "ids must be letters/digits/underscore");
@@ -18,21 +29,14 @@ const rich = (max: number) => z.string().max(max).transform(sanitizeRichText).pi
  *  (contrast-safe by construction against the default stage background) or
  *  a verified custom hex (validated below). Legacy authoring drafts stored
  *  a bare hex string directly on the field — that shape is migrated to
- *  `{ hex }` at parse time so old drafts keep validating unchanged. */
+ *  `{ hex }` at parse time so old drafts keep validating unchanged. This
+ *  schema needs zod, so (unlike ColorRef/resolveColorHex/colorRefToCss) it
+ *  stays in schema.ts rather than moving to the light runtime-config.ts. */
 export const colorRefSchema = z.union([
   z.object({ token: z.string().refine(isTokenName, "unknown color token") }).strict(),
   z.object({ hex: z.string().regex(/^#[0-9a-fA-F]{6}$/) }).strict(),
   z.string().regex(/^#[0-9a-fA-F]{6}$/).transform((hex) => ({ hex })),
 ]);
-export type ColorRef = { token: TokenName } | { hex: string };
-
-export function resolveColorHex(c: ColorRef): string {
-  return "token" in c ? colorHex(c.token) : c.hex;
-}
-
-export function colorRefToCss(c: ColorRef): string {
-  return "token" in c ? `var(--rds-${c.token})` : c.hex;
-}
 
 /** Stage background used for the fill-overlay contrast gate (light-1). */
 const STAGE_BG_HEX = colorHex("light-1");
@@ -219,48 +223,14 @@ export function validateSandboxConfig(raw: unknown): ValidationResult {
   return errors.length ? { ok: false, errors } : { ok: true, config };
 }
 
-/** Runtime config: assetIds resolved to URLs. Shape consumed by the engine runtime. */
-export type RuntimeSandboxConfig = Omit<SandboxConfig, "visual"> & {
-  visual?: {
-    backgroundUrl?: string;
-    overlays: Array<
-      | { id: string; type: "fill"; outputId: string; inMin: number; inMax: number; color: string; box: { x: number; y: number; w: number; h: number } }
-      | { id: string; type: "swap"; outputId: string; box: { x: number; y: number; w: number; h: number }; bands: Array<{ upTo: number; url: string }> }
-      | { id: string; type: "transform"; outputId: string; box: { x: number; y: number; w: number; h: number }; url: string; property: "translateY" | "translateX" | "rotate" | "scale" | "opacity"; inMin: number; inMax: number; outMin: number; outMax: number }
-    >;
-  };
-};
-
-export function toRuntimeConfig(config: SandboxConfig, urlForAsset: (assetId: string) => string): RuntimeSandboxConfig {
-  const { visual, ...rest } = config;
-  if (!visual) return rest;
-  return {
-    ...rest,
-    visual: {
-      backgroundUrl: visual.backgroundAssetId ? urlForAsset(visual.backgroundAssetId) : undefined,
-      overlays: visual.overlays.map((ov) => {
-        if (ov.type === "fill") return { ...ov, color: colorRefToCss(ov.color) };
-        if (ov.type === "swap") {
-          const { bands, ...o } = ov;
-          return { ...o, bands: bands.map((b) => ({ upTo: b.upTo, url: urlForAsset(b.assetId) })) };
-        }
-        const { assetId, ...o } = ov;
-        return { ...o, url: urlForAsset(assetId) };
-      }),
-    },
-  };
-}
-
-/** All assetIds referenced by a config (for export bundling). */
-export function collectAssetIds(config: SandboxConfig): string[] {
-  const ids = new Set<string>();
-  if (config.visual?.backgroundAssetId) ids.add(config.visual.backgroundAssetId);
-  for (const ov of config.visual?.overlays ?? []) {
-    if (ov.type === "swap") ov.bands.forEach((b) => ids.add(b.assetId));
-    if (ov.type === "transform") ids.add(ov.assetId);
-  }
-  return [...ids];
-}
+// Runtime-shape mapping (RuntimeSandboxConfig/toRuntimeConfig/collectAssetIds)
+// lives in the light, zod-free runtime-config.ts so client bundles that only
+// need to resolve/reshape a config (the editor's live preview) don't pull in
+// zod/sanitize-html/the formula parser. Re-exported here so no existing
+// import site breaks.
+export type RuntimeSandboxConfig = RuntimeSandboxConfigImpl;
+export const toRuntimeConfig: (config: SandboxConfig, urlForAsset: (assetId: string) => string) => RuntimeSandboxConfig = toRuntimeConfigImpl;
+export const collectAssetIds: (config: SandboxConfig) => string[] = collectAssetIdsImpl;
 
 export function emptySandboxConfig(title: string): SandboxConfig {
   return sandboxConfigSchema.parse({

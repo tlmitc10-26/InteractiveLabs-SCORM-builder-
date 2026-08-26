@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Editor } from "./editor";
-import { emptySandboxConfig, SandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { emptySandboxConfig, migrateLegacyColors, SandboxConfig } from "@/lib/engines/param-sandbox/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,12 @@ export default async function InteractivePage({ params }: { params: Promise<{ id
   // this same JSON.parse; this keeps the editor consistent with it.
   let initialConfig: SandboxConfig;
   try {
-    initialConfig = JSON.parse(interactive.configJson);
+    // migrateLegacyColors rewrites any fill overlay's bare-hex-string color
+    // (pre-hybrid-color-model drafts) into { hex } before this raw parse
+    // result is handed to the editor as SandboxConfig — this JSON is never
+    // run through validateSandboxConfig on read, so without this the
+    // editor would receive a plain string where the type says {token}|{hex}.
+    initialConfig = migrateLegacyColors(JSON.parse(interactive.configJson)) as SandboxConfig;
   } catch (err) {
     console.error(`interactives/${interactive.id}: configJson is not valid JSON, falling back to an empty config`, err);
     initialConfig = emptySandboxConfig(interactive.title);
