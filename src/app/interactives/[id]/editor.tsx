@@ -10,6 +10,12 @@ import { saveInteractiveConfig } from "@/app/actions";
 import { toRuntimeConfig, type SandboxConfigLike, type ColorRef } from "@/lib/engines/param-sandbox/runtime-config";
 import { colorHex } from "@/lib/design/tokens";
 import { ColorField } from "./color-field";
+import { uniqueSlug } from "./slugify";
+// Light import (no zod/sanitize-html — see runtime-config.ts's own file
+// comment for why that matters for this client bundle): rename.ts only
+// pulls in the formula parser to rewrite formula/chart/challenge/overlay
+// references when a designer renames an id via a row's Advanced disclosure.
+import { renameIdentifier, type RenameableConfig } from "@/lib/engines/param-sandbox/rename";
 
 /* Editing shape mirrors the Zod input (pre-validation). */
 type EInput = { id: string; label: string; type: "slider" | "number" | "toggle" | "select"; min?: number; max?: number; step?: number; defaultValue: number; units?: string; options?: Array<{ label: string; value: number }> };
@@ -160,6 +166,19 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
   const handleTitleChange = (v: string) => { setTitle(v); setSaveState("saving"); };
   const patch = (p: Partial<EConfig>) => { setConfig((c) => ({ ...c, ...p })); setSaveState("saving"); };
 
+  // Backs each row's "Rename to match label" Advanced affordance for inputs
+  // and outputs (the only ids formulas/charts/challenges/overlays actually
+  // reference — see rename.ts). Rewrites every reference atomically in one
+  // setConfig update, so the config is never briefly inconsistent. EConfig
+  // structurally satisfies RenameableConfig (same shape rename.ts's pure
+  // module already expects) — cast the same way postPreview above does for
+  // its own structural-superset reason.
+  const renameId = useCallback((oldId: string, newId: string) => {
+    if (oldId === newId) return;
+    setConfig((c) => renameIdentifier(c as unknown as RenameableConfig, oldId, newId) as unknown as EConfig);
+    setSaveState("saving");
+  }, []);
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="max-h-[85vh] space-y-4 overflow-y-auto pr-2">
@@ -185,8 +204,10 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
           </div>
         )}
 
-        <InputsSection inputs={config.inputs} onChange={(inputs) => patch({ inputs })} />
-        <OutputsSection outputs={config.outputs} onChange={(outputs) => patch({ outputs })} />
+        <InputsSection inputs={config.inputs} otherIds={new Set(config.outputs.map((o) => o.id))}
+          onChange={(inputs) => patch({ inputs })} onRenameId={renameId} />
+        <OutputsSection outputs={config.outputs} inputs={config.inputs} otherIds={new Set(config.inputs.map((i) => i.id))}
+          onChange={(outputs) => patch({ outputs })} onRenameId={renameId} />
         <ChartsSection charts={config.charts} inputs={config.inputs} outputs={config.outputs} onChange={(charts) => patch({ charts })} />
         <VisualSection visual={config.visual} outputs={config.outputs} assets={assets}
           onChange={(visual) => patch({ visual })} />
@@ -281,17 +302,64 @@ function splitFirstEquals(line: string): [string, string] {
   return [line.slice(0, idx), line.slice(idx + 1)];
 }
 
-/** Collision-safe id generator: increments until `prefix_N` isn't already in
- *  the caller's current id set (callers pass their section's own ids). No
- *  Date.now() suffix, so ids stay clean (input_1, input_2, ...). */
-function newId(prefix: string, existingIds: Set<string>): string {
-  let n = 1;
-  let id = `${prefix}_${n}`;
-  while (existingIds.has(id)) {
-    n += 1;
-    id = `${prefix}_${n}`;
-  }
-  return id;
+/** Per-row "Advanced" disclosure: ids disappear from the primary editing
+ *  flow (per Task 9's humanization contract) but stay inspectable/rewritable
+ *  here. "Rename to match label" regenerates the id from the row's current
+ *  display text via `onRename` — for inputs/outputs that rewrites every
+ *  formula/chart/challenge/overlay reference atomically (see `renameId` in
+ *  the top-level Editor component); for charts/overlays/challenges nothing
+ *  else references their id, so it's a same-section-only local rename. */
+function IdAdvanced({ id, onRename }: { id: string; onRename: () => void }) {
+  return (
+    <details className="col-span-2 mt-1">
+      <summary className="cursor-pointer text-xs font-medium text-gray-500">Advanced</summary>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-gray-500">ID:</span>
+        <code className="rounded bg-gray-100 px-1.5 py-0.5">{id}</code>
+        <button type="button" onClick={onRename} className="btn btn-light-2 btn-sm">Rename to match label</button>
+      </div>
+    </details>
+  );
+}
+
+/** Formula input with a same-row "insert name" picker: choosing an
+ *  available identifier (inputs + earlier outputs) inserts it at the
+ *  input's current cursor position (falls back to appending when the
+ *  cursor position isn't available, e.g. before the element has ever been
+ *  focused). The picker is a controlled select that always resets back to
+ *  its placeholder — it's an action trigger, not a persisted choice. */
+function FormulaField({ value, identifiers, onChange }: {
+  value: string; identifiers: Array<{ id: string; label: string }>; onChange: (v: string) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  const insertAtCursor = (name: string) => {
+    const el = ref.current;
+    const start = el && typeof el.selectionStart === "number" ? el.selectionStart : value.length;
+    const end = el && typeof el.selectionEnd === "number" ? el.selectionEnd : start;
+    const next = `${value.slice(0, start)}${name}${value.slice(end)}`;
+    onChange(next);
+    const caret = start + name.length;
+    // Cursor restoration needs the element's value to already reflect
+    // `next` (a controlled input only re-renders after this handler
+    // returns), so defer one frame rather than calling setSelectionRange
+    // synchronously against the still-stale DOM value.
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(caret, caret); });
+  };
+
+  return (
+    <Field label="Formula">
+      <div className="flex gap-1">
+        <input ref={ref} className={`${inputCls} font-mono`} value={value} onChange={(e) => onChange(e.target.value)} />
+        <select aria-label="Insert name" className={`${inputCls} w-28 flex-none`} value=""
+          onChange={(e) => { const name = e.target.value; if (name) insertAtCursor(name); e.target.value = ""; }}>
+          <option value="">Insert name…</option>
+          {identifiers.map((idf) => <option key={idf.id} value={idf.id}>{idf.label}</option>)}
+        </select>
+      </div>
+      <span className="mt-0.5 block text-xs text-gray-500">Use the names of things learners adjust, e.g. mass / density * 1000</span>
+    </Field>
+  );
 }
 
 /** Stable React `key` per row, independent of the row's own (user-editable,
@@ -314,18 +382,21 @@ function useRowKeys(initialLength: number) {
 
 /* ---------- sections ---------- */
 
-function InputsSection({ inputs, onChange }: { inputs: EInput[]; onChange: (v: EInput[]) => void }) {
+function InputsSection({ inputs, otherIds, onChange, onRenameId }: {
+  inputs: EInput[]; otherIds: Set<string>; onChange: (v: EInput[]) => void; onRenameId: (oldId: string, newId: string) => void;
+}) {
   const rowKeys = useRowKeys(inputs.length);
   const update = (i: number, p: Partial<EInput>) => onChange(inputs.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
-    <Section title="Inputs (what learners manipulate)" addLabel="input"
+    <Section title="What learners adjust" addLabel="input"
       onAdd={() => {
         rowKeys.add();
-        onChange([...inputs, { id: newId("input", new Set(inputs.map((x) => x.id))), label: "New input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 5 }]);
+        const label = "New input";
+        const id = uniqueSlug(label, new Set([...inputs.map((x) => x.id), ...otherIds]));
+        onChange([...inputs, { id, label, type: "slider", min: 0, max: 10, step: 1, defaultValue: 5 }]);
       }}>
       {inputs.map((inp, i) => (
         <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(inputs.filter((_, j) => j !== i)); }}>
-          <TextField label="ID (used in formulas)" value={inp.id} onChange={(id) => update(i, { id })} />
           <TextField label="Label" value={inp.label} onChange={(label) => update(i, { label })} />
           <SelectField label="Type" value={inp.type}
             options={["slider", "number", "toggle", "select"].map((t) => ({ value: t, label: t }))}
@@ -349,32 +420,53 @@ function InputsSection({ inputs, onChange }: { inputs: EInput[]; onChange: (v: E
                 })} />
             </Field>
           )}
+          <IdAdvanced id={inp.id} onRename={() => {
+            const others = new Set([...inputs.filter((_, j) => j !== i).map((x) => x.id), ...otherIds]);
+            const newIdCandidate = uniqueSlug(inp.label, others);
+            if (newIdCandidate !== inp.id) onRenameId(inp.id, newIdCandidate);
+          }} />
         </Row>
       ))}
     </Section>
   );
 }
 
-function OutputsSection({ outputs, onChange }: { outputs: EOutput[]; onChange: (v: EOutput[]) => void }) {
+function OutputsSection({ outputs, inputs, otherIds, onChange, onRenameId }: {
+  outputs: EOutput[]; inputs: EInput[]; otherIds: Set<string>; onChange: (v: EOutput[]) => void; onRenameId: (oldId: string, newId: string) => void;
+}) {
   const rowKeys = useRowKeys(outputs.length);
   const update = (i: number, p: Partial<EOutput>) => onChange(outputs.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
-    <Section title="Outputs (computed by formulas)" addLabel="output"
+    <Section title="What gets calculated" addLabel="output"
       onAdd={() => {
         rowKeys.add();
-        onChange([...outputs, { id: newId("out", new Set(outputs.map((x) => x.id))), label: "New output", formula: "1" }]);
+        const label = "New output";
+        const id = uniqueSlug(label, new Set([...outputs.map((x) => x.id), ...otherIds]));
+        onChange([...outputs, { id, label, formula: "1" }]);
       }}>
-      {outputs.map((out, i) => (
-        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(outputs.filter((_, j) => j !== i)); }}>
-          <TextField label="ID" value={out.id} onChange={(id) => update(i, { id })} />
-          <TextField label="Label" value={out.label} onChange={(label) => update(i, { label })} />
-          <Field label="Formula (inputs + earlier outputs; e.g. mass / density * 1000)">
-            <input className={`${inputCls} font-mono`} value={out.formula} onChange={(e) => update(i, { formula: e.target.value })} />
-          </Field>
-          <TextField label="Units" value={out.units ?? ""} onChange={(units) => update(i, { units: units || undefined })} />
-          <NumField label="Decimals" value={out.decimals} onChange={(decimals) => update(i, { decimals })} />
-        </Row>
-      ))}
+      {outputs.map((out, i) => {
+        // Formulas may reference inputs plus any EARLIER output only (schema.ts's
+        // validateSandboxConfig builds its "known" identifier set the same way,
+        // incrementally, top to bottom) — later outputs are deliberately excluded
+        // from this row's insert picker.
+        const identifiers = [
+          ...inputs.map((inp) => ({ id: inp.id, label: inp.label })),
+          ...outputs.slice(0, i).map((o) => ({ id: o.id, label: o.label })),
+        ];
+        return (
+          <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(outputs.filter((_, j) => j !== i)); }}>
+            <TextField label="Label" value={out.label} onChange={(label) => update(i, { label })} />
+            <FormulaField value={out.formula} identifiers={identifiers} onChange={(formula) => update(i, { formula })} />
+            <TextField label="Units" value={out.units ?? ""} onChange={(units) => update(i, { units: units || undefined })} />
+            <NumField label="Decimals" value={out.decimals} onChange={(decimals) => update(i, { decimals })} />
+            <IdAdvanced id={out.id} onRename={() => {
+              const others = new Set([...outputs.filter((_, j) => j !== i).map((x) => x.id), ...otherIds]);
+              const newIdCandidate = uniqueSlug(out.label, others);
+              if (newIdCandidate !== out.id) onRenameId(out.id, newIdCandidate);
+            }} />
+          </Row>
+        );
+      })}
     </Section>
   );
 }
@@ -383,20 +475,30 @@ function ChartsSection({ charts, inputs, outputs, onChange }: { charts: EChart[]
   const rowKeys = useRowKeys(charts.length);
   const update = (i: number, p: Partial<EChart>) => onChange(charts.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
-    <Section title="Charts (pattern across an input's range)" addLabel="chart"
+    <Section title="Charts" addLabel="chart"
       onAdd={() => {
         rowKeys.add();
-        onChange([...charts, { id: newId("chart", new Set(charts.map((x) => x.id))), title: "New chart", xInputId: inputs[0]?.id ?? "", yOutputId: outputs[0]?.id ?? "", samples: 40 }]);
+        const title = "New chart";
+        const id = uniqueSlug(title, new Set(charts.map((x) => x.id)), "chart");
+        onChange([...charts, { id, title, xInputId: inputs[0]?.id ?? "", yOutputId: outputs[0]?.id ?? "", samples: 40 }]);
       }}>
       {charts.map((c, i) => (
         <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(charts.filter((_, j) => j !== i)); }}>
-          <TextField label="ID" value={c.id} onChange={(id) => update(i, { id })} />
           <TextField label="Title" value={c.title} onChange={(title) => update(i, { title })} />
           <SelectField label="X axis (input)" value={c.xInputId}
             options={inputs.map((x) => ({ value: x.id, label: x.label }))} onChange={(xInputId) => update(i, { xInputId })} />
           <SelectField label="Y axis (output)" value={c.yOutputId}
             options={outputs.map((o) => ({ value: o.id, label: o.label }))} onChange={(yOutputId) => update(i, { yOutputId })} />
           <NumField label="Samples" value={c.samples} onChange={(samples) => update(i, { samples: samples ?? 40 })} />
+          {/* Chart ids aren't referenced anywhere else (schema.ts only checks
+              them for duplicates within this section), so unlike inputs/outputs
+              this is a same-section-only local rename — no config-wide rewrite
+              needed. */}
+          <IdAdvanced id={c.id} onRename={() => {
+            const others = new Set(charts.filter((_, j) => j !== i).map((x) => x.id));
+            const newIdCandidate = uniqueSlug(c.title, others, "chart");
+            if (newIdCandidate !== c.id) update(i, { id: newIdCandidate });
+          }} />
         </Row>
       ))}
     </Section>
@@ -423,16 +525,17 @@ function VisualSection({ visual, outputs, assets, onChange }: {
     </Field>
   );
   return (
-    <Section title="Visual stage (background + state overlays)" addLabel="overlay"
+    <Section title="Visual scene" addLabel="overlay"
       onAdd={() => {
         rowKeys.add();
-        onChange({ ...v, overlays: [...v.overlays, { id: newId("ov", new Set(v.overlays.map((x) => x.id))), type: "fill", outputId: outputs[0]?.id ?? "", inMin: 0, inMax: 100, color: { token: "info" }, box: { x: 10, y: 10, w: 80, h: 80 } }] });
+        const outputId = outputs[0]?.id ?? "";
+        const id = uniqueSlug(`fill_${outputId}`, new Set(v.overlays.map((x) => x.id)), "overlay");
+        onChange({ ...v, overlays: [...v.overlays, { id, type: "fill", outputId, inMin: 0, inMax: 100, color: { token: "info" }, box: { x: 10, y: 10, w: 80, h: 80 } }] });
       }}>
       <SelectField label="Background image" value={v.backgroundAssetId ?? ""}
         options={assetOptions} onChange={(id) => onChange({ ...v, backgroundAssetId: id || undefined })} />
       {v.overlays.map((ov, i) => (
         <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange({ ...v, overlays: v.overlays.filter((_, j) => j !== i) }); }}>
-          <TextField label="ID" value={ov.id} onChange={(id) => updateOverlay(i, { id })} />
           <SelectField label="Type" value={ov.type}
             options={[{ value: "fill", label: "fill (rising level)" }, { value: "swap", label: "swap (image per range)" }, { value: "transform", label: "transform (move/rotate/scale/fade)" }]}
             onChange={(type) => {
@@ -492,6 +595,15 @@ function VisualSection({ visual, outputs, assets, onChange }: {
             <NumField label="Effect at min" value={ov.outMin} onChange={(outMin) => updateOverlay(i, { outMin } as Partial<EOverlay>)} />
             <NumField label="Effect at max" value={ov.outMax} onChange={(outMax) => updateOverlay(i, { outMax } as Partial<EOverlay>)} />
           </>)}
+          {/* Overlays have no free-text label to rename toward, and (like
+              charts) nothing else references an overlay's own id — build the
+              rename basis from its type + driving output instead, and rename
+              locally within this section. */}
+          <IdAdvanced id={ov.id} onRename={() => {
+            const others = new Set(v.overlays.filter((_, j) => j !== i).map((x) => x.id));
+            const newIdCandidate = uniqueSlug(`${ov.type}_${ov.outputId}`, others, "overlay");
+            if (newIdCandidate !== ov.id) updateOverlay(i, { id: newIdCandidate });
+          }} />
         </Row>
       ))}
     </Section>
@@ -505,14 +617,15 @@ function ChallengesSection({ challenges, outputs, onChange }: {
   const update = (i: number, p: Partial<EConfig["challenges"][number]>) =>
     onChange(challenges.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
-    <Section title="Challenges (drive completion + score)" addLabel="challenge"
+    <Section title="Challenges & completion" addLabel="challenge"
       onAdd={() => {
         rowKeys.add();
-        onChange([...challenges, { id: newId("ch", new Set(challenges.map((x) => x.id))), prompt: "New challenge", outputId: outputs[0]?.id ?? "", comparator: "gte", value: 0 }]);
+        const prompt = "New challenge";
+        const id = uniqueSlug(prompt, new Set(challenges.map((x) => x.id)), "challenge");
+        onChange([...challenges, { id, prompt, outputId: outputs[0]?.id ?? "", comparator: "gte", value: 0 }]);
       }}>
       {challenges.map((ch, i) => (
         <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(challenges.filter((_, j) => j !== i)); }}>
-          <TextField label="ID" value={ch.id} onChange={(id) => update(i, { id })} />
           <TextField label="Prompt" value={ch.prompt} onChange={(prompt) => update(i, { prompt })} />
           <SelectField label="Output" value={ch.outputId} options={outputs.map((o) => ({ value: o.id, label: o.label }))}
             onChange={(outputId) => update(i, { outputId })} />
@@ -524,6 +637,13 @@ function ChallengesSection({ challenges, outputs, onChange }: {
             <NumField label="Min" value={ch.min} onChange={(min) => update(i, { min })} />
             <NumField label="Max" value={ch.max} onChange={(max) => update(i, { max })} />
           </>)}
+          {/* Same as charts/overlays: nothing else references a challenge's
+              own id, so this is a same-section-only local rename. */}
+          <IdAdvanced id={ch.id} onRename={() => {
+            const others = new Set(challenges.filter((_, j) => j !== i).map((x) => x.id));
+            const newIdCandidate = uniqueSlug(ch.prompt, others, "challenge");
+            if (newIdCandidate !== ch.id) update(i, { id: newIdCandidate });
+          }} />
         </Row>
       ))}
     </Section>

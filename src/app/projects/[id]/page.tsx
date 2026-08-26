@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { createInteractive, deleteInteractive } from "@/app/actions";
+import { STARTERS, DEFAULT_STARTER_ID } from "@/lib/engines/param-sandbox/starter-configs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AssetPanel } from "./asset-panel";
@@ -21,10 +22,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
       <section className="mt-6">
         <h2 className="app-h2">Interactives</h2>
-        <form action={createInteractive} className="mt-2 flex gap-2">
+        <form action={createInteractive} className="mt-2 flex flex-wrap items-center gap-2">
           <input type="hidden" name="projectId" value={project.id} />
           <input name="title" placeholder="New Parameter Sandbox title" maxLength={200}
             className="flex-1 rounded border border-gray-300 px-3 py-2" />
+          <label htmlFor="ilb-starter-field" className="sr-only">Starter template</label>
+          <select id="ilb-starter-field" name="starter" defaultValue={DEFAULT_STARTER_ID}
+            className="rounded border border-gray-300 px-3 py-2 text-sm">
+            {Object.entries(STARTERS).map(([id, starter]) => (
+              <option key={id} value={id} title={starter.description}>{starter.label}</option>
+            ))}
+          </select>
           <button className="btn btn-primary">New Parameter Sandbox</button>
         </form>
         <ul className="mt-3 divide-y rounded border border-gray-200 bg-white">
