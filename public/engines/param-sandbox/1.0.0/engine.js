@@ -246,6 +246,18 @@
   }
 
   // src/engine-runtime/param-sandbox/main.ts
+  var STAGE_MAX_HEIGHT_PX = 480;
+  function stageDimensions(naturalW, naturalH, capPx = STAGE_MAX_HEIGHT_PX) {
+    if (!(naturalW > 0) || !(naturalH > 0)) {
+      return { aspectRatio: "1 / 1" };
+    }
+    const aspectRatio = `${naturalW} / ${naturalH}`;
+    if (naturalH >= naturalW) {
+      const maxWidth = `${Math.round(capPx * naturalW / naturalH)}px`;
+      return { aspectRatio, maxWidth };
+    }
+    return { aspectRatio };
+  }
   var preloadedBandUrls = /* @__PURE__ */ new Set();
   var ILB_CHART_COLORS = {
     line: "#8c1d40",
@@ -504,8 +516,11 @@
         bg.alt = "";
         bg.src = config.visual.backgroundUrl;
         bg.addEventListener("load", () => {
+          var _a2;
           if (bg.naturalWidth && bg.naturalHeight) {
-            stage.style.aspectRatio = `${bg.naturalWidth} / ${bg.naturalHeight}`;
+            const dims = stageDimensions(bg.naturalWidth, bg.naturalHeight);
+            stage.style.aspectRatio = dims.aspectRatio;
+            stage.style.maxWidth = (_a2 = dims.maxWidth) != null ? _a2 : "";
             stage.style.minHeight = "0";
           }
         });
