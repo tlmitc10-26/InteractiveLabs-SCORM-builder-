@@ -12,16 +12,36 @@ export function AssetPanel({ projectId, assets }: {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
 
+  // Mirrors the Policy model's default maxAssetBytes so users get instant
+  // feedback without a round trip. The server (which reads the live Policy
+  // row) remains the authoritative check — this is purely a UX shortcut and
+  // must not be relied on for enforcement.
+  const CLIENT_MAX_BYTES = 5 * 1024 * 1024;
+
   async function upload() {
     const file = fileRef.current?.files?.[0];
     if (!file) return;
+    if (file.size > CLIENT_MAX_BYTES) {
+      setError(`File is ${Math.round(file.size / 1024)} KB, which exceeds the ${Math.round(CLIENT_MAX_BYTES / 1024)} KB limit`);
+      return;
+    }
     setBusy(true); setError(null);
     const form = new FormData();
     form.set("projectId", projectId);
     form.set("file", file);
     const res = await fetch("/api/assets", { method: "POST", body: form });
     setBusy(false);
-    if (!res.ok) { setError((await res.json()).error ?? "Upload failed"); return; }
+    if (!res.ok) {
+      let message = `Upload failed (HTTP ${res.status})`;
+      try {
+        const body = await res.json();
+        if (body && typeof body.error === "string") message = body.error;
+      } catch {
+        // Non-JSON or empty error body — keep the generic fallback above.
+      }
+      setError(message);
+      return;
+    }
     if (fileRef.current) fileRef.current.value = "";
     router.refresh();
   }
