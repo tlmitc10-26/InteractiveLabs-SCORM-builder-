@@ -137,6 +137,30 @@ const FORBIDDEN_PATTERNS_CSS: Array<{ re: RegExp; label: string }> = [
  *  handing it to `new URL()` — see below. */
 const URL_TOKEN_RE = /\bhttps?:\/\/[^ "'<>)]+/gi;
 
+/** Exact, full XML-namespace/schemaLocation URIs that legitimately appear
+ *  in EVERY SCORM 1.2 / IMS CP manifest — copied verbatim from
+ *  src/lib/scorm/manifest.ts's buildManifestXml (the xmlns/xmlns:adlcp/
+ *  xmlns:xsi declarations, plus every URI half of the three
+ *  "URI schema.xsd" pairs in xsi:schemaLocation). These are fixed spec
+ *  boilerplate that buildManifestXml always emits byte-for-byte — caller
+ *  input (opts.title/opts.identifier/opts.files) is interpolated ONLY
+ *  into <manifest identifier="...">, <title>, and <file href="...">, never
+ *  into these namespace positions, so this set can never be attacker-
+ *  reachable.
+ *
+ *  Exact full-URL match only, and applied ONLY when the file being
+ *  scanned is imsmanifest.xml — never a host-level exemption. Matching by
+ *  host (e.g. "trust anything on www.imsproject.org") would let an
+ *  attacker-controlled URL sharing that host through; matching in any
+ *  OTHER file would let a config field forge one of these exact strings
+ *  to sneak past the allowlist elsewhere. Neither is what this is for. */
+const SCORM_MANIFEST_NAMESPACE_URIS = new Set([
+  "http://www.imsproject.org/xsd/imscp_rootv1p1p2",
+  "http://www.adlnet.org/xsd/adlcp_rootv1p2",
+  "http://www.w3.org/2001/XMLSchema-instance",
+  "http://www.imsglobal.org/xsd/imsmd_rootv1p2p1",
+]);
+
 /** Parse each http(s) token in `text` with the real WHATWG URL constructor
  *  and check its (already lowercased/punycoded/userinfo-stripped)
  *  hostname against the allowlist. Shared between the per-file text scan
@@ -155,6 +179,12 @@ function scanUrlTokensForAllowlist(text: string, file: string, urlAllowlist: str
       violations.push({ file, rule: "invalid-url", detail: `unparseable URL "${token}"` });
       continue;
     }
+    // Manifest-namespace exemption (exact full-URL, imsmanifest.xml only —
+    // see SCORM_MANIFEST_NAMESPACE_URIS above). Checked against url.href
+    // (the parser's normalized form), not the raw token, and BEFORE the
+    // allowlist check below — but it does NOT bypass invalid-url handling
+    // above, and it does nothing for any other file or any other URL.
+    if (file === "imsmanifest.xml" && SCORM_MANIFEST_NAMESPACE_URIS.has(url.href)) continue;
     const host = url.hostname;
     if (!host) {
       violations.push({ file, rule: "invalid-url", detail: `URL "${token}" has no hostname` });

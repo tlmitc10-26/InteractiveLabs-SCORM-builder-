@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { scanPackage, ScanContext } from "@/lib/export/scanner";
+import { buildManifestXml } from "@/lib/scorm/manifest";
 import { createHash } from "node:crypto";
 
 const sha256 = (b: Buffer | string) => createHash("sha256").update(b).digest("hex");
@@ -332,5 +333,53 @@ describe("scanPackage", () => {
     const rNl = scanPackage(p2, ctx({ authoringConfig: badNl, urlAllowlist: ["youtube.com"] }));
     expect(rNl.passed).toBe(false);
     expect(rNl.violations.some((v) => v.rule === "url-allowlist" && /evil\.example/i.test(v.detail))).toBe(true);
+  });
+
+  // --- Task 13 wiring surfaced a real bug: buildManifestXml's mandatory
+  // SCORM 1.2 / IMS CP xmlns + schemaLocation URIs are spec boilerplate,
+  // not attacker-influenced content, but they're still http(s) URLs that
+  // the url-allowlist rule scans -- so with the strict empty-default
+  // allowlist EVERY real export failed. scanner.test.ts's goodPackage()
+  // uses a stub <manifest></manifest> with none of these URIs, which is
+  // why this never surfaced until a real buildManifestXml output was
+  // scanned. ---
+
+  it("a real buildManifestXml output scans clean with the default empty allowlist (its namespace URIs are exempt)", () => {
+    const manifestXml = buildManifestXml({
+      identifier: "ILB-test1",
+      title: "T",
+      files: ["content/config.json", "engine/engine.css", "engine/engine.js", "engine/scorm-adapter.js", "index.html"],
+    });
+    const p = goodPackage();
+    p.set("imsmanifest.xml", Buffer.from(manifestXml));
+    const r = scanPackage(p, ctx());
+    expect(r.violations.filter((v) => v.rule === "url-allowlist")).toEqual([]);
+    expect(r.passed).toBe(true);
+  });
+
+  it("CRITICAL: an attacker-controlled title in the manifest is still caught, even though the manifest's own namespace URIs are exempt", () => {
+    const manifestXml = buildManifestXml({
+      identifier: "ILB-test1",
+      title: "https://evil.com",
+      files: ["index.html"],
+    });
+    const p = goodPackage();
+    p.set("imsmanifest.xml", Buffer.from(manifestXml));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) =>
+      v.rule === "url-allowlist" && v.file === "imsmanifest.xml" && /evil\.com/i.test(v.detail)
+    )).toBe(true);
+  });
+
+  it("the manifest-namespace exemption does not apply outside imsmanifest.xml (exact-URL-in-wrong-file is still caught)", () => {
+    // Same exact string as one of the exempt namespace URIs, but placed in
+    // content/config.json instead -- must NOT be exempt there.
+    const p = goodPackage();
+    const bad = { ...goodConfig, title: "http://www.imsproject.org/xsd/imscp_rootv1p1p2" };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist" && v.file === "content/config.json")).toBe(true);
   });
 });
