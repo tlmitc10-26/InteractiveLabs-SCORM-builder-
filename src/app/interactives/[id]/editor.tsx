@@ -115,6 +115,28 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
       if (ev.data?.type === "ilb-preview-ready") { previewReady.current = true; postPreview(configRef.current); }
     };
     window.addEventListener("message", onMsg);
+
+    // Third leg of the handshake, alongside the iframe's `onLoad` prop and
+    // the "ilb-preview-ready" message above: on a genuine full-page load
+    // (hard navigation, not a client-side route transition), the
+    // server-rendered <iframe src="..."> can start — and finish — loading
+    // before React finishes hydrating and attaches the `onLoad` handler, so
+    // that leg's trigger is simply missed; and the ready-ping preview.html
+    // posts on its own script executing can likewise fire before this
+    // effect has run and attached the listener above. Both legs can lose
+    // their race on the very same load. This synchronous check closes that
+    // remaining window: if the iframe's document is already the real
+    // preview.html (not the transient about:blank) and already fully
+    // loaded by the time this effect runs, treat it as ready right now
+    // instead of waiting for a signal that already happened.
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      if (doc && doc.readyState === "complete" && doc.getElementById("ilb-root")) {
+        previewReady.current = true;
+        postPreview(configRef.current);
+      }
+    } catch { /* cross-origin or transient access failure: the other two legs still cover this. */ }
+
     return () => window.removeEventListener("message", onMsg);
   }, [postPreview]);
 
