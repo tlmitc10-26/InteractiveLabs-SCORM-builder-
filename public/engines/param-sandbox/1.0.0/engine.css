@@ -36,7 +36,32 @@
 .ilb-input-label { display: block; font-weight: bold; font-size: 0.9rem; margin-bottom: 4px; }
 .ilb-input-control { display: flex; align-items: center; gap: 8px; }
 .ilb-input-control input[type="range"] { flex: 1; accent-color: var(--rds-primary); }
-.ilb-input-value { min-width: 3ch; font-variant-numeric: tabular-nums; }
+/* 2.5.7: the paired number field IS the readout for a slider (replaces the
+   old read-only ".ilb-input-value" text badge) and is also used standalone
+   for type:"number" inputs. */
+.ilb-input-number { width: 6ch; font-variant-numeric: tabular-nums; text-align: right; flex: 0 0 auto; }
+
+/* 2.5.8 (WCAG 2.2) target size: every interactive control in the sandbox
+   gets at least a 24x24px hit area. */
+.ilb-sandbox input[type="range"],
+.ilb-sandbox input[type="number"],
+.ilb-sandbox select {
+  min-height: 24px;
+}
+.ilb-sandbox input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+
+/* Focus visibility: a clearly visible ring on every interactive control,
+   distinct from any hover/selected styling. */
+.ilb-sandbox input:focus-visible,
+.ilb-sandbox select:focus-visible,
+.ilb-sandbox button:focus-visible {
+  outline: 3px solid var(--rds-info);
+  outline-offset: 2px;
+}
 .ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; }
 .ilb-stage-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .ilb-overlay { position: absolute; }

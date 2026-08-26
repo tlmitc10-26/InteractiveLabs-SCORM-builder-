@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { mountSandbox } from "@/engine-runtime/param-sandbox/main";
 import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import type { ScormSession } from "@/engine-runtime/scorm-adapter";
+
+const ENGINE_CSS_PATH = path.resolve(__dirname, "../src/engine-runtime/param-sandbox/engine.css");
 
 const config: RuntimeSandboxConfig = {
   title: "Test",
@@ -40,7 +44,7 @@ describe("mountSandbox", () => {
 
   it("recomputes when an input changes", () => {
     mountSandbox(document.getElementById("root")!, config);
-    const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+    const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
     slider.value = "6";
     slider.dispatchEvent(new Event("input", { bubbles: true }));
     const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
@@ -49,11 +53,100 @@ describe("mountSandbox", () => {
 
   it("marks challenges met and unmet", () => {
     mountSandbox(document.getElementById("root")!, config);
-    const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+    const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
     expect(document.querySelector('[data-challenge="c1"]')!.classList.contains("met")).toBe(false);
     slider.value = "7";
     slider.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector('[data-challenge="c1"]')!.classList.contains("met")).toBe(true);
+  });
+
+  describe("paired numeric input for sliders (2.5.7)", () => {
+    it("renders both a range input and a visible number input for a slider, sharing min/max/step", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      expect(range).toBeTruthy();
+      expect(number).toBeTruthy();
+      expect(number.id).not.toBe(range.id); // mount-unique id, distinct from the range's
+      expect(number.min).toBe(range.min);
+      expect(number.max).toBe(range.max);
+      expect(number.step).toBe(range.step);
+      expect(number.getAttribute("aria-label")).toBe("Mass, exact value");
+    });
+
+    it("slider change updates the paired number field's value", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      range.value = "6";
+      range.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(number.value).toBe("6");
+    });
+
+    it("typing into the paired number field updates outputs and the range value", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      number.value = "7";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(range.value).toBe("7");
+      const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
+      expect(out.textContent).toBe("14");
+    });
+
+    it("ignores an empty/non-finite intermediate value while typing in the number field", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      number.value = "";
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
+      expect(out.textContent).toBe("8"); // unchanged from the default (4 * 2)
+    });
+
+    it("clamps an out-of-range number entry into [min, max] on blur", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      number.value = "999"; // config max is 10
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      number.dispatchEvent(new Event("blur", { bubbles: true }));
+      expect(number.value).toBe("10");
+      expect(range.value).toBe("10");
+      const out = document.querySelector('[data-output="double"] .ilb-output-value')!;
+      expect(out.textContent).toBe("20"); // 10 * 2, clamped value drives outputs
+    });
+
+    it("clamps an out-of-range number entry into [min, max] on Enter", () => {
+      mountSandbox(document.getElementById("root")!, config);
+      const range = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+      const number = document.querySelector('input[type="number"][data-input="mass"]') as HTMLInputElement;
+      number.value = "-5"; // config min is 0
+      number.dispatchEvent(new Event("input", { bubbles: true }));
+      number.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      expect(number.value).toBe("0");
+      expect(range.value).toBe("0");
+    });
+  });
+
+  describe("engine.css source rules (2.5.8 target size + focus visibility)", () => {
+    const css = readFileSync(ENGINE_CSS_PATH, "utf8");
+
+    it("defines a 24px minimum height for range, number, and select controls", () => {
+      expect(css).toMatch(/input\[type="range"\][^{]*\{[^}]*min-height:\s*24px/);
+      expect(css).toMatch(/input\[type="number"\][^{]*\{[^}]*min-height:\s*24px/);
+      expect(css).toMatch(/select[^{]*\{[^}]*min-height:\s*24px/);
+    });
+
+    it("defines a 24x24px checkbox control", () => {
+      expect(css).toMatch(/input\[type="checkbox"\][^{]*\{[^}]*width:\s*24px/);
+      expect(css).toMatch(/input\[type="checkbox"\][^{]*\{[^}]*height:\s*24px/);
+    });
+
+    it("defines focus-visible outline styles scoped under .ilb-sandbox", () => {
+      expect(css).toMatch(
+        /\.ilb-sandbox[^{]*input:focus-visible[^{]*,[^{]*select:focus-visible[^{]*,[^{]*button:focus-visible[^{]*\{[^}]*outline:\s*3px solid var\(--rds-info\)[^}]*outline-offset:\s*2px/,
+      );
+    });
   });
 
   it("renders a fill overlay whose height tracks the output", () => {
@@ -117,7 +210,7 @@ describe("mountSandbox", () => {
       (window as any).ILBScorm = scorm as unknown as ScormSession;
 
       mountSandbox(document.getElementById("root")!, config);
-      const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+      const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
 
       // Meet the challenge: double = 14 >= 12.
       slider.value = "7";
@@ -152,7 +245,7 @@ describe("mountSandbox", () => {
       (window as any).ILBScorm = scorm as unknown as ScormSession;
 
       mountSandbox(document.getElementById("root")!, config);
-      const slider = document.querySelector('input[data-input="mass"]') as HTMLInputElement;
+      const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
 
       // double = 10, challenge requires >= 12: still unmet, but an absent
       // score reads as "not attempted" in Canvas, not zero — must be written.

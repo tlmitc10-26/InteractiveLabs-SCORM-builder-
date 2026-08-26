@@ -238,7 +238,7 @@
     frame: "#bfbfbf"
   };
   function mountSandbox(root, config) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     root.innerHTML = "";
     root.classList.add("ilb-sandbox");
     const mountId = `ilb-${Math.random().toString(36).slice(2, 9)}`;
@@ -339,28 +339,85 @@
           onInteract();
         });
         control = cb;
+      } else if (inp.type === "slider") {
+        const range = document.createElement("input");
+        range.type = "range";
+        range.id = inputId;
+        range.dataset.input = inp.id;
+        range.min = String((_c = inp.min) != null ? _c : 0);
+        range.max = String((_d = inp.max) != null ? _d : 100);
+        range.step = String((_e = inp.step) != null ? _e : "any");
+        range.value = String(values[inp.id]);
+        const num = document.createElement("input");
+        num.type = "number";
+        num.id = `${inputId}-value`;
+        num.className = "ilb-input-number";
+        num.dataset.input = inp.id;
+        num.min = range.min;
+        num.max = range.max;
+        num.step = range.step;
+        num.value = range.value;
+        num.setAttribute("aria-label", `${inp.label}, exact value`);
+        const commit = (raw, clamp) => {
+          if (raw === "") return;
+          let v = Number(raw);
+          if (!Number.isFinite(v)) return;
+          if (clamp) {
+            if (inp.min !== void 0) v = Math.max(inp.min, v);
+            if (inp.max !== void 0) v = Math.min(inp.max, v);
+          }
+          values[inp.id] = v;
+          range.value = String(v);
+          num.value = String(v);
+          onInteract();
+        };
+        const commitClamp = () => commit(num.value, true);
+        range.addEventListener("input", () => commit(range.value, false));
+        num.addEventListener("input", () => commit(num.value, false));
+        num.addEventListener("blur", commitClamp);
+        num.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") commitClamp();
+        });
+        const wrap = el("span", "ilb-input-control");
+        wrap.appendChild(range);
+        wrap.appendChild(num);
+        control = wrap;
       } else {
         const num = document.createElement("input");
-        num.type = inp.type === "slider" ? "range" : "number";
+        num.type = "number";
         num.id = inputId;
+        num.className = "ilb-input-number";
         num.dataset.input = inp.id;
-        num.min = String((_c = inp.min) != null ? _c : 0);
-        num.max = String((_d = inp.max) != null ? _d : 100);
-        num.step = String((_e = inp.step) != null ? _e : "any");
+        num.min = String((_f = inp.min) != null ? _f : 0);
+        num.max = String((_g = inp.max) != null ? _g : 100);
+        num.step = String((_h = inp.step) != null ? _h : "any");
         num.value = String(values[inp.id]);
-        const valueBadge = el("span", "ilb-input-value");
-        valueBadge.textContent = String(values[inp.id]);
         num.addEventListener("input", () => {
           if (num.value === "") return;
           const v = Number(num.value);
           if (!Number.isFinite(v)) return;
           values[inp.id] = v;
-          valueBadge.textContent = num.value;
           onInteract();
+        });
+        const commitClamp = () => {
+          if (num.value === "") return;
+          const raw = Number(num.value);
+          if (!Number.isFinite(raw)) return;
+          let v = raw;
+          if (inp.min !== void 0) v = Math.max(inp.min, v);
+          if (inp.max !== void 0) v = Math.min(inp.max, v);
+          if (v !== raw || String(v) !== num.value) {
+            values[inp.id] = v;
+            num.value = String(v);
+            onInteract();
+          }
+        };
+        num.addEventListener("blur", commitClamp);
+        num.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") commitClamp();
         });
         const wrap = el("span", "ilb-input-control");
         wrap.appendChild(num);
-        wrap.appendChild(valueBadge);
         control = wrap;
       }
       row.appendChild(control);
@@ -427,7 +484,7 @@
       val.appendChild(num);
       val.appendChild(dash);
       const unit = el("span", "ilb-output-units");
-      unit.textContent = (_f = out.units) != null ? _f : "";
+      unit.textContent = (_i = out.units) != null ? _i : "";
       const sr = el("span", "ilb-sr-only");
       card.appendChild(lab);
       card.appendChild(val);

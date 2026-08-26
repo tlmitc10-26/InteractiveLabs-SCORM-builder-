@@ -150,15 +150,62 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       cb.type = "checkbox"; cb.id = inputId; cb.dataset.input = inp.id; cb.checked = values[inp.id] !== 0;
       cb.addEventListener("change", () => { values[inp.id] = cb.checked ? 1 : 0; onInteract(); });
       control = cb;
+    } else if (inp.type === "slider") {
+      // 2.5.7 (WCAG 2.2): every slider gets a paired, visible number input
+      // so a learner who cannot perform a drag gesture can type an exact
+      // value. This number field IS the readout — it replaces the old
+      // read-only ".ilb-input-value" text badge.
+      const range = document.createElement("input");
+      range.type = "range";
+      range.id = inputId;
+      range.dataset.input = inp.id;
+      range.min = String(inp.min ?? 0); range.max = String(inp.max ?? 100);
+      range.step = String(inp.step ?? "any"); range.value = String(values[inp.id]);
+
+      const num = document.createElement("input");
+      num.type = "number";
+      num.id = `${inputId}-value`; // own mount-unique id, distinct from the range's
+      num.className = "ilb-input-number";
+      num.dataset.input = inp.id; // same logical control as the range, distinguished by [type]
+      num.min = range.min; num.max = range.max; num.step = range.step;
+      num.value = range.value;
+      num.setAttribute("aria-label", `${inp.label}, exact value`);
+
+      // Commit a raw string into the model + both controls. `clamp` is only
+      // true from the blur/Enter commit path below — mid-typing (the plain
+      // "input" event) never clamps, matching the existing number-field
+      // ignore-empty/NaN behavior.
+      const commit = (raw: string, clamp: boolean): void => {
+        if (raw === "") return;
+        let v = Number(raw);
+        if (!Number.isFinite(v)) return;
+        if (clamp) {
+          if (inp.min !== undefined) v = Math.max(inp.min, v);
+          if (inp.max !== undefined) v = Math.min(inp.max, v);
+        }
+        values[inp.id] = v;
+        range.value = String(v);
+        num.value = String(v);
+        onInteract();
+      };
+      const commitClamp = (): void => commit(num.value, true);
+
+      range.addEventListener("input", () => commit(range.value, false));
+      num.addEventListener("input", () => commit(num.value, false));
+      num.addEventListener("blur", commitClamp);
+      num.addEventListener("keydown", (e) => { if (e.key === "Enter") commitClamp(); });
+
+      const wrap = el("span", "ilb-input-control");
+      wrap.appendChild(range); wrap.appendChild(num);
+      control = wrap;
     } else {
       const num = document.createElement("input");
-      num.type = inp.type === "slider" ? "range" : "number";
+      num.type = "number";
       num.id = inputId;
+      num.className = "ilb-input-number";
       num.dataset.input = inp.id;
       num.min = String(inp.min ?? 0); num.max = String(inp.max ?? 100);
       num.step = String(inp.step ?? "any"); num.value = String(values[inp.id]);
-      const valueBadge = el("span", "ilb-input-value");
-      valueBadge.textContent = String(values[inp.id]);
       num.addEventListener("input", () => {
         // Ignore an empty/non-finite intermediate typing state rather than
         // writing 0 into the model (e.g. while the learner clears a <input
@@ -167,11 +214,25 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
         const v = Number(num.value);
         if (!Number.isFinite(v)) return;
         values[inp.id] = v;
-        valueBadge.textContent = num.value;
         onInteract();
       });
+      const commitClamp = (): void => {
+        if (num.value === "") return;
+        const raw = Number(num.value);
+        if (!Number.isFinite(raw)) return;
+        let v = raw;
+        if (inp.min !== undefined) v = Math.max(inp.min, v);
+        if (inp.max !== undefined) v = Math.min(inp.max, v);
+        if (v !== raw || String(v) !== num.value) {
+          values[inp.id] = v;
+          num.value = String(v);
+          onInteract();
+        }
+      };
+      num.addEventListener("blur", commitClamp);
+      num.addEventListener("keydown", (e) => { if (e.key === "Enter") commitClamp(); });
       const wrap = el("span", "ilb-input-control");
-      wrap.appendChild(num); wrap.appendChild(valueBadge);
+      wrap.appendChild(num);
       control = wrap;
     }
     row.appendChild(control);
