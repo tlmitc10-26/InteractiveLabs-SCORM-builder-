@@ -1,3 +1,28 @@
+/* GENERATED FILE - edit src/lib/design/tokens.json and run npm run build:engines */
+:root {
+  --rds-primary: #8c1d40;
+  --rds-secondary: #ffc627;
+  --rds-success: #446d12;
+  --rds-info: #00a3e0;
+  --rds-warning: #ff7f32;
+  --rds-danger: #b72a2a;
+  --rds-light: #f8f9fa;
+  --rds-dark: #212529;
+  --rds-light-1: #fafafa;
+  --rds-light-2: #f1f1f1;
+  --rds-light-3: #e8e8e8;
+  --rds-light-4: #d0d0d0;
+  --rds-light-5: #bfbfbf;
+  --rds-dark-1: #747474;
+  --rds-dark-2: #484848;
+  --rds-dark-3: #191919;
+}
+:root {
+  --ilb-font-heading: Georgia, 'Times New Roman', serif;
+  --ilb-font-body: Arial, Helvetica, sans-serif;
+  --ilb-min-target: 24px;
+}
+
 .ilb-sandbox { font-family: Georgia, "Times New Roman", serif; color: #1b1b1b; max-width: 960px; margin: 0 auto; padding: 16px; }
 .ilb-sandbox h2 { color: #8C1D40; font-size: 1.1rem; margin: 16px 0 8px; }
 .ilb-sandbox h2.ilb-title { font-size: 1.6rem; margin: 0 0 8px; }

@@ -1,0 +1,40 @@
+/* GENERATED FILE - edit src/lib/design/tokens.json and run npm run build:engines */
+:root {
+  --rds-primary: #8c1d40;
+  --rds-secondary: #ffc627;
+  --rds-success: #446d12;
+  --rds-info: #00a3e0;
+  --rds-warning: #ff7f32;
+  --rds-danger: #b72a2a;
+  --rds-light: #f8f9fa;
+  --rds-dark: #212529;
+  --rds-light-1: #fafafa;
+  --rds-light-2: #f1f1f1;
+  --rds-light-3: #e8e8e8;
+  --rds-light-4: #d0d0d0;
+  --rds-light-5: #bfbfbf;
+  --rds-dark-1: #747474;
+  --rds-dark-2: #484848;
+  --rds-dark-3: #191919;
+}
+
+@theme {
+  --color-rds-primary: #8c1d40;
+  --color-rds-secondary: #ffc627;
+  --color-rds-success: #446d12;
+  --color-rds-info: #00a3e0;
+  --color-rds-warning: #ff7f32;
+  --color-rds-danger: #b72a2a;
+  --color-rds-light: #f8f9fa;
+  --color-rds-dark: #212529;
+  --color-rds-light-1: #fafafa;
+  --color-rds-light-2: #f1f1f1;
+  --color-rds-light-3: #e8e8e8;
+  --color-rds-light-4: #d0d0d0;
+  --color-rds-light-5: #bfbfbf;
+  --color-rds-dark-1: #747474;
+  --color-rds-dark-2: #484848;
+  --color-rds-dark-3: #191919;
+  --font-app: Arial, Helvetica, sans-serif;
+  --radius-pill: 50rem;
+}

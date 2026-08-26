@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildEngines } from "../scripts/build-engines.mjs";
+import { emitAppThemeCss, emitEngineTokensCss } from "@/lib/design/tokens";
 
 /**
  * Guards against the class of bug where a dev edits src/engine-runtime/*
@@ -71,5 +72,19 @@ describe("engine build drift", () => {
           : committedManifest.engines[0].files[manifestKey];
       expect(sha256(freshBuf)).toBe(expectedHash);
     }
+
+    // (a) the .mjs build script's inline CSS templates and the TS emitters
+    // used by app/schema/tests code must agree — they cannot silently drift
+    // apart since one is a plain-JS duplicate of the other.
+    expect(built.appTokensCss).toBe(emitAppThemeCss());
+
+    // (b) the committed src/app/tokens.css is exactly what a fresh emit
+    // produces (catches "edited tokens.json but forgot to rebuild").
+    expect(readFileSync(path.join(ROOT, "src", "app", "tokens.css"), "utf8")).toBe(emitAppThemeCss());
+
+    // (c) the committed engine.css begins with the current generated tokens
+    // layer (catches a stale prepend as well as a hand-edited engine.css).
+    const engineCss = readFileSync(path.join(COMMITTED_OUT, "param-sandbox", "1.0.0", "engine.css"), "utf8");
+    expect(engineCss.startsWith(emitEngineTokensCss())).toBe(true);
   });
 });
