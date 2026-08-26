@@ -368,4 +368,61 @@ describe("mountSandbox", () => {
       expect(document.querySelector(".ilb-stage")).toBeNull();
     });
   });
+
+  describe("empty zone containers are not rendered (Task 13 cosmetic fix)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Every input AND output placed off-panel (stage/below), with a visual
+    // scene present so the "stage" placements are valid — nothing at all
+    // routes into .ilb-inputs or .ilb-outputs, so both containers should be
+    // omitted entirely rather than rendered empty.
+    const allStageConfig: RuntimeSandboxConfig = {
+      title: "All stage",
+      layout: "stage-focus",
+      inputs: [
+        { id: "stageIn", label: "Stage input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 4, placement: { zone: "stage", box: { x: 10, y: 20, w: 15, h: 10 } } },
+      ],
+      outputs: [
+        { id: "stageOut", label: "Stage output", formula: "stageIn * 2", placement: { zone: "stage", box: { x: 40, y: 50, w: 15, h: 10 } } },
+      ],
+      charts: [],
+      challenges: [],
+      visual: { overlays: [] },
+    };
+
+    it("omits .ilb-inputs and .ilb-outputs when every input/output is stage-placed", () => {
+      mountSandbox(document.getElementById("root")!, allStageConfig);
+      expect(document.querySelector(".ilb-inputs")).toBeNull();
+      expect(document.querySelector(".ilb-outputs")).toBeNull();
+      // The stage-placed controls themselves still render.
+      expect(document.querySelector('[data-input="stageIn"]')).toBeTruthy();
+      expect(document.querySelector('[data-output="stageOut"]')).toBeTruthy();
+    });
+
+    it("still renders the sr-only outputs live region (in a minimal wrapper) and keeps it functional", () => {
+      vi.useFakeTimers();
+      mountSandbox(document.getElementById("root")!, allStageConfig);
+      const live = document.querySelector('[role="status"][aria-live="polite"]');
+      expect(live).toBeTruthy();
+      // Not inside an (absent) .ilb-outputs card — it must have its own
+      // minimal wrapper instead.
+      expect(document.querySelector(".ilb-outputs")).toBeNull();
+      expect(live!.closest(".ilb-outputs-live")).toBeTruthy();
+
+      const slider = document.querySelector('input[type="range"][data-input="stageIn"]') as HTMLInputElement;
+      slider.value = "8";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(500);
+      expect(live!.textContent).toBe("Stage output: 16");
+    });
+
+    it("still renders .ilb-inputs/.ilb-outputs when at least one panel-zone element exists", () => {
+      mountSandbox(document.getElementById("root")!, config); // module-level fixture: panel-zone input+output
+      expect(document.querySelector(".ilb-inputs")).toBeTruthy();
+      expect(document.querySelector(".ilb-outputs")).toBeTruthy();
+      expect(document.querySelector(".ilb-outputs-live")).toBeNull();
+    });
+  });
 });

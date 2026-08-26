@@ -99,6 +99,19 @@ describe("layout preset", () => {
   it("rejects an unknown layout value", () => {
     expect(validateSandboxConfig({ ...base, layout: "grid" }).ok).toBe(false);
   });
+
+  it("round-trips through a save/reload cycle (JSON serialize + re-validate) unchanged (Task 13)", () => {
+    const r1 = validateSandboxConfig({ ...base, layout: "stacked" });
+    if (!r1.ok) throw new Error(`expected valid: ${JSON.stringify(r1.errors)}`);
+    // Mirrors what actually happens across a save: the validated config is
+    // JSON-serialized into configJson, then re-parsed (and re-validated) on
+    // the next load — this is the "saving passes through schema default"
+    // persistence path the editor's layout preset picker relies on.
+    const reloaded = JSON.parse(JSON.stringify(r1.config));
+    const r2 = validateSandboxConfig(reloaded);
+    if (!r2.ok) throw new Error(`expected valid on reload: ${JSON.stringify(r2.errors)}`);
+    expect(r2.config.layout).toBe("stacked");
+  });
 });
 
 describe("toRuntimeConfig passthrough (placement + layout)", () => {

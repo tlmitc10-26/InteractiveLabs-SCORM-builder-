@@ -550,14 +550,23 @@
         outputsPanel.appendChild(card);
       }
     }
-    layout.appendChild(inputsPanel);
-    layout.appendChild(outputsPanel);
-    if (hasBelowZone) layout.appendChild(belowPanel);
-    if (stage) layout.appendChild(stage);
     const outputsSummary = el("div", "ilb-sr-only");
     outputsSummary.setAttribute("role", "status");
     outputsSummary.setAttribute("aria-live", "polite");
-    outputsPanel.appendChild(outputsSummary);
+    const outputsPanelHasVisibleOutputs = outputsPanel.childElementCount > 0;
+    if (outputsPanelHasVisibleOutputs) {
+      outputsPanel.appendChild(outputsSummary);
+    }
+    if (inputsPanel.childElementCount > 0) layout.appendChild(inputsPanel);
+    if (outputsPanelHasVisibleOutputs) {
+      layout.appendChild(outputsPanel);
+    } else {
+      const outputsLive = el("div", "ilb-outputs-live");
+      outputsLive.appendChild(outputsSummary);
+      layout.appendChild(outputsLive);
+    }
+    if (hasBelowZone) layout.appendChild(belowPanel);
+    if (stage) layout.appendChild(stage);
     let outputsSummaryTimer = null;
     const OUTPUTS_SUMMARY_DEBOUNCE_MS = 500;
     const chartsPanel = el("div", "ilb-charts");

@@ -27,7 +27,7 @@ import { renameIdentifier, type RenameableConfig } from "@/lib/engines/param-san
  *  as an overlay's own `box`. */
 type EPlacement = { zone: "panel" } | { zone: "below" } | { zone: "stage"; box: Box };
 type EInput = { id: string; label: string; type: "slider" | "number" | "toggle" | "select"; min?: number; max?: number; step?: number; defaultValue: number; units?: string; options?: Array<{ label: string; value: number }>; placement?: EPlacement };
-type EOutput = { id: string; label: string; formula: string; units?: string; decimals?: number };
+type EOutput = { id: string; label: string; formula: string; units?: string; decimals?: number; placement?: EPlacement };
 type EChart = { id: string; title: string; xInputId: string; yOutputId: string; samples: number };
 /* Hybrid verifiable color model (schema.ts ColorRef): a named RDS token or a
  * verified custom hex. Rendered/edited via color-field.tsx's token swatches
@@ -38,11 +38,17 @@ type EOverlay =
   | { id: string; type: "swap"; outputId: string; box: Box; bands: Array<{ upTo: number; assetId: string }> }
   | { id: string; type: "transform"; outputId: string; box: Box; assetId: string; property: "translateY" | "translateX" | "rotate" | "scale" | "opacity"; inMin: number; inMax: number; outMin: number; outMax: number };
 type Box = { x: number; y: number; w: number; h: number };
+type ELayout = "side" | "stacked" | "stage-focus";
 type EConfig = {
   title: string; intro?: string;
   inputs: EInput[]; outputs: EOutput[]; charts: EChart[];
   visual?: { backgroundAssetId?: string; overlays: EOverlay[] };
   challenges: Array<{ id: string; prompt: string; outputId: string; comparator: "gte" | "lte" | "between"; value?: number; min?: number; max?: number }>;
+  /* Layout preset (schema.ts's `sandboxConfigSchema.layout`, Task 11):
+   * absent is treated as "side" everywhere it's read here (the schema
+   * default) — a pre-Task-11 stored draft, or one read via the page's raw
+   * JSON.parse (not re-validated), may not carry this field at all. */
+  layout?: ELayout;
 };
 type AssetRef = { id: string; filename: string };
 
@@ -195,12 +201,16 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
   // ---------- stage authoring (Task 12) ----------
 
   // Targets = overlays (fill/swap/transform, always stage-placed by nature)
-  // plus any input whose placement.zone is "stage" — the placement UI
-  // itself arrives in Task 13, but a config can already carry a stage
-  // placement (hand-authored, or a future starter), so this reads the
-  // field defensively rather than assuming Task 13's picker put it there.
+  // plus any input/output whose placement.zone is "stage" — Task 13's "Where
+  // it appears" picker (below) is what now sets that field going forward,
+  // but a config can already carry a stage placement from hand-authoring or
+  // a future starter, so this reads it defensively either way. Outputs are
+  // wired symmetrically to inputs (key "output:<id>", routing through
+  // output.placement.box) so a stage-placed output drags/resizes/nudges
+  // exactly like a stage-placed input.
   const overlays = config.visual?.overlays ?? [];
   const stageInputs = config.inputs.filter((inp): inp is EInput & { placement: { zone: "stage"; box: Box } } => inp.placement?.zone === "stage");
+  const stageOutputs = config.outputs.filter((out): out is EOutput & { placement: { zone: "stage"; box: Box } } => out.placement?.zone === "stage");
   const targets: StageTarget[] = [
     ...overlays.map((ov) => ({
       key: `overlay:${ov.id}`,
@@ -208,12 +218,13 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
       box: ov.box,
     })),
     ...stageInputs.map((inp) => ({ key: `input:${inp.id}`, label: inp.label, box: inp.placement.box })),
+    ...stageOutputs.map((out) => ({ key: `output:${out.id}`, label: out.label, box: out.placement.box })),
   ];
 
   // Routes a drag/resize/nudge commit from the stage layer into the same
   // config slot the numeric Box fields already write to (overlay.box, or
-  // input.placement.box) — both paths converge on the same setConfig call,
-  // so the fields and the on-stage outline never disagree.
+  // input/output.placement.box) — both paths converge on the same setConfig
+  // call, so the fields and the on-stage outline never disagree.
   const handleBoxChange = useCallback((key: string, box: Box) => {
     if (key.startsWith("overlay:")) {
       const id = key.slice("overlay:".length);
@@ -225,6 +236,12 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
       setConfig((c) => ({
         ...c,
         inputs: c.inputs.map((i) => (i.id === id && i.placement?.zone === "stage" ? { ...i, placement: { ...i.placement, box } } : i)),
+      }));
+    } else if (key.startsWith("output:")) {
+      const id = key.slice("output:".length);
+      setConfig((c) => ({
+        ...c,
+        outputs: c.outputs.map((o) => (o.id === id && o.placement?.zone === "stage" ? { ...o, placement: { ...o.placement, box } } : o)),
       }));
     }
     setSaveState("saving");
@@ -270,11 +287,12 @@ export function Editor({ interactiveId, initialTitle, initialConfig, assets }: {
         )}
 
         <InputsSection inputs={config.inputs} otherIds={new Set(config.outputs.map((o) => o.id))} selected={selected}
-          onChange={(inputs) => patch({ inputs })} onRenameId={renameId} />
+          hasVisual={!!config.visual} onChange={(inputs) => patch({ inputs })} onRenameId={renameId} />
         <OutputsSection outputs={config.outputs} inputs={config.inputs} otherIds={new Set(config.inputs.map((i) => i.id))}
-          onChange={(outputs) => patch({ outputs })} onRenameId={renameId} />
+          selected={selected} hasVisual={!!config.visual} onChange={(outputs) => patch({ outputs })} onRenameId={renameId} />
         <ChartsSection charts={config.charts} inputs={config.inputs} outputs={config.outputs} onChange={(charts) => patch({ charts })} />
         <VisualSection visual={config.visual} outputs={config.outputs} assets={assets} selected={selected}
+          layout={config.layout ?? "side"} onLayoutChange={(layout) => patch({ layout })}
           onChange={(visual) => patch({ visual })} />
         <ChallengesSection challenges={config.challenges} outputs={config.outputs} onChange={(challenges) => patch({ challenges })} />
 
@@ -404,6 +422,47 @@ function IdAdvanced({ id, onRename }: { id: string; onRename: () => void }) {
   );
 }
 
+/** Per-row "Where it appears" placement picker (Task 13), shared by
+ *  inputs and outputs. Panel (default) and "Below the scene" just set the
+ *  matching zone directly. "On the scene" needs a visual scene to render
+ *  into: when `hasVisual` is false this shows inline guidance instead of
+ *  setting anything (the select itself snaps back to the row's actual
+ *  current zone on the next render, since `onChange` was never called).
+ *  When a visual scene DOES exist, choosing "On the scene" seeds a default
+ *  box — the designer then drags/resizes it via StageAuthoringLayer, or
+ *  edits the numeric fields Task 12 already wired up for other stage
+ *  targets (overlays don't have per-row numeric box fields themselves; a
+ *  stage-placed input/output's box is authored on-stage or by re-dragging).
+ *  Switching away from "stage" drops the box entirely — the new placement
+ *  object never carries one, matching the strict panel/below schema shape. */
+function PlacementField({ placement, hasVisual, onChange }: {
+  placement: EPlacement | undefined; hasVisual: boolean; onChange: (p: EPlacement) => void;
+}) {
+  const zone = placement?.zone ?? "panel";
+  const [showHint, setShowHint] = useState(false);
+  return (
+    <Field label="Where it appears">
+      <select className={inputCls} value={zone}
+        onChange={(e) => {
+          const next = e.target.value as "panel" | "below" | "stage";
+          if (next === "stage") {
+            if (!hasVisual) { setShowHint(true); return; }
+            setShowHint(false);
+            onChange({ zone: "stage", box: { x: 60, y: 70, w: 30, h: 12 } });
+          } else {
+            setShowHint(false);
+            onChange({ zone: next });
+          }
+        }}>
+        <option value="panel">Panel</option>
+        <option value="below">Below the scene</option>
+        <option value="stage">On the scene</option>
+      </select>
+      {showHint && <span className="mt-0.5 block text-xs text-amber-700">Add a visual scene first</span>}
+    </Field>
+  );
+}
+
 /** Formula input with a same-row "insert name" picker: choosing an
  *  available identifier (inputs + earlier outputs) inserts it at the
  *  input's current cursor position (falls back to appending when the
@@ -464,8 +523,8 @@ function useRowKeys(initialLength: number) {
 
 /* ---------- sections ---------- */
 
-function InputsSection({ inputs, otherIds, selected, onChange, onRenameId }: {
-  inputs: EInput[]; otherIds: Set<string>; selected: string | null; onChange: (v: EInput[]) => void; onRenameId: (oldId: string, newId: string) => void;
+function InputsSection({ inputs, otherIds, selected, hasVisual, onChange, onRenameId }: {
+  inputs: EInput[]; otherIds: Set<string>; selected: string | null; hasVisual: boolean; onChange: (v: EInput[]) => void; onRenameId: (oldId: string, newId: string) => void;
 }) {
   const rowKeys = useRowKeys(inputs.length);
   const update = (i: number, p: Partial<EInput>) => onChange(inputs.map((x, j) => (j === i ? { ...x, ...p } : x)));
@@ -491,6 +550,7 @@ function InputsSection({ inputs, otherIds, selected, onChange, onRenameId }: {
             <NumField label="Step" value={inp.step} onChange={(step) => update(i, { step })} />
           </>)}
           <NumField label="Default" value={inp.defaultValue} onChange={(defaultValue) => update(i, { defaultValue: defaultValue ?? 0 })} />
+          <PlacementField placement={inp.placement} hasVisual={hasVisual} onChange={(placement) => update(i, { placement })} />
           {inp.type === "select" && (
             <Field label="Options (label=value, one per line)">
               <textarea className={inputCls} rows={3}
@@ -514,8 +574,8 @@ function InputsSection({ inputs, otherIds, selected, onChange, onRenameId }: {
   );
 }
 
-function OutputsSection({ outputs, inputs, otherIds, onChange, onRenameId }: {
-  outputs: EOutput[]; inputs: EInput[]; otherIds: Set<string>; onChange: (v: EOutput[]) => void; onRenameId: (oldId: string, newId: string) => void;
+function OutputsSection({ outputs, inputs, otherIds, selected, hasVisual, onChange, onRenameId }: {
+  outputs: EOutput[]; inputs: EInput[]; otherIds: Set<string>; selected: string | null; hasVisual: boolean; onChange: (v: EOutput[]) => void; onRenameId: (oldId: string, newId: string) => void;
 }) {
   const rowKeys = useRowKeys(outputs.length);
   const update = (i: number, p: Partial<EOutput>) => onChange(outputs.map((x, j) => (j === i ? { ...x, ...p } : x)));
@@ -537,11 +597,13 @@ function OutputsSection({ outputs, inputs, otherIds, onChange, onRenameId }: {
           ...outputs.slice(0, i).map((o) => ({ id: o.id, label: o.label })),
         ];
         return (
-          <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(outputs.filter((_, j) => j !== i)); }}>
+          <Row key={rowKeys.keys[i]} dataRowKey={`output:${out.id}`} highlighted={selected === `output:${out.id}`}
+            onRemove={() => { rowKeys.remove(i); onChange(outputs.filter((_, j) => j !== i)); }}>
             <TextField label="Label" value={out.label} onChange={(label) => update(i, { label })} />
             <FormulaField value={out.formula} identifiers={identifiers} onChange={(formula) => update(i, { formula })} />
             <TextField label="Units" value={out.units ?? ""} onChange={(units) => update(i, { units: units || undefined })} />
             <NumField label="Decimals" value={out.decimals} onChange={(decimals) => update(i, { decimals })} />
+            <PlacementField placement={out.placement} hasVisual={hasVisual} onChange={(placement) => update(i, { placement })} />
             <IdAdvanced id={out.id} onRename={() => {
               const others = new Set([...outputs.filter((_, j) => j !== i).map((x) => x.id), ...otherIds]);
               const newIdCandidate = uniqueSlug(out.label, others);
@@ -588,8 +650,9 @@ function ChartsSection({ charts, inputs, outputs, onChange }: { charts: EChart[]
   );
 }
 
-function VisualSection({ visual, outputs, assets, selected, onChange }: {
-  visual: EConfig["visual"]; outputs: EOutput[]; assets: AssetRef[]; selected: string | null; onChange: (v: EConfig["visual"]) => void;
+function VisualSection({ visual, outputs, assets, selected, layout, onLayoutChange, onChange }: {
+  visual: EConfig["visual"]; outputs: EOutput[]; assets: AssetRef[]; selected: string | null;
+  layout: ELayout; onLayoutChange: (v: ELayout) => void; onChange: (v: EConfig["visual"]) => void;
 }) {
   const v = visual ?? { overlays: [] };
   const rowKeys = useRowKeys(v.overlays.length);
@@ -615,6 +678,13 @@ function VisualSection({ visual, outputs, assets, selected, onChange }: {
         const id = uniqueSlug(`fill_${outputId}`, new Set(v.overlays.map((x) => x.id)), "overlay");
         onChange({ ...v, overlays: [...v.overlays, { id, type: "fill", outputId, inMin: 0, inMax: 100, color: { token: "info" }, box: { x: 10, y: 10, w: 80, h: 80 } }] });
       }}>
+      <SelectField label="Lesson layout" value={layout}
+        options={[
+          { value: "side", label: "Side by side" },
+          { value: "stacked", label: "Stacked" },
+          { value: "stage-focus", label: "Stage focus" },
+        ]}
+        onChange={(v) => onLayoutChange(v as ELayout)} />
       <SelectField label="Background image" value={v.backgroundAssetId ?? ""}
         options={assetOptions} onChange={(id) => onChange({ ...v, backgroundAssetId: id || undefined })} />
       {v.overlays.map((ov, i) => (

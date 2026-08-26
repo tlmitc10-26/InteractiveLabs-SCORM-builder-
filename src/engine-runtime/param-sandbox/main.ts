@@ -147,8 +147,15 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   // FOCUS-ORDER INVARIANT: regardless of authoring order or which `layout`
   // preset is active, the DOM (and therefore default tab) order of the
   // zone containers inside `.ilb-layout` is always:
-  //   1. .ilb-inputs       - panel-zone inputs, in authoring order
-  //   2. .ilb-outputs      - panel-zone outputs, in authoring order
+  //   1. .ilb-inputs       - panel-zone inputs, in authoring order; OMITTED
+  //      entirely when no input uses the panel zone (nothing to render)
+  //   2. .ilb-outputs      - panel-zone outputs, in authoring order; OMITTED
+  //      when no output uses the panel zone. The sr-only live-region summary
+  //      (see `outputsSummary` below) normally lives inside this container,
+  //      but it must survive even when the container itself is omitted — in
+  //      that case it's appended to a minimal `.ilb-outputs-live` wrapper
+  //      (no card styling) in this same position instead, so the container
+  //      being empty of VISIBLE outputs never silences the live region.
   //   3. .ilb-below-panel  - below-zone inputs then below-zone outputs, in
   //      authoring order (the container is omitted entirely when nothing
   //      uses this zone)
@@ -163,6 +170,9 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   // inputs -> panel-zone outputs -> below-zone inputs -> below-zone
   // outputs -> stage-zone inputs -> stage-zone outputs -> chart canvases
   // (if any) -> challenges (a later sibling of `.ilb-layout` under `root`).
+  // The (sr-only, non-focusable) live region never participates in tab
+  // order either way, so omitting/relocating its container never affects
+  // this sequence.
   const allElements = [...config.inputs, ...config.outputs];
   const anyStageZone = allElements.some((e) => zoneOf(e.placement) === "stage");
   const hasBelowZone = allElements.some((e) => zoneOf(e.placement) === "below");
@@ -418,20 +428,38 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     }
   }
 
-  // Assemble the layout's zone containers in the fixed DOM order documented
-  // in the FOCUS-ORDER INVARIANT above; content was routed into each
-  // container by zone in the loops above, independent of this append order.
-  layout.appendChild(inputsPanel);
-  layout.appendChild(outputsPanel);
-  if (hasBelowZone) layout.appendChild(belowPanel);
-  if (stage) layout.appendChild(stage);
   // Debounced, visually-hidden live-region summary of all outputs: mirrors
   // the instant visual values on a trailing timer so a screen reader hears
-  // one settled announcement after input stops, not one per tick.
+  // one settled announcement after input stops, not one per tick. It must
+  // survive even when every output is placed "below"/"stage" (so
+  // .ilb-outputs ends up with no visible children) — in that case it gets a
+  // minimal wrapper of its own (no card styling), appended in the same DOM
+  // position `.ilb-outputs` would otherwise occupy, instead of the
+  // (otherwise-empty) outputs card.
   const outputsSummary = el("div", "ilb-sr-only");
   outputsSummary.setAttribute("role", "status");
   outputsSummary.setAttribute("aria-live", "polite");
-  outputsPanel.appendChild(outputsSummary);
+  const outputsPanelHasVisibleOutputs = outputsPanel.childElementCount > 0;
+  if (outputsPanelHasVisibleOutputs) {
+    outputsPanel.appendChild(outputsSummary);
+  }
+
+  // Assemble the layout's zone containers in the fixed DOM order documented
+  // in the FOCUS-ORDER INVARIANT above; content was routed into each
+  // container by zone in the loops above, independent of this append order.
+  // A panel container that ended up with no visible children (every input/
+  // output was routed to "below" or "stage") is omitted entirely, rather
+  // than shipping an empty, borderless-but-still-padded card.
+  if (inputsPanel.childElementCount > 0) layout.appendChild(inputsPanel);
+  if (outputsPanelHasVisibleOutputs) {
+    layout.appendChild(outputsPanel);
+  } else {
+    const outputsLive = el("div", "ilb-outputs-live");
+    outputsLive.appendChild(outputsSummary);
+    layout.appendChild(outputsLive);
+  }
+  if (hasBelowZone) layout.appendChild(belowPanel);
+  if (stage) layout.appendChild(stage);
   let outputsSummaryTimer: ReturnType<typeof setTimeout> | null = null;
   const OUTPUTS_SUMMARY_DEBOUNCE_MS = 500;
 
