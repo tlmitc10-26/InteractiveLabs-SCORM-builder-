@@ -237,8 +237,15 @@
     axisText: "#484848",
     frame: "#bfbfbf"
   };
+  function zoneOf(placement) {
+    var _a;
+    return (_a = placement == null ? void 0 : placement.zone) != null ? _a : "panel";
+  }
+  function stageBoxOf(placement) {
+    return placement && placement.zone === "stage" ? placement.box : null;
+  }
   function mountSandbox(root, config) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
     root.innerHTML = "";
     root.classList.add("ilb-sandbox");
     root.setAttribute("role", "main");
@@ -302,8 +309,20 @@
     root.appendChild(header);
     const layout = el("div", "ilb-layout");
     root.appendChild(layout);
+    layout.classList.add(`ilb-layout-${(_b = config.layout) != null ? _b : "side"}`);
+    const allElements = [...config.inputs, ...config.outputs];
+    const anyStageZone = allElements.some((e) => zoneOf(e.placement) === "stage");
+    const hasBelowZone = allElements.some((e) => zoneOf(e.placement) === "below");
+    const needsStage = !!config.visual && (!!config.visual.backgroundUrl || config.visual.overlays.length > 0 || anyStageZone);
     const inputsPanel = el("div", "ilb-inputs");
-    layout.appendChild(inputsPanel);
+    const outputsPanel = el("div", "ilb-outputs");
+    const belowPanel = el("div", "ilb-below-panel");
+    let stage = null;
+    let stageControls = null;
+    if (needsStage) {
+      stage = el("div", "ilb-stage");
+      stageControls = el("div", "ilb-stage-controls");
+    }
     for (const inp of config.inputs) {
       const inputId = `${mountId}-${inp.id}`;
       const row = el("div", "ilb-input-row");
@@ -317,7 +336,7 @@
         const sel = document.createElement("select");
         sel.id = inputId;
         sel.dataset.input = inp.id;
-        for (const opt of (_b = inp.options) != null ? _b : []) {
+        for (const opt of (_c = inp.options) != null ? _c : []) {
           const o = document.createElement("option");
           o.value = String(opt.value);
           o.textContent = opt.label;
@@ -345,9 +364,9 @@
         range.type = "range";
         range.id = inputId;
         range.dataset.input = inp.id;
-        range.min = String((_c = inp.min) != null ? _c : 0);
-        range.max = String((_d = inp.max) != null ? _d : 100);
-        range.step = String((_e = inp.step) != null ? _e : "any");
+        range.min = String((_d = inp.min) != null ? _d : 0);
+        range.max = String((_e = inp.max) != null ? _e : 100);
+        range.step = String((_f = inp.step) != null ? _f : "any");
         range.value = String(values[inp.id]);
         const num = document.createElement("input");
         num.type = "number";
@@ -402,9 +421,9 @@
         num.id = inputId;
         num.className = "ilb-input-number";
         num.dataset.input = inp.id;
-        num.min = String((_f = inp.min) != null ? _f : 0);
-        num.max = String((_g = inp.max) != null ? _g : 100);
-        num.step = String((_h = inp.step) != null ? _h : "any");
+        num.min = String((_g = inp.min) != null ? _g : 0);
+        num.max = String((_h = inp.max) != null ? _h : 100);
+        num.step = String((_i = inp.step) != null ? _i : "any");
         num.value = String(values[inp.id]);
         num.addEventListener("input", () => {
           if (num.value === "") return;
@@ -435,11 +454,23 @@
         control = wrap;
       }
       row.appendChild(control);
-      inputsPanel.appendChild(row);
+      const zone = zoneOf(inp.placement);
+      const box = stageBoxOf(inp.placement);
+      if (zone === "stage" && stageControls && box) {
+        const card = el("div", "ilb-stage-control");
+        card.style.left = `${box.x}%`;
+        card.style.top = `${box.y}%`;
+        card.style.width = `${box.w}%`;
+        card.style.height = `${box.h}%`;
+        card.appendChild(row);
+        stageControls.appendChild(card);
+      } else if (zone === "below") {
+        belowPanel.appendChild(row);
+      } else {
+        inputsPanel.appendChild(row);
+      }
     }
-    let stage = null;
-    if (config.visual && (config.visual.backgroundUrl || config.visual.overlays.length)) {
-      stage = el("div", "ilb-stage");
+    if (stage && config.visual) {
       if (config.visual.backgroundUrl) {
         const bg = document.createElement("img");
         bg.className = "ilb-stage-bg";
@@ -480,11 +511,9 @@
         }
         stage.appendChild(holder);
       }
-      layout.appendChild(stage);
+      if (stageControls) stage.appendChild(stageControls);
       layout.classList.add("ilb-has-stage");
     }
-    const outputsPanel = el("div", "ilb-outputs");
-    layout.appendChild(outputsPanel);
     const outputNodes = /* @__PURE__ */ new Map();
     for (const out of config.outputs) {
       const card = el("div", "ilb-output");
@@ -498,15 +527,33 @@
       val.appendChild(num);
       val.appendChild(dash);
       const unit = el("span", "ilb-output-units");
-      unit.textContent = (_i = out.units) != null ? _i : "";
+      unit.textContent = (_j = out.units) != null ? _j : "";
       const sr = el("span", "ilb-sr-only");
       card.appendChild(lab);
       card.appendChild(val);
       card.appendChild(unit);
       card.appendChild(sr);
-      outputsPanel.appendChild(card);
       outputNodes.set(out.id, { num, dash, sr });
+      const zone = zoneOf(out.placement);
+      const box = stageBoxOf(out.placement);
+      if (zone === "stage" && stageControls && box) {
+        const wrap = el("div", "ilb-stage-control");
+        wrap.style.left = `${box.x}%`;
+        wrap.style.top = `${box.y}%`;
+        wrap.style.width = `${box.w}%`;
+        wrap.style.height = `${box.h}%`;
+        wrap.appendChild(card);
+        stageControls.appendChild(wrap);
+      } else if (zone === "below") {
+        belowPanel.appendChild(card);
+      } else {
+        outputsPanel.appendChild(card);
+      }
     }
+    layout.appendChild(inputsPanel);
+    layout.appendChild(outputsPanel);
+    if (hasBelowZone) layout.appendChild(belowPanel);
+    if (stage) layout.appendChild(stage);
     const outputsSummary = el("div", "ilb-sr-only");
     outputsSummary.setAttribute("role", "status");
     outputsSummary.setAttribute("aria-live", "polite");

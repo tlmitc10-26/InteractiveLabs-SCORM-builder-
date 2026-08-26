@@ -79,6 +79,13 @@ export function migrateLegacyColors(raw: unknown): unknown {
 
 type Box = { x: number; y: number; w: number; h: number };
 
+/** Placement model (schema.ts's `placementSchema`): where an input/output
+ *  renders. "panel" is the implicit default when an element carries no
+ *  `placement` at all (legacy configs, and any new element until a
+ *  designer explicitly moves it) — see `zoneOf`/main.ts's rendering. The
+ *  stage box reuses the same {x,y,w,h} percent shape as overlay boxes. */
+export type Placement = { zone: "panel" } | { zone: "below" } | { zone: "stage"; box: Box };
+
 type FillOverlay = { id: string; type: "fill"; outputId: string; inMin: number; inMax: number; color: ColorRef; box: Box };
 type SwapOverlay = { id: string; type: "swap"; outputId: string; box: Box; bands: Array<{ upTo: number; assetId: string }> };
 type TransformOverlay = {
@@ -92,19 +99,23 @@ type Input = {
   id: string; label: string; type: "slider" | "number" | "toggle" | "select";
   min?: number; max?: number; step?: number; defaultValue: number; units?: string;
   options?: Array<{ label: string; value: number }>;
+  placement?: Placement;
 };
-type Output = { id: string; label: string; formula: string; units?: string; decimals?: number };
+type Output = { id: string; label: string; formula: string; units?: string; decimals?: number; placement?: Placement };
 type Chart = { id: string; title: string; xInputId: string; yOutputId: string; samples: number };
 type Challenge = { id: string; prompt: string; outputId: string; comparator: "gte" | "lte" | "between"; value?: number; min?: number; max?: number };
 type Visual = { backgroundAssetId?: string; overlays: Overlay[] };
 
 /** Structural authoring-config shape: schema.ts's `SandboxConfig` (a Zod
  *  inference) is assignable to this without either module importing the
- *  other's types. */
+ *  other's types. `layout` is optional here (a mid-edit editor draft may
+ *  not carry it yet); schema.ts's zod default guarantees it's always set
+ *  on a validated `SandboxConfig`. */
 export type SandboxConfigLike = {
   title: string; intro?: string;
   inputs: Input[]; outputs: Output[]; charts: Chart[];
   visual?: Visual; challenges: Challenge[];
+  layout?: "side" | "stacked" | "stage-focus";
 };
 
 /** Runtime config: assetIds resolved to URLs, colors resolved to CSS values.
@@ -121,6 +132,9 @@ export type RuntimeSandboxConfig = Omit<SandboxConfigLike, "visual"> & {
 };
 
 export function toRuntimeConfig(config: SandboxConfigLike, urlForAsset: (assetId: string) => string): RuntimeSandboxConfig {
+  // `layout` and every input/output's `placement` need no reshaping (no
+  // assetIds or colors inside them), so spreading `...rest` below carries
+  // them through to the runtime config unchanged.
   const { visual, ...rest } = config;
   if (!visual) return rest;
   return {

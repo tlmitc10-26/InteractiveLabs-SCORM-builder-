@@ -25,6 +25,22 @@ const ILB_CHART_COLORS = {
   frame: "#bfbfbf",
 } as const;
 
+/** Placement model (schema.ts's `placementSchema`): where an input/output
+ *  renders. Absence of `placement` means "panel" — the only behavior that
+ *  existed before this feature, so every pre-existing config renders
+ *  identically. */
+type Placement = NonNullable<RuntimeSandboxConfig["inputs"][number]["placement"]>;
+
+function zoneOf(placement: Placement | undefined): "panel" | "below" | "stage" {
+  return placement?.zone ?? "panel";
+}
+
+/** The stage box for a "stage" zone placement, or null for any other zone
+ *  (including absent placement). */
+function stageBoxOf(placement: Placement | undefined): { x: number; y: number; w: number; h: number } | null {
+  return placement && placement.zone === "stage" ? placement.box : null;
+}
+
 /** Mount the Parameter Sandbox. Labels/units via textContent (never innerHTML);
  *  only `intro` may contain markup and it arrives pre-sanitized from the builder. */
 export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): void {
@@ -126,10 +142,43 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
 
   const layout = el("div", "ilb-layout");
   root.appendChild(layout);
+  layout.classList.add(`ilb-layout-${config.layout ?? "side"}`);
+
+  // FOCUS-ORDER INVARIANT: regardless of authoring order or which `layout`
+  // preset is active, the DOM (and therefore default tab) order of the
+  // zone containers inside `.ilb-layout` is always:
+  //   1. .ilb-inputs       - panel-zone inputs, in authoring order
+  //   2. .ilb-outputs      - panel-zone outputs, in authoring order
+  //   3. .ilb-below-panel  - below-zone inputs then below-zone outputs, in
+  //      authoring order (the container is omitted entirely when nothing
+  //      uses this zone)
+  //   4. .ilb-stage        - background image/overlays first, then
+  //      .ilb-stage-controls (stage-zone inputs then stage-zone outputs,
+  //      in authoring order) appended LAST, so a stage-zone control is
+  //      always a later sibling of the stage's own image/overlay nodes
+  //   5. .ilb-charts       - omitted when there are no charts
+  // Which preset makes the stage render first/large/etc. is controlled
+  // purely by CSS (`order`/grid-column in engine.css); it never changes
+  // this DOM order. Net tab sequence for a mixed config: panel-zone
+  // inputs -> panel-zone outputs -> below-zone inputs -> below-zone
+  // outputs -> stage-zone inputs -> stage-zone outputs -> chart canvases
+  // (if any) -> challenges (a later sibling of `.ilb-layout` under `root`).
+  const allElements = [...config.inputs, ...config.outputs];
+  const anyStageZone = allElements.some((e) => zoneOf(e.placement) === "stage");
+  const hasBelowZone = allElements.some((e) => zoneOf(e.placement) === "below");
+  const needsStage = !!config.visual && (!!config.visual.backgroundUrl || config.visual.overlays.length > 0 || anyStageZone);
+
+  const inputsPanel = el("div", "ilb-inputs");
+  const outputsPanel = el("div", "ilb-outputs");
+  const belowPanel = el("div", "ilb-below-panel");
+  let stage: HTMLElement | null = null;
+  let stageControls: HTMLElement | null = null;
+  if (needsStage) {
+    stage = el("div", "ilb-stage");
+    stageControls = el("div", "ilb-stage-controls");
+  }
 
   // ---------- inputs ----------
-  const inputsPanel = el("div", "ilb-inputs");
-  layout.appendChild(inputsPanel);
   for (const inp of config.inputs) {
     const inputId = `${mountId}-${inp.id}`;
     const row = el("div", "ilb-input-row");
@@ -265,13 +314,23 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       control = wrap;
     }
     row.appendChild(control);
-    inputsPanel.appendChild(row);
+    const zone = zoneOf(inp.placement);
+    const box = stageBoxOf(inp.placement);
+    if (zone === "stage" && stageControls && box) {
+      const card = el("div", "ilb-stage-control");
+      card.style.left = `${box.x}%`; card.style.top = `${box.y}%`;
+      card.style.width = `${box.w}%`; card.style.height = `${box.h}%`;
+      card.appendChild(row);
+      stageControls.appendChild(card);
+    } else if (zone === "below") {
+      belowPanel.appendChild(row);
+    } else {
+      inputsPanel.appendChild(row);
+    }
   }
 
   // ---------- stage (visual layer) ----------
-  let stage: HTMLElement | null = null;
-  if (config.visual && (config.visual.backgroundUrl || config.visual.overlays.length)) {
-    stage = el("div", "ilb-stage");
+  if (stage && config.visual) {
     if (config.visual.backgroundUrl) {
       const bg = document.createElement("img");
       bg.className = "ilb-stage-bg"; bg.alt = ""; bg.src = config.visual.backgroundUrl;
@@ -316,7 +375,10 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       }
       stage.appendChild(holder);
     }
-    layout.appendChild(stage);
+    // Stage-zone controls are appended LAST, after the background image
+    // and every overlay node, so they're always a later sibling of the
+    // stage's own visual content (see FOCUS-ORDER INVARIANT above).
+    if (stageControls) stage.appendChild(stageControls);
     layout.classList.add("ilb-has-stage");
   }
 
@@ -326,8 +388,6 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   // avoids announcing every keystroke of a slider drag. Each card still
   // keeps a per-output aria-hidden dash + sr-only fallback for browse-mode
   // screen reader navigation.
-  const outputsPanel = el("div", "ilb-outputs");
-  layout.appendChild(outputsPanel);
   const outputNodes = new Map<string, { num: HTMLElement; dash: HTMLElement; sr: HTMLElement }>();
   for (const out of config.outputs) {
     const card = el("div", "ilb-output");
@@ -341,9 +401,30 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     const unit = el("span", "ilb-output-units"); unit.textContent = out.units ?? "";
     const sr = el("span", "ilb-sr-only");
     card.appendChild(lab); card.appendChild(val); card.appendChild(unit); card.appendChild(sr);
-    outputsPanel.appendChild(card);
     outputNodes.set(out.id, { num, dash, sr });
+
+    const zone = zoneOf(out.placement);
+    const box = stageBoxOf(out.placement);
+    if (zone === "stage" && stageControls && box) {
+      const wrap = el("div", "ilb-stage-control");
+      wrap.style.left = `${box.x}%`; wrap.style.top = `${box.y}%`;
+      wrap.style.width = `${box.w}%`; wrap.style.height = `${box.h}%`;
+      wrap.appendChild(card);
+      stageControls.appendChild(wrap);
+    } else if (zone === "below") {
+      belowPanel.appendChild(card);
+    } else {
+      outputsPanel.appendChild(card);
+    }
   }
+
+  // Assemble the layout's zone containers in the fixed DOM order documented
+  // in the FOCUS-ORDER INVARIANT above; content was routed into each
+  // container by zone in the loops above, independent of this append order.
+  layout.appendChild(inputsPanel);
+  layout.appendChild(outputsPanel);
+  if (hasBelowZone) layout.appendChild(belowPanel);
+  if (stage) layout.appendChild(stage);
   // Debounced, visually-hidden live-region summary of all outputs: mirrors
   // the instant visual values on a trailing timer so a screen reader hears
   // one settled announcement after input stops, not one per tick.

@@ -4,9 +4,42 @@
 .ilb-sandbox h2.ilb-title { font-size: 24px; margin: 0 0 8px; }
 @media (min-width: 992px) { .ilb-sandbox h2.ilb-title { font-size: 36px; } }
 .ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: 8px 12px; margin-bottom: 12px; }
+/* Layout presets (Task 11): the DOM order of .ilb-layout's zone containers
+   is FIXED by main.ts (see its FOCUS-ORDER INVARIANT comment) for a stable,
+   predictable tab order across all three presets below. Visual placement
+   is controlled here purely via `order`/`grid-column`, which can reorder
+   how things LOOK without ever touching keyboard/tab order. */
 .ilb-layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
-@media (min-width: 760px) { .ilb-layout { grid-template-columns: 260px 1fr; } .ilb-layout.ilb-has-stage { grid-template-columns: 260px 1fr 1fr; } }
-.ilb-inputs, .ilb-outputs, .ilb-challenges, .ilb-charts { background: #fff; border: 1px solid var(--rds-light-4); border-radius: 8px; padding: 12px; }
+.ilb-layout > .ilb-inputs { order: 1; }
+.ilb-layout > .ilb-stage { order: 2; }
+.ilb-layout > .ilb-outputs { order: 3; }
+.ilb-layout > .ilb-below-panel { order: 4; grid-column: 1 / -1; }
+.ilb-layout > .ilb-charts { order: 5; grid-column: 1 / -1; }
+
+/* Stacked: single column, stage first, then inputs, then the below-zone
+   panel, then outputs/charts. */
+.ilb-layout.ilb-layout-stacked > .ilb-stage { order: 1; }
+.ilb-layout.ilb-layout-stacked > .ilb-inputs { order: 2; }
+.ilb-layout.ilb-layout-stacked > .ilb-below-panel { order: 3; }
+.ilb-layout.ilb-layout-stacked > .ilb-outputs { order: 4; }
+.ilb-layout.ilb-layout-stacked > .ilb-charts { order: 5; }
+
+/* Stage-focus: the stage spans full width on top; inputs and outputs share
+   a row beneath it. */
+.ilb-layout.ilb-layout-stage-focus > .ilb-stage { order: 1; grid-column: 1 / -1; }
+.ilb-layout.ilb-layout-stage-focus > .ilb-inputs { order: 2; }
+.ilb-layout.ilb-layout-stage-focus > .ilb-outputs { order: 3; }
+.ilb-layout.ilb-layout-stage-focus > .ilb-below-panel { order: 4; grid-column: 1 / -1; }
+.ilb-layout.ilb-layout-stage-focus > .ilb-charts { order: 5; grid-column: 1 / -1; }
+
+@media (min-width: 760px) {
+  /* Side (default): input panel | stage | output panel, side by side. */
+  .ilb-layout.ilb-layout-side { grid-template-columns: 260px 1fr; }
+  .ilb-layout.ilb-layout-side.ilb-has-stage { grid-template-columns: 260px 1fr 1fr; }
+  .ilb-layout.ilb-layout-stacked { grid-template-columns: 1fr; }
+  .ilb-layout.ilb-layout-stage-focus { grid-template-columns: 1fr 1fr; }
+}
+.ilb-inputs, .ilb-outputs, .ilb-below-panel, .ilb-challenges, .ilb-charts { background: #fff; border: 1px solid var(--rds-light-4); border-radius: 8px; padding: 12px; }
 .ilb-input-row { display: block; margin-bottom: 14px; }
 .ilb-input-label { display: block; font-weight: bold; font-size: 0.9rem; margin-bottom: 4px; }
 .ilb-input-control { display: flex; align-items: center; gap: 8px; }
@@ -40,6 +73,19 @@
 .ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; }
 .ilb-stage-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .ilb-overlay { position: absolute; }
+/* Stage-zone controls: a layer of small cards positioned by box percents,
+   sitting above the background image/overlays (later in DOM => on top). */
+.ilb-stage-controls { position: absolute; inset: 0; }
+.ilb-stage-control {
+  position: absolute;
+  background: rgba(250, 250, 250, 0.92); /* fallback for engines without color-mix(): ~= --rds-light-1 (#fafafa) at .92 opacity */
+  background: color-mix(in srgb, var(--rds-light-1) 92%, transparent);
+  border-radius: var(--radius-card, 8px);
+  padding: 4px;
+  overflow: auto;
+}
+/* Controls placed on the stage still get the same 24px minimum targets as
+   panel/below controls (enforced globally below, not re-declared here). */
 .ilb-fill { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; opacity: 0.65; transition: height 120ms ease; }
 .ilb-overlay-img { width: 100%; height: 100%; object-fit: contain; transition: transform 120ms ease, opacity 120ms ease; }
 .ilb-output { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid #eee; }

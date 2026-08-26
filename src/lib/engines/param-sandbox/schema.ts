@@ -41,6 +41,27 @@ export const colorRefSchema = z.union([
 /** Stage background used for the fill-overlay contrast gate (light-1). */
 const STAGE_BG_HEX = colorHex("light-1");
 
+const boxSchema = z.object({
+  x: z.number().min(0).max(100), y: z.number().min(0).max(100),
+  w: z.number().min(0).max(100), h: z.number().min(0).max(100),
+}).strict();
+
+/** Stage placement reuses the same {x,y,w,h} percent box as overlays. */
+const stageBoxSchema = boxSchema;
+
+/** Placement model: where an input/output renders. `placement` is optional
+ *  on both inputSchema and outputSchema — its absence means "panel" (the
+ *  historical, only-ever behavior before this task), so every pre-existing
+ *  config stays valid unchanged. A "stage" placement additionally requires
+ *  a visual scene to exist (cross-checked in validateSandboxConfig, since
+ *  that check needs the parsed config as a whole, not just this field). */
+export const placementSchema = z.union([
+  z.object({ zone: z.literal("panel") }).strict(),
+  z.object({ zone: z.literal("below") }).strict(),
+  z.object({ zone: z.literal("stage"), box: stageBoxSchema }).strict(),
+]);
+export type Placement = z.infer<typeof placementSchema>;
+
 const inputSchema = z.object({
   id: safeId,
   label: plain(120),
@@ -51,6 +72,7 @@ const inputSchema = z.object({
   defaultValue: z.number(),
   units: plain(20).optional(),
   options: z.array(z.object({ label: plain(80), value: z.number() }).strict()).max(20).optional(),
+  placement: placementSchema.optional(),
 }).strict();
 
 const outputSchema = z.object({
@@ -59,6 +81,7 @@ const outputSchema = z.object({
   formula: z.string().min(1).max(500),
   units: plain(20).optional(),
   decimals: z.number().int().min(0).max(8).optional(),
+  placement: placementSchema.optional(),
 }).strict();
 
 const chartSchema = z.object({
@@ -67,11 +90,6 @@ const chartSchema = z.object({
   xInputId: safeId,
   yOutputId: safeId,
   samples: z.number().int().min(2).max(200),
-}).strict();
-
-const boxSchema = z.object({
-  x: z.number().min(0).max(100), y: z.number().min(0).max(100),
-  w: z.number().min(0).max(100), h: z.number().min(0).max(100),
 }).strict();
 
 const overlaySchema = z.discriminatedUnion("type", [
@@ -114,6 +132,7 @@ export const sandboxConfigSchema = z.object({
   charts: z.array(chartSchema).max(6).default([]),
   visual: visualSchema.optional(),
   challenges: z.array(challengeSchema).max(12).default([]),
+  layout: z.enum(["side", "stacked", "stage-focus"]).default("side"),
 }).strict();
 
 export type SandboxConfig = z.infer<typeof sandboxConfigSchema>;
@@ -159,6 +178,20 @@ export function validateSandboxConfig(raw: unknown): ValidationResult {
   if (challengeDupes.length) errors.push(`duplicate challenge ids: ${challengeDupes.join(", ")}`);
   const overlayDupes = dupesWithin((config.visual?.overlays ?? []).map((o) => o.id));
   if (overlayDupes.length) errors.push(`duplicate overlay ids: ${overlayDupes.join(", ")}`);
+
+  // Placement cross-check: a "stage" zone renders inside the stage layer, so
+  // it requires a visual scene to actually exist to render into.
+  const hasVisual = !!config.visual;
+  for (const inp of config.inputs) {
+    if (inp.placement?.zone === "stage" && !hasVisual) {
+      errors.push(`input "${inp.id}": placement zone "stage" requires a visual scene`);
+    }
+  }
+  for (const out of config.outputs) {
+    if (out.placement?.zone === "stage" && !hasVisual) {
+      errors.push(`output "${out.id}": placement zone "stage" requires a visual scene`);
+    }
+  }
 
   for (const c of config.charts) {
     if (!inputIdSet.has(c.xInputId)) {

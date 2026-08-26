@@ -301,4 +301,71 @@ describe("mountSandbox", () => {
       expect(scorm.setCompleted).not.toHaveBeenCalled();
     });
   });
+
+  describe("placement zones and layout presets (Task 11)", () => {
+    const placementConfig: RuntimeSandboxConfig = {
+      title: "Placement test",
+      layout: "stage-focus",
+      inputs: [
+        { id: "panelIn", label: "Panel input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 2 },
+        { id: "belowIn", label: "Below input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 3, placement: { zone: "below" } },
+        { id: "stageIn", label: "Stage input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 4, placement: { zone: "stage", box: { x: 10, y: 20, w: 15, h: 10 } } },
+      ],
+      outputs: [
+        { id: "panelOut", label: "Panel output", formula: "panelIn * 2" },
+        { id: "belowOut", label: "Below output", formula: "belowIn * 2", placement: { zone: "below" } },
+        { id: "stageOut", label: "Stage output", formula: "stageIn * 2", placement: { zone: "stage", box: { x: 40, y: 50, w: 15, h: 10 } } },
+      ],
+      charts: [],
+      challenges: [],
+      visual: { overlays: [] },
+    };
+
+    it("applies the layout class to .ilb-layout", () => {
+      mountSandbox(document.getElementById("root")!, placementConfig);
+      const layout = document.querySelector(".ilb-layout")!;
+      expect(layout.classList.contains("ilb-layout-stage-focus")).toBe(true);
+    });
+
+    it("renders a stage-zone input inside .ilb-stage-controls with left/top set, and its slider still drives outputs", () => {
+      mountSandbox(document.getElementById("root")!, placementConfig);
+      const stageControls = document.querySelector(".ilb-stage-controls")!;
+      const slider = stageControls.querySelector('input[type="range"][data-input="stageIn"]') as HTMLInputElement;
+      expect(slider).toBeTruthy();
+      const card = slider.closest(".ilb-stage-control") as HTMLElement;
+      expect(card.style.left).toBe("10%");
+      expect(card.style.top).toBe("20%");
+
+      slider.value = "8";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      const out = document.querySelector('[data-output="stageOut"] .ilb-output-value')!;
+      expect(out.textContent).toBe("16");
+    });
+
+    it("renders below-zone input and output inside .ilb-below-panel", () => {
+      mountSandbox(document.getElementById("root")!, placementConfig);
+      const below = document.querySelector(".ilb-below-panel")!;
+      expect(below.querySelector('input[data-input="belowIn"]')).toBeTruthy();
+      expect(below.querySelector('[data-output="belowOut"]')).toBeTruthy();
+    });
+
+    it("keeps DOM order matching the documented focus-order invariant: panel containers, then below, then stage", () => {
+      mountSandbox(document.getElementById("root")!, placementConfig);
+      const layout = document.querySelector(".ilb-layout")!;
+      const panels = Array.from(layout.children).map((c) => c.className);
+      expect(panels).toEqual(["ilb-inputs", "ilb-outputs", "ilb-below-panel", "ilb-stage"]);
+
+      const inputOrder = [...new Set(Array.from(document.querySelectorAll("[data-input]")).map((n) => n.getAttribute("data-input")))];
+      expect(inputOrder).toEqual(["panelIn", "belowIn", "stageIn"]);
+
+      const outputOrder = Array.from(document.querySelectorAll("[data-output]")).map((n) => n.getAttribute("data-output"));
+      expect(outputOrder).toEqual(["panelOut", "belowOut", "stageOut"]);
+    });
+
+    it("omits the below-panel and stage entirely when nothing uses those zones", () => {
+      mountSandbox(document.getElementById("root")!, config); // the module-level `config` fixture: no placement, no visual
+      expect(document.querySelector(".ilb-below-panel")).toBeNull();
+      expect(document.querySelector(".ilb-stage")).toBeNull();
+    });
+  });
 });
