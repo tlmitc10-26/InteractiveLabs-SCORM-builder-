@@ -55,6 +55,13 @@ body {
 .rds-swatch-swab.is-selected { outline: 3px solid var(--rds-info); outline-offset: 1px; }
 .rds-swatch-caption { font-size: 9px; line-height: 1.1; color: var(--rds-dark-2); text-align: center; }
 
+/* Stage authoring outlines (Task 12): the outline's own selected/unselected
+   look is drawn via its inline `border` (dashed when selected, solid
+   otherwise — see stage-authoring.tsx); this class carries ONLY the
+   keyboard focus ring, so an inline style can never suppress it the way an
+   always-on inline `outline` previously did. */
+.ilb-authoring-outline:focus-visible { outline: 3px solid var(--rds-info); outline-offset: 2px; }
+
 /* Branded app shell */
 .app-header { background: var(--rds-primary); color: #fff; padding: 12px 24px; font-weight: 700; font-size: 18px; }
 .app-link { color: var(--rds-primary); text-decoration: underline; }
