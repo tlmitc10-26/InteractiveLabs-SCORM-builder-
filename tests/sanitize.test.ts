@@ -29,6 +29,23 @@ describe("sanitizeRichText", () => {
   });
 });
 
+describe("sanitizeRichText href guard edge cases", () => {
+  it("rejects hrefs with leading whitespace", () => {
+    expect(sanitizeRichText('<a href=" https://evil.com">x</a>')).toBe("<a>x</a>");
+  });
+  it("rejects https scheme without //", () => {
+    expect(sanitizeRichText('<a href="https:alert(1)">x</a>')).toBe("<a>x</a>");
+  });
+  it("rejects uppercase javascript: scheme", () => {
+    expect(sanitizeRichText('<A HREF="JAVASCRIPT:alert(1)">x</A>')).toBe("<a>x</a>");
+  });
+  it("accepts case-insensitive HTTPS and is idempotent", () => {
+    const once = sanitizeRichText('<a href="HTTPS://evil.example/x">x</a>');
+    expect(once).toBe('<a href="HTTPS://evil.example/x">x</a>');
+    expect(sanitizeRichText(once)).toBe(once);
+  });
+});
+
 describe("sanitizePlainText", () => {
   it("escapes all HTML", () => {
     expect(sanitizePlainText('<b>x</b>')).toBe("&lt;b&gt;x&lt;/b&gt;");
