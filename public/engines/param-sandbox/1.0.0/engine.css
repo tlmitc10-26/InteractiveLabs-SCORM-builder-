@@ -20,7 +20,7 @@
 :root {
   --ilb-font-heading: Georgia, 'Times New Roman', serif;
   --ilb-font-body: Arial, Helvetica, sans-serif;
-  --ilb-min-target: 24px;
+  --radius-card: 8px;
 }
 
 .ilb-sandbox { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 960px; margin: 0 auto; padding: 16px; }
@@ -29,33 +29,20 @@
 .ilb-sandbox h2.ilb-title { font-size: 24px; margin: 0 0 8px; }
 @media (min-width: 992px) { .ilb-sandbox h2.ilb-title { font-size: 36px; } }
 .ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: 8px 12px; margin-bottom: 12px; }
-/* Layout presets (Task 11): the DOM order of .ilb-layout's zone containers
-   is FIXED by main.ts (see its FOCUS-ORDER INVARIANT comment) for a stable,
-   predictable tab order across all three presets below. Visual placement
-   is controlled here purely via `order`/`grid-column`, which can reorder
-   how things LOOK without ever touching keyboard/tab order. */
+/* Layout presets (Task 11 / focus-order fix): the DOM order of
+   .ilb-layout's zone containers is chosen PER PRESET by main.ts
+   (LAYOUT_ZONE_ORDER, see its FOCUS-ORDER INVARIANT comment) to match
+   each preset's visual reading order — DOM order IS tab order here.
+   Placement below is therefore grid-column ONLY (which column/row a zone
+   spans); it must never reorder zones relative to their DOM order, or tab
+   order would again diverge from what's on screen. */
 .ilb-layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
-.ilb-layout > .ilb-inputs { order: 1; }
-.ilb-layout > .ilb-stage { order: 2; }
-.ilb-layout > .ilb-outputs { order: 3; }
-.ilb-layout > .ilb-below-panel { order: 4; grid-column: 1 / -1; }
-.ilb-layout > .ilb-charts { order: 5; grid-column: 1 / -1; }
-
-/* Stacked: single column, stage first, then inputs, then the below-zone
-   panel, then outputs/charts. */
-.ilb-layout.ilb-layout-stacked > .ilb-stage { order: 1; }
-.ilb-layout.ilb-layout-stacked > .ilb-inputs { order: 2; }
-.ilb-layout.ilb-layout-stacked > .ilb-below-panel { order: 3; }
-.ilb-layout.ilb-layout-stacked > .ilb-outputs { order: 4; }
-.ilb-layout.ilb-layout-stacked > .ilb-charts { order: 5; }
+.ilb-layout > .ilb-below-panel { grid-column: 1 / -1; }
+.ilb-layout > .ilb-charts { grid-column: 1 / -1; }
 
 /* Stage-focus: the stage spans full width on top; inputs and outputs share
-   a row beneath it. */
-.ilb-layout.ilb-layout-stage-focus > .ilb-stage { order: 1; grid-column: 1 / -1; }
-.ilb-layout.ilb-layout-stage-focus > .ilb-inputs { order: 2; }
-.ilb-layout.ilb-layout-stage-focus > .ilb-outputs { order: 3; }
-.ilb-layout.ilb-layout-stage-focus > .ilb-below-panel { order: 4; grid-column: 1 / -1; }
-.ilb-layout.ilb-layout-stage-focus > .ilb-charts { order: 5; grid-column: 1 / -1; }
+   a row beneath it (DOM order: stage, inputs, outputs, below, charts). */
+.ilb-layout.ilb-layout-stage-focus > .ilb-stage { grid-column: 1 / -1; }
 
 @media (min-width: 760px) {
   /* Side (default): input panel | stage | output panel, side by side. */
@@ -106,7 +93,14 @@
   background: rgba(250, 250, 250, 0.92); /* fallback for engines without color-mix(): ~= --rds-light-1 (#fafafa) at .92 opacity */
   background: color-mix(in srgb, var(--rds-light-1) 92%, transparent);
   border-radius: var(--radius-card, 8px);
-  padding: 4px;
+  /* 6px so a focused control's 3px ring + 2px outline-offset (5px total)
+   * fits inside the card instead of being clipped at its edge. Note:
+   * .ilb-stage itself is `overflow: hidden`, so a stage-control card
+   * positioned at the extreme edge of the stage can still have its ring
+   * clipped by the STAGE's boundary, not this card's -- accepted, since
+   * that only affects controls placed flush against the stage edge.
+   */
+  padding: 6px;
   overflow: auto;
 }
 /* Controls placed on the stage still get the same 24px minimum targets as

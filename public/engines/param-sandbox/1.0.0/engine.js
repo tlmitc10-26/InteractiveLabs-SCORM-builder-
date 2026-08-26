@@ -244,8 +244,19 @@
   function stageBoxOf(placement) {
     return placement && placement.zone === "stage" ? placement.box : null;
   }
+  var LAYOUT_ZONE_ORDER = {
+    // Side (default): inputs | stage | outputs sit in one row, then the
+    // below-zone panel spans full width beneath, then charts.
+    side: ["inputs", "stage", "outputs", "below", "charts"],
+    // Stacked: single column, stage first, then inputs, then below, then
+    // outputs, then charts.
+    stacked: ["stage", "inputs", "below", "outputs", "charts"],
+    // Stage-focus: stage first (full width), then inputs+outputs share a row,
+    // then below, then charts.
+    "stage-focus": ["stage", "inputs", "outputs", "below", "charts"]
+  };
   function mountSandbox(root, config) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     root.innerHTML = "";
     root.classList.add("ilb-sandbox");
     root.setAttribute("role", "main");
@@ -557,16 +568,6 @@
     if (outputsPanelHasVisibleOutputs) {
       outputsPanel.appendChild(outputsSummary);
     }
-    if (inputsPanel.childElementCount > 0) layout.appendChild(inputsPanel);
-    if (outputsPanelHasVisibleOutputs) {
-      layout.appendChild(outputsPanel);
-    } else {
-      const outputsLive = el("div", "ilb-outputs-live");
-      outputsLive.appendChild(outputsSummary);
-      layout.appendChild(outputsLive);
-    }
-    if (hasBelowZone) layout.appendChild(belowPanel);
-    if (stage) layout.appendChild(stage);
     let outputsSummaryTimer = null;
     const OUTPUTS_SUMMARY_DEBOUNCE_MS = 500;
     const chartsPanel = el("div", "ilb-charts");
@@ -586,7 +587,32 @@
       chartsPanel.appendChild(wrap);
       chartCanvases.set(chart.id, canvas);
     }
-    if (config.charts.length) layout.appendChild(chartsPanel);
+    const zoneOrder = (_l = LAYOUT_ZONE_ORDER[(_k = config.layout) != null ? _k : "side"]) != null ? _l : LAYOUT_ZONE_ORDER.side;
+    for (const zone of zoneOrder) {
+      switch (zone) {
+        case "inputs":
+          if (inputsPanel.childElementCount > 0) layout.appendChild(inputsPanel);
+          break;
+        case "outputs":
+          if (outputsPanelHasVisibleOutputs) {
+            layout.appendChild(outputsPanel);
+          } else {
+            const outputsLive = el("div", "ilb-outputs-live");
+            outputsLive.appendChild(outputsSummary);
+            layout.appendChild(outputsLive);
+          }
+          break;
+        case "below":
+          if (hasBelowZone) layout.appendChild(belowPanel);
+          break;
+        case "stage":
+          if (stage) layout.appendChild(stage);
+          break;
+        case "charts":
+          if (config.charts.length) layout.appendChild(chartsPanel);
+          break;
+      }
+    }
     const challengeNodes = /* @__PURE__ */ new Map();
     if (config.challenges.length) {
       const panel = el("div", "ilb-challenges");

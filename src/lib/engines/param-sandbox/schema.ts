@@ -18,10 +18,11 @@ export type { ColorRef } from "@/lib/engines/param-sandbox/runtime-config";
 
 const idPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const safeId = z.string().min(1).max(40).regex(idPattern, "ids must be letters/digits/underscore");
-// Pre-transform cap fails fast on giant inputs; the post-transform `.pipe()`
-// cap enforces the declared max on the STORED value, since entity escaping
-// (sanitizePlainText) can inflate length past the original input's cap
-// (e.g. "&" x120 -> "&amp;" x120 = 600 chars).
+// Pre-transform cap fails fast on giant inputs. sanitizePlainText only
+// strips HTML tags now (no entity escaping — see its doc comment), so it
+// can only ever shrink a string; the post-transform `.pipe()` cap is kept
+// anyway as a defensive invariant on the STORED value (belt and braces,
+// and cheap), rather than because tag-stripping could grow past the cap.
 const plain = (max: number) => z.string().max(max).transform(sanitizePlainText).pipe(z.string().max(max));
 const rich = (max: number) => z.string().max(max).transform(sanitizeRichText).pipe(z.string().max(max));
 

@@ -22,11 +22,11 @@ function emitRootVariables(tokens) {
 
 function emitAppThemeCss(tokens) {
   const colorLines = Object.keys(tokens.colors).map((n) => `  --color-rds-${n}: ${tokens.colors[n]};`);
-  return `${GENERATED}\n${emitRootVariables(tokens)}\n\n@theme {\n${colorLines.join("\n")}\n  --font-app: ${tokens.fonts.app};\n  --radius-pill: ${tokens.radius.pill};\n}\n`;
+  return `${GENERATED}\n${emitRootVariables(tokens)}\n\n@theme {\n${colorLines.join("\n")}\n  --font-app: ${tokens.fonts.app};\n  --radius-pill: ${tokens.radius.pill};\n  --radius-card: ${tokens.radius.card};\n}\n`;
 }
 
 function emitEngineTokensCss(tokens) {
-  return `${GENERATED}\n${emitRootVariables(tokens)}\n:root {\n  --ilb-font-heading: ${tokens.fonts.lessonHeading};\n  --ilb-font-body: ${tokens.fonts.lessonBody};\n  --ilb-min-target: ${tokens.minTarget};\n}\n`;
+  return `${GENERATED}\n${emitRootVariables(tokens)}\n:root {\n  --ilb-font-heading: ${tokens.fonts.lessonHeading};\n  --ilb-font-body: ${tokens.fonts.lessonBody};\n  --radius-card: ${tokens.radius.card};\n}\n`;
 }
 
 /**

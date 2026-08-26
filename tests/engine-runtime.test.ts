@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { mountSandbox } from "@/engine-runtime/param-sandbox/main";
+import { validateSandboxConfig, toRuntimeConfig, emptySandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import type { ScormSession } from "@/engine-runtime/scorm-adapter";
 
@@ -58,6 +59,26 @@ describe("mountSandbox", () => {
     slider.value = "7";
     slider.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector('[data-challenge="c1"]')!.classList.contains("met")).toBe(true);
+  });
+
+  it("displays a title containing '&' correctly end-to-end through the FULL authoring pipeline (validate -> runtime -> mount)", () => {
+    // Task fix 2: sanitizePlainText used to entity-escape plain-text fields
+    // at storage time, so a title of "Mass & weight test" was PERMANENTLY
+    // stored as "Mass &amp; weight test" and every consumer (including this
+    // textContent render) displayed the escaped form. Round-tripping
+    // through the real authoring schema (not just calling mountSandbox
+    // directly with a hand-built RuntimeSandboxConfig) is what actually
+    // exercises sanitizePlainText.
+    const draft = { ...emptySandboxConfig("x"), title: "Mass & weight test" };
+    const result = validateSandboxConfig(draft);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.title).toBe("Mass & weight test"); // stored raw, not "Mass &amp; weight test"
+
+    const runtimeConfig = toRuntimeConfig(result.config, () => { throw new Error("no assets in this config"); });
+    mountSandbox(document.getElementById("root")!, runtimeConfig);
+    const h2 = document.querySelector(".ilb-title")!;
+    expect(h2.textContent).toBe("Mass & weight test");
   });
 
   describe("paired numeric input for sliders (2.5.7)", () => {
@@ -349,24 +370,84 @@ describe("mountSandbox", () => {
       expect(below.querySelector('[data-output="belowOut"]')).toBeTruthy();
     });
 
-    it("keeps DOM order matching the documented focus-order invariant: panel containers, then below, then stage", () => {
-      mountSandbox(document.getElementById("root")!, placementConfig);
-      const layout = document.querySelector(".ilb-layout")!;
-      const panels = Array.from(layout.children).map((c) => c.className);
-      expect(panels).toEqual(["ilb-inputs", "ilb-outputs", "ilb-below-panel", "ilb-stage"]);
-
-      const inputOrder = [...new Set(Array.from(document.querySelectorAll("[data-input]")).map((n) => n.getAttribute("data-input")))];
-      expect(inputOrder).toEqual(["panelIn", "belowIn", "stageIn"]);
-
-      const outputOrder = Array.from(document.querySelectorAll("[data-output]")).map((n) => n.getAttribute("data-output"));
-      expect(outputOrder).toEqual(["panelOut", "belowOut", "stageOut"]);
-    });
-
     it("omits the below-panel and stage entirely when nothing uses those zones", () => {
       mountSandbox(document.getElementById("root")!, config); // the module-level `config` fixture: no placement, no visual
       expect(document.querySelector(".ilb-below-panel")).toBeNull();
       expect(document.querySelector(".ilb-stage")).toBeNull();
     });
+  });
+
+  describe("focus order matches each preset's visual reading order (WCAG 1.3.2/2.4.3, technique C27)", () => {
+    // Same shape as `placementConfig` above (one input + one output per
+    // zone) but parameterized over `layout`, so DOM order can be checked
+    // against each preset's documented visual order (main.ts's
+    // LAYOUT_ZONE_ORDER / engine.css's grid placement).
+    function configFor(layout: RuntimeSandboxConfig["layout"]): RuntimeSandboxConfig {
+      return {
+        title: "Placement test",
+        layout,
+        inputs: [
+          { id: "panelIn", label: "Panel input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 2 },
+          { id: "belowIn", label: "Below input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 3, placement: { zone: "below" } },
+          { id: "stageIn", label: "Stage input", type: "slider", min: 0, max: 10, step: 1, defaultValue: 4, placement: { zone: "stage", box: { x: 10, y: 20, w: 15, h: 10 } } },
+        ],
+        outputs: [
+          { id: "panelOut", label: "Panel output", formula: "panelIn * 2" },
+          { id: "belowOut", label: "Below output", formula: "belowIn * 2", placement: { zone: "below" } },
+          { id: "stageOut", label: "Stage output", formula: "stageIn * 2", placement: { zone: "stage", box: { x: 40, y: 50, w: 15, h: 10 } } },
+        ],
+        charts: [],
+        challenges: [],
+        visual: { overlays: [] },
+      };
+    }
+
+    // Expected zone-container DOM order, and the resulting input/output
+    // element order it implies (below-zone and stage-zone elements sort
+    // wherever their zone container falls; panel-zone elements sort
+    // wherever .ilb-inputs/.ilb-outputs falls) — one case per preset.
+    const cases: Array<{
+      layout: RuntimeSandboxConfig["layout"];
+      panels: string[];
+      inputOrder: string[];
+      outputOrder: string[];
+    }> = [
+      {
+        layout: "side",
+        // Visual: inputs | stage | outputs row, then below-panel beneath.
+        panels: ["ilb-inputs", "ilb-stage", "ilb-outputs", "ilb-below-panel"],
+        inputOrder: ["panelIn", "stageIn", "belowIn"],
+        outputOrder: ["stageOut", "panelOut", "belowOut"],
+      },
+      {
+        layout: "stacked",
+        // Visual: stage first, then inputs, then below, then outputs.
+        panels: ["ilb-stage", "ilb-inputs", "ilb-below-panel", "ilb-outputs"],
+        inputOrder: ["stageIn", "panelIn", "belowIn"],
+        outputOrder: ["stageOut", "belowOut", "panelOut"],
+      },
+      {
+        layout: "stage-focus",
+        // Visual: stage first (full width), then inputs+outputs row, then below.
+        panels: ["ilb-stage", "ilb-inputs", "ilb-outputs", "ilb-below-panel"],
+        inputOrder: ["stageIn", "panelIn", "belowIn"],
+        outputOrder: ["stageOut", "panelOut", "belowOut"],
+      },
+    ];
+
+    for (const { layout, panels, inputOrder, outputOrder } of cases) {
+      it(`layout="${layout}": DOM order of zone containers, inputs, and outputs matches the visual order`, () => {
+        mountSandbox(document.getElementById("root")!, configFor(layout));
+        const layoutEl = document.querySelector(".ilb-layout")!;
+        expect(Array.from(layoutEl.children).map((c) => c.className)).toEqual(panels);
+
+        const actualInputOrder = [...new Set(Array.from(document.querySelectorAll("[data-input]")).map((n) => n.getAttribute("data-input")))];
+        expect(actualInputOrder).toEqual(inputOrder);
+
+        const actualOutputOrder = Array.from(document.querySelectorAll("[data-output]")).map((n) => n.getAttribute("data-output"));
+        expect(actualOutputOrder).toEqual(outputOrder);
+      });
+    }
   });
 
   describe("empty zone containers are not rendered (Task 13 cosmetic fix)", () => {

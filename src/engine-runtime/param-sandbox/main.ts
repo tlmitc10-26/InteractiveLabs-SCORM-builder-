@@ -41,6 +41,26 @@ function stageBoxOf(placement: Placement | undefined): { x: number; y: number; w
   return placement && placement.zone === "stage" ? placement.box : null;
 }
 
+type ZoneKind = "inputs" | "outputs" | "below" | "stage" | "charts";
+
+/** Per-preset DOM append order for `.ilb-layout`'s zone containers — this
+ *  IS the tab order, and must match wherever engine.css visually places
+ *  each zone for that preset (grid-column placement only; engine.css must
+ *  never apply a CSS `order` that contradicts this). A zone absent from a
+ *  config (nothing routed to it, or no charts) is simply skipped when
+ *  assembling, regardless of its position here. */
+const LAYOUT_ZONE_ORDER: Record<NonNullable<RuntimeSandboxConfig["layout"]>, ZoneKind[]> = {
+  // Side (default): inputs | stage | outputs sit in one row, then the
+  // below-zone panel spans full width beneath, then charts.
+  side: ["inputs", "stage", "outputs", "below", "charts"],
+  // Stacked: single column, stage first, then inputs, then below, then
+  // outputs, then charts.
+  stacked: ["stage", "inputs", "below", "outputs", "charts"],
+  // Stage-focus: stage first (full width), then inputs+outputs share a row,
+  // then below, then charts.
+  "stage-focus": ["stage", "inputs", "outputs", "below", "charts"],
+};
+
 /** Mount the Parameter Sandbox. Labels/units via textContent (never innerHTML);
  *  only `intro` may contain markup and it arrives pre-sanitized from the builder. */
 export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): void {
@@ -144,35 +164,35 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   root.appendChild(layout);
   layout.classList.add(`ilb-layout-${config.layout ?? "side"}`);
 
-  // FOCUS-ORDER INVARIANT: regardless of authoring order or which `layout`
-  // preset is active, the DOM (and therefore default tab) order of the
-  // zone containers inside `.ilb-layout` is always:
-  //   1. .ilb-inputs       - panel-zone inputs, in authoring order; OMITTED
-  //      entirely when no input uses the panel zone (nothing to render)
-  //   2. .ilb-outputs      - panel-zone outputs, in authoring order; OMITTED
-  //      when no output uses the panel zone. The sr-only live-region summary
-  //      (see `outputsSummary` below) normally lives inside this container,
-  //      but it must survive even when the container itself is omitted — in
-  //      that case it's appended to a minimal `.ilb-outputs-live` wrapper
-  //      (no card styling) in this same position instead, so the container
-  //      being empty of VISIBLE outputs never silences the live region.
-  //   3. .ilb-below-panel  - below-zone inputs then below-zone outputs, in
-  //      authoring order (the container is omitted entirely when nothing
-  //      uses this zone)
-  //   4. .ilb-stage        - background image/overlays first, then
+  // FOCUS-ORDER INVARIANT (WCAG 1.3.2/2.4.3, technique C27): DOM and tab
+  // order follow the preset's visual reading order; within a zone,
+  // authoring order. The zone containers themselves are always the same
+  // five nodes -- .ilb-inputs, .ilb-outputs (or its .ilb-outputs-live
+  // stand-in, see below), .ilb-below-panel, .ilb-stage, .ilb-charts, each
+  // omitted when it has nothing to show -- but the ORDER they're appended
+  // to `.ilb-layout` in is chosen per `config.layout` (see LAYOUT_ZONE_ORDER
+  // below) to match wherever engine.css visually places that preset's
+  // zones. engine.css therefore places zones purely via `grid-column`
+  // (which column/row span), never via a CSS `order` that would let the
+  // visual position diverge from DOM/tab order again.
+  //   .ilb-inputs       - panel-zone inputs, in authoring order
+  //   .ilb-outputs      - panel-zone outputs, in authoring order. The
+  //      sr-only live-region summary (see `outputsSummary` below) normally
+  //      lives inside this container, but it must survive even when the
+  //      container itself is omitted — in that case it's appended to a
+  //      minimal `.ilb-outputs-live` wrapper (no card styling) in this same
+  //      slot instead, so the container being empty of VISIBLE outputs
+  //      never silences the live region.
+  //   .ilb-below-panel  - below-zone inputs then below-zone outputs, in
+  //      authoring order
+  //   .ilb-stage        - background image/overlays first, then
   //      .ilb-stage-controls (stage-zone inputs then stage-zone outputs,
   //      in authoring order) appended LAST, so a stage-zone control is
   //      always a later sibling of the stage's own image/overlay nodes
-  //   5. .ilb-charts       - omitted when there are no charts
-  // Which preset makes the stage render first/large/etc. is controlled
-  // purely by CSS (`order`/grid-column in engine.css); it never changes
-  // this DOM order. Net tab sequence for a mixed config: panel-zone
-  // inputs -> panel-zone outputs -> below-zone inputs -> below-zone
-  // outputs -> stage-zone inputs -> stage-zone outputs -> chart canvases
-  // (if any) -> challenges (a later sibling of `.ilb-layout` under `root`).
+  //   .ilb-charts       - omitted when there are no charts
   // The (sr-only, non-focusable) live region never participates in tab
   // order either way, so omitting/relocating its container never affects
-  // this sequence.
+  // reading order.
   const allElements = [...config.inputs, ...config.outputs];
   const anyStageZone = allElements.some((e) => zoneOf(e.placement) === "stage");
   const hasBelowZone = allElements.some((e) => zoneOf(e.placement) === "below");
@@ -444,29 +464,15 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     outputsPanel.appendChild(outputsSummary);
   }
 
-  // Assemble the layout's zone containers in the fixed DOM order documented
-  // in the FOCUS-ORDER INVARIANT above; content was routed into each
-  // container by zone in the loops above, independent of this append order.
-  // A panel container that ended up with no visible children (every input/
-  // output was routed to "below" or "stage") is omitted entirely, rather
-  // than shipping an empty, borderless-but-still-padded card.
-  if (inputsPanel.childElementCount > 0) layout.appendChild(inputsPanel);
-  if (outputsPanelHasVisibleOutputs) {
-    layout.appendChild(outputsPanel);
-  } else {
-    const outputsLive = el("div", "ilb-outputs-live");
-    outputsLive.appendChild(outputsSummary);
-    layout.appendChild(outputsLive);
-  }
-  if (hasBelowZone) layout.appendChild(belowPanel);
-  if (stage) layout.appendChild(stage);
   let outputsSummaryTimer: ReturnType<typeof setTimeout> | null = null;
   const OUTPUTS_SUMMARY_DEBOUNCE_MS = 500;
 
   // ---------- charts ----------
   // Charts live OUTSIDE the outputs region entirely (their own container,
   // not aria-live) — a canvas redraw / aria-label refresh on every render
-  // must never trigger the outputs live region to re-announce.
+  // must never trigger the outputs live region to re-announce. Built here
+  // (before the zone-container assembly below) so the assembly can append
+  // it in whatever position the active preset calls for.
   const chartsPanel = el("div", "ilb-charts");
   const chartCanvases = new Map<string, HTMLCanvasElement>();
   for (const chart of config.charts) {
@@ -480,7 +486,39 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
     chartsPanel.appendChild(wrap);
     chartCanvases.set(chart.id, canvas);
   }
-  if (config.charts.length) layout.appendChild(chartsPanel);
+
+  // Assemble the layout's zone containers in the ACTIVE PRESET's visual
+  // reading order (see LAYOUT_ZONE_ORDER + the FOCUS-ORDER INVARIANT above)
+  // — this append order IS the tab order. Content was routed into each
+  // container by zone in the loops above, independent of this append order.
+  // A zone that ended up with nothing to show is omitted entirely, rather
+  // than shipping an empty, borderless-but-still-padded card.
+  const zoneOrder = LAYOUT_ZONE_ORDER[config.layout ?? "side"] ?? LAYOUT_ZONE_ORDER.side;
+  for (const zone of zoneOrder) {
+    switch (zone) {
+      case "inputs":
+        if (inputsPanel.childElementCount > 0) layout.appendChild(inputsPanel);
+        break;
+      case "outputs":
+        if (outputsPanelHasVisibleOutputs) {
+          layout.appendChild(outputsPanel);
+        } else {
+          const outputsLive = el("div", "ilb-outputs-live");
+          outputsLive.appendChild(outputsSummary);
+          layout.appendChild(outputsLive);
+        }
+        break;
+      case "below":
+        if (hasBelowZone) layout.appendChild(belowPanel);
+        break;
+      case "stage":
+        if (stage) layout.appendChild(stage);
+        break;
+      case "charts":
+        if (config.charts.length) layout.appendChild(chartsPanel);
+        break;
+    }
+  }
 
   // ---------- challenges ----------
   const challengeNodes = new Map<string, HTMLElement>();

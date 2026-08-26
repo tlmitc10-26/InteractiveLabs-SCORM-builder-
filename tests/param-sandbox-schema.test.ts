@@ -84,13 +84,23 @@ describe("validateSandboxConfig", () => {
 });
 
 describe("semantic validation", () => {
-  it("enforces the declared length cap on the post-sanitize (stored) value, not just the raw input", () => {
-    // 100 raw "&" chars pass the pre-transform cap (<=120) but sanitizePlainText
-    // escapes each to "&amp;" (5 chars), producing a 500-char stored value that
-    // must still be rejected against the label's 120-char cap.
+  it("no longer entity-escapes plain text, so a run of raw '&' chars under the cap is stored unchanged and stays valid", () => {
+    // sanitizePlainText strips tags only (no entity escaping) — a value
+    // that would previously have been inflated past the label's 120-char
+    // cap (100 "&" -> 500 "&amp;" chars) is now stored byte-for-byte, well
+    // under the cap.
     const r = validateSandboxConfig({
       ...valid,
-      inputs: [{ ...valid.inputs[0], label: "&".repeat(100) }],
+      inputs: [{ ...valid.inputs[0], label: "&".repeat(100) }, valid.inputs[1]],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.config.inputs[0].label).toBe("&".repeat(100));
+  });
+
+  it("still enforces the declared length cap on the raw input (tag-stripping can only shrink, never rescue an over-cap input)", () => {
+    const r = validateSandboxConfig({
+      ...valid,
+      inputs: [{ ...valid.inputs[0], label: "x".repeat(121) }, valid.inputs[1]],
     });
     expect(r.ok).toBe(false);
   });

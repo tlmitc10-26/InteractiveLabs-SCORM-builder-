@@ -66,15 +66,29 @@ describe("sanitizeRichText control-character stripping (N1/N2/N3 defense-in-dept
 });
 
 describe("sanitizePlainText", () => {
-  it("escapes all HTML", () => {
-    expect(sanitizePlainText('<b>x</b>')).toBe("&lt;b&gt;x&lt;/b&gt;");
+  // sanitizePlainText now strips HTML tags but returns otherwise-RAW text:
+  // no entity escaping, no quote escaping. The runtime renders these
+  // fields via textContent (never innerHTML), and every other sink
+  // (manifest's xmlEscape, index-html's htmlEscape, the filename
+  // sanitizer) escapes correctly at its own point of use — escaping here
+  // too would double-escape (see the function's doc comment).
+  it("strips tags but keeps their text content", () => {
+    expect(sanitizePlainText('<b>x</b>')).toBe("x");
   });
 
-  it("escapes double and single quotes so the value can never break out of an attribute position", () => {
-    // e.g. a units field of `kg" onmouseover="x` must not be able to
-    // close a `title="..."` attribute even if a future call site places
-    // this value there instead of a text node.
-    expect(sanitizePlainText(`a"b'c`)).toBe("a&quot;b&#39;c");
-    expect(sanitizePlainText(`kg" onmouseover="alert(1)`)).toBe("kg&quot; onmouseover=&quot;alert(1)");
+  it("leaves quotes untouched", () => {
+    expect(sanitizePlainText(`a"b'c`)).toBe(`a"b'c`);
+  });
+
+  it("leaves a bare ampersand untouched (no entity escaping)", () => {
+    expect(sanitizePlainText("Salt & Pepper")).toBe("Salt & Pepper");
+    expect(sanitizePlainText("Mass & weight")).toBe("Mass & weight");
+  });
+
+  it("drops a <script> element's tag AND its inner text content, keeping only surrounding text", () => {
+    // Verifies sanitize-html's default nonTextTags behavior: script/style
+    // content must not survive even though a plain tag like <b> keeps its
+    // text. Without this, "hi" would come back as "alert(1)hi".
+    expect(sanitizePlainText('<script>alert(1)</script>hi')).toBe("hi");
   });
 });

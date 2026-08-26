@@ -53,7 +53,15 @@ const REQUIRED_ENGINE_KEYS = ["engine/engine.js", "engine/scorm-adapter.js"];
 /** Forbidden executable/injection patterns, applied to ALL text files
  *  (including audited engine files: integrity is enforced by checksum too,
  *  but the runtime must never contain eval/new Function etc. — belt and
- *  braces, so a compromised "audited" build still trips this scan). */
+ *  braces, so a compromised "audited" build still trips this scan).
+ *
+ *  NOTE (sanitizePlainText no longer entity-escapes, see src/lib/sanitize.ts):
+ *  the decoded-authoring-value walk below (collectStrings + this list) now
+ *  sees each label/title/units/prompt's RAW stored text. A value that
+ *  survives sanitizePlainText still containing a literal "<iframe" (its
+ *  HTML parser didn't recognize it as a real tag to strip) will trip the
+ *  rule below and block export, where the old entity-escaped form
+ *  ("&lt;iframe") never matched. Accepted as fail-closed. */
 const FORBIDDEN_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /\beval\s*\(/, label: "eval() call" },
   { re: /new\s+Function\s*\(/, label: "new Function() constructor" },

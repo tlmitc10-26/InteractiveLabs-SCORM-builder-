@@ -24,11 +24,21 @@ describe("design tokens", () => {
     expect(css).toContain("--color-rds-primary: #8c1d40;");
     expect(css).toContain("GENERATED FILE");
   });
+  it("app theme css emits --radius-pill and --radius-card (both consumed: app buttons and engine stage-controls)", () => {
+    const css = emitAppThemeCss();
+    expect(css).toContain("--radius-pill: 50rem;");
+    expect(css).toContain("--radius-card: 8px;");
+  });
   it("engine tokens css carries variables plus lesson font tokens", () => {
     const css = emitEngineTokensCss();
     expect(css).toContain(":root {");
     expect(css).toContain("--rds-primary: #8c1d40;");
     expect(css).toContain("--ilb-font-heading: Georgia");
     expect(css).toContain("--ilb-font-body: Arial");
+  });
+  it("engine tokens css emits --radius-card (consumed by .ilb-stage-control in engine.css) and no longer emits the unconsumed --ilb-min-target", () => {
+    const css = emitEngineTokensCss();
+    expect(css).toContain("--radius-card: 8px;");
+    expect(css).not.toContain("--ilb-min-target");
   });
 });
