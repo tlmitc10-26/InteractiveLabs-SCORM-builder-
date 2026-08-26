@@ -2,6 +2,8 @@ import { z } from "zod";
 import { parseFormula } from "@/lib/formula/parser";
 import { collectIdentifiers } from "@/lib/formula/evaluate";
 import { sanitizeRichText, sanitizePlainText } from "@/lib/sanitize";
+import { isTokenName, colorHex, type TokenName } from "@/lib/design/tokens";
+import { contrastRatio, meetsNonText, ratioLabel } from "@/lib/design/contrast";
 
 const idPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const safeId = z.string().min(1).max(40).regex(idPattern, "ids must be letters/digits/underscore");
@@ -11,7 +13,29 @@ const safeId = z.string().min(1).max(40).regex(idPattern, "ids must be letters/d
 // (e.g. "&" x120 -> "&amp;" x120 = 600 chars).
 const plain = (max: number) => z.string().max(max).transform(sanitizePlainText).pipe(z.string().max(max));
 const rich = (max: number) => z.string().max(max).transform(sanitizeRichText).pipe(z.string().max(max));
-const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+/** Hybrid verifiable color model: a designer picks a named RDS token
+ *  (contrast-safe by construction against the default stage background) or
+ *  a verified custom hex (validated below). Legacy authoring drafts stored
+ *  a bare hex string directly on the field — that shape is migrated to
+ *  `{ hex }` at parse time so old drafts keep validating unchanged. */
+export const colorRefSchema = z.union([
+  z.object({ token: z.string().refine(isTokenName, "unknown color token") }).strict(),
+  z.object({ hex: z.string().regex(/^#[0-9a-fA-F]{6}$/) }).strict(),
+  z.string().regex(/^#[0-9a-fA-F]{6}$/).transform((hex) => ({ hex })),
+]);
+export type ColorRef = { token: TokenName } | { hex: string };
+
+export function resolveColorHex(c: ColorRef): string {
+  return "token" in c ? colorHex(c.token) : c.hex;
+}
+
+export function colorRefToCss(c: ColorRef): string {
+  return "token" in c ? `var(--rds-${c.token})` : c.hex;
+}
+
+/** Stage background used for the fill-overlay contrast gate (light-1). */
+const STAGE_BG_HEX = colorHex("light-1");
 
 const inputSchema = z.object({
   id: safeId,
@@ -49,7 +73,7 @@ const boxSchema = z.object({
 const overlaySchema = z.discriminatedUnion("type", [
   z.object({
     id: safeId, type: z.literal("fill"), outputId: safeId,
-    inMin: z.number(), inMax: z.number(), color: hexColor, box: boxSchema,
+    inMin: z.number(), inMax: z.number(), color: colorRefSchema, box: boxSchema,
   }).strict(),
   z.object({
     id: safeId, type: z.literal("swap"), outputId: safeId, box: boxSchema,
@@ -143,10 +167,22 @@ export function validateSandboxConfig(raw: unknown): ValidationResult {
     }
     if (!outputIdSet.has(c.yOutputId)) errors.push(`chart "${c.id}": unknown yOutputId "${c.yOutputId}"`);
   }
+  const hasBackgroundImage = !!config.visual?.backgroundAssetId;
   for (const ov of config.visual?.overlays ?? []) {
     if (!outputIdSet.has(ov.outputId)) errors.push(`overlay "${ov.id}": unknown outputId "${ov.outputId}"`);
     if ((ov.type === "fill" || ov.type === "transform") && ov.inMin === ov.inMax) {
       errors.push(`overlay "${ov.id}": inMin and inMax must differ`);
+    }
+    if (ov.type === "fill" && !hasBackgroundImage) {
+      // No background image behind the stage: the overlay's fill color sits
+      // directly on the stage background, so it must be verifiably legible
+      // (WCAG 1.4.11 non-text, 3:1). When a background image IS set this is
+      // advisory only (the runtime's numeric readout is the guarantee) —
+      // the editor surfaces a warning but export is not blocked.
+      const ratio = contrastRatio(resolveColorHex(ov.color), STAGE_BG_HEX);
+      if (!meetsNonText(ratio)) {
+        errors.push(`overlay "${ov.id}": fill color fails 3:1 contrast against the stage background (${ratioLabel(ratio)}) — pick a stronger color`);
+      }
     }
     if (ov.type === "swap") {
       const ups = ov.bands.map((b) => b.upTo);
@@ -203,7 +239,7 @@ export function toRuntimeConfig(config: SandboxConfig, urlForAsset: (assetId: st
     visual: {
       backgroundUrl: visual.backgroundAssetId ? urlForAsset(visual.backgroundAssetId) : undefined,
       overlays: visual.overlays.map((ov) => {
-        if (ov.type === "fill") return ov;
+        if (ov.type === "fill") return { ...ov, color: colorRefToCss(ov.color) };
         if (ov.type === "swap") {
           const { bands, ...o } = ov;
           return { ...o, bands: bands.map((b) => ({ upTo: b.upTo, url: urlForAsset(b.assetId) })) };

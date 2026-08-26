@@ -392,6 +392,23 @@ describe("scanPackage", () => {
     )).toBe(true);
   });
 
+  // --- Task 6: hybrid color model contrast gate must be enforced at scan
+  // time too (revalidation via validateSandboxConfig), not just at save ---
+
+  it("blocks a fill overlay whose custom hex color fails 3:1 contrast against the stage background (no background image) — caught by schema revalidation", () => {
+    const p = goodPackage();
+    const bad = {
+      ...goodConfig,
+      visual: {
+        overlays: [{ id: "water", type: "fill", outputId: "y", inMin: 0, inMax: 10, color: { hex: "#e8e8e8" }, box: { x: 0, y: 0, w: 10, h: 10 } }],
+      },
+    };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "schema" && /fails 3:1 contrast/.test(v.detail))).toBe(true);
+  });
+
   it("the manifest-namespace exemption does not apply outside imsmanifest.xml (exact-URL-in-wrong-file is still caught)", () => {
     // Same exact string as one of the exempt namespace URIs, but placed in
     // content/config.json instead -- must NOT be exempt there.

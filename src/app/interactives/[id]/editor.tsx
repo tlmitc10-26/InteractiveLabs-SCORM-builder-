@@ -2,13 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { saveInteractiveConfig } from "@/app/actions";
+import { colorRefToCss } from "@/lib/engines/param-sandbox/schema";
 
 /* Editing shape mirrors the Zod input (pre-validation). */
 type EInput = { id: string; label: string; type: "slider" | "number" | "toggle" | "select"; min?: number; max?: number; step?: number; defaultValue: number; units?: string; options?: Array<{ label: string; value: number }> };
 type EOutput = { id: string; label: string; formula: string; units?: string; decimals?: number };
 type EChart = { id: string; title: string; xInputId: string; yOutputId: string; samples: number };
+/* Hybrid verifiable color model (schema.ts ColorRef): a named RDS token or a
+ * verified custom hex. TODO(Task 7): color-field.tsx replaces this raw
+ * TextField bridge with token swatches + a live contrast readout. */
+type EColorRef = { token: string } | { hex: string };
 type EOverlay =
-  | { id: string; type: "fill"; outputId: string; inMin: number; inMax: number; color: string; box: Box }
+  | { id: string; type: "fill"; outputId: string; inMin: number; inMax: number; color: EColorRef; box: Box }
   | { id: string; type: "swap"; outputId: string; box: Box; bands: Array<{ upTo: number; assetId: string }> }
   | { id: string; type: "transform"; outputId: string; box: Box; assetId: string; property: "translateY" | "translateX" | "rotate" | "scale" | "opacity"; inMin: number; inMax: number; outMin: number; outMax: number };
 type Box = { x: number; y: number; w: number; h: number };
@@ -194,7 +199,7 @@ function toPreviewRuntime(cfg: EConfig) {
     visual: {
       backgroundUrl: visual.backgroundAssetId ? url(visual.backgroundAssetId) : undefined,
       overlays: visual.overlays.map((ov) => {
-        if (ov.type === "fill") return ov;
+        if (ov.type === "fill") return { ...ov, color: colorRefToCss(ov.color as Parameters<typeof colorRefToCss>[0]) };
         if (ov.type === "swap") return { ...ov, bands: ov.bands.map((b) => ({ upTo: b.upTo, url: url(b.assetId) })) };
         const { assetId, ...o } = ov;
         return { ...o, url: url(assetId) };
@@ -403,7 +408,7 @@ function VisualSection({ visual, outputs, assets, onChange }: {
     <Section title="Visual stage (background + state overlays)" addLabel="overlay"
       onAdd={() => {
         rowKeys.add();
-        onChange({ ...v, overlays: [...v.overlays, { id: newId("ov", new Set(v.overlays.map((x) => x.id))), type: "fill", outputId: outputs[0]?.id ?? "", inMin: 0, inMax: 100, color: "#4a90d9", box: { x: 10, y: 10, w: 80, h: 80 } }] });
+        onChange({ ...v, overlays: [...v.overlays, { id: newId("ov", new Set(v.overlays.map((x) => x.id))), type: "fill", outputId: outputs[0]?.id ?? "", inMin: 0, inMax: 100, color: { token: "info" }, box: { x: 10, y: 10, w: 80, h: 80 } }] });
       }}>
       <SelectField label="Background image" value={v.backgroundAssetId ?? ""}
         options={assetOptions} onChange={(id) => onChange({ ...v, backgroundAssetId: id || undefined })} />
@@ -423,7 +428,7 @@ function VisualSection({ visual, outputs, assets, onChange }: {
               // React key (tracked separately in `rowKeys`) stable while
               // fully swapping the object's shape.
               const fresh: EOverlay =
-                type === "fill" ? { id: ov.id, type: "fill", outputId: ov.outputId, inMin: 0, inMax: 100, color: "#4a90d9", box }
+                type === "fill" ? { id: ov.id, type: "fill", outputId: ov.outputId, inMin: 0, inMax: 100, color: { token: "info" }, box }
                 : type === "swap" ? { id: ov.id, type: "swap", outputId: ov.outputId, box, bands: [] }
                 : { id: ov.id, type: "transform", outputId: ov.outputId, box, assetId: "", property: "translateY", inMin: 0, inMax: 100, outMin: 0, outMax: 100 };
               onChange({ ...v, overlays: v.overlays.map((x, j) => (j === i ? fresh : x)) });
@@ -433,7 +438,14 @@ function VisualSection({ visual, outputs, assets, onChange }: {
           {ov.type === "fill" && (<>
             <NumField label="Value at empty" value={ov.inMin} onChange={(inMin) => updateOverlay(i, { inMin } as Partial<EOverlay>)} />
             <NumField label="Value at full" value={ov.inMax} onChange={(inMax) => updateOverlay(i, { inMax } as Partial<EOverlay>)} />
-            <TextField label="Color (#rrggbb)" value={ov.color} onChange={(color) => updateOverlay(i, { color } as Partial<EOverlay>)} />
+            {/* Crude bridge onto the hybrid ColorRef shape ({token} | {hex});
+                Task 7's ColorField (token swatches + live contrast readout)
+                replaces this raw text input. */}
+            <TextField label="Color (#rrggbb or token:name)"
+              value={"token" in ov.color ? `token:${ov.color.token}` : ov.color.hex}
+              onChange={(val) => updateOverlay(i, {
+                color: val.startsWith("token:") ? { token: val.slice(6) } : { hex: val },
+              } as Partial<EOverlay>)} />
           </>)}
           {ov.type === "swap" && (
             <Field label="Bands (upTo=assetId, one per line; ascending)">

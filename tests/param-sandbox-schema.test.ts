@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { validateSandboxConfig, toRuntimeConfig, emptySandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import {
+  validateSandboxConfig, toRuntimeConfig, emptySandboxConfig,
+  colorRefToCss, resolveColorHex, type ColorRef,
+} from "@/lib/engines/param-sandbox/schema";
 
 const valid = {
   title: "Archimedes Principle",
@@ -207,5 +210,104 @@ describe("toRuntimeConfig", () => {
     const rt = toRuntimeConfig(r.config, (assetId) => `assets/${assetId}.png`);
     expect(rt.visual?.backgroundUrl).toBe("assets/asset_abc.png");
     expect((rt.visual as { backgroundAssetId?: string }).backgroundAssetId).toBeUndefined();
+  });
+
+  it("maps a legacy bare-hex fill overlay color to the resolved hex in the runtime css value", () => {
+    const r = validateSandboxConfig(valid); // valid.visual.overlays[0].color === "#4a90d9" (legacy bare string)
+    if (!r.ok) throw new Error("valid fixture");
+    const rt = toRuntimeConfig(r.config, (assetId) => `assets/${assetId}.png`);
+    const fill = rt.visual?.overlays.find((o) => o.type === "fill") as { color: string } | undefined;
+    expect(fill?.color).toBe("#4a90d9");
+  });
+
+  it("maps a token fill overlay color to a var(--rds-*) runtime css value", () => {
+    const withToken = {
+      ...valid,
+      visual: {
+        backgroundAssetId: "asset_abc",
+        overlays: [{ id: "water", type: "fill", outputId: "volume", inMin: 0, inMax: 10, color: { token: "info" }, box: { x: 20, y: 10, w: 60, h: 80 } }],
+      },
+    };
+    const r = validateSandboxConfig(withToken);
+    if (!r.ok) throw new Error(`expected valid: ${JSON.stringify((r as { errors: string[] }).errors)}`);
+    const rt = toRuntimeConfig(r.config, (assetId) => `assets/${assetId}.png`);
+    const fill = rt.visual?.overlays.find((o) => o.type === "fill") as { color: string } | undefined;
+    expect(fill?.color).toBe("var(--rds-info)");
+  });
+});
+
+describe("hybrid color model (ColorRef)", () => {
+  it("colorRefToCss maps a token to a css variable reference and a hex to itself", () => {
+    expect(colorRefToCss({ token: "info" } as ColorRef)).toBe("var(--rds-info)");
+    expect(colorRefToCss({ hex: "#e8e8e8" } as ColorRef)).toBe("#e8e8e8");
+  });
+
+  it("resolveColorHex resolves a token to its hex and passes a hex through", () => {
+    expect(resolveColorHex({ token: "info" } as ColorRef)).toBe("#00a3e0");
+    expect(resolveColorHex({ hex: "#e8e8e8" } as ColorRef)).toBe("#e8e8e8");
+  });
+
+  it("accepts a token color on a fill overlay with no background image", () => {
+    const cfg = {
+      ...valid,
+      visual: {
+        overlays: [{ id: "water", type: "fill", outputId: "volume", inMin: 0, inMax: 10, color: { token: "primary" }, box: { x: 20, y: 10, w: 60, h: 80 } }],
+      },
+    };
+    const r = validateSandboxConfig(cfg);
+    expect(r.ok).toBe(true);
+  });
+
+  it("blocks a low-contrast hex fill color against the default stage background when no background image is set", () => {
+    const cfg = {
+      ...valid,
+      visual: {
+        overlays: [{ id: "water", type: "fill", outputId: "volume", inMin: 0, inMax: 10, color: { hex: "#e8e8e8" }, box: { x: 20, y: 10, w: 60, h: 80 } }],
+      },
+    };
+    const r = validateSandboxConfig(cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.join(" ")).toMatch(/overlay "water": fill color fails 3:1 contrast against the stage background \(\d\.\d:1\) — pick a stronger color/);
+    }
+  });
+
+  it("allows the same low-contrast hex fill color when a background image is set (advisory only)", () => {
+    const cfg = {
+      ...valid,
+      visual: {
+        backgroundAssetId: "asset_abc",
+        overlays: [{ id: "water", type: "fill", outputId: "volume", inMin: 0, inMax: 10, color: { hex: "#e8e8e8" }, box: { x: 20, y: 10, w: 60, h: 80 } }],
+      },
+    };
+    const r = validateSandboxConfig(cfg);
+    expect(r.ok).toBe(true);
+  });
+
+  it("migrates a legacy bare-hex string color and validates it", () => {
+    const cfg = {
+      ...valid,
+      visual: {
+        backgroundAssetId: "asset_abc",
+        overlays: [{ id: "water", type: "fill", outputId: "volume", inMin: 0, inMax: 10, color: "#4a90d9", box: { x: 20, y: 10, w: 60, h: 80 } }],
+      },
+    };
+    const r = validateSandboxConfig(cfg);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const overlay = r.config.visual?.overlays[0];
+      expect(overlay && "color" in overlay ? overlay.color : undefined).toEqual({ hex: "#4a90d9" });
+    }
+  });
+
+  it("rejects an unknown color token", () => {
+    const cfg = {
+      ...valid,
+      visual: {
+        backgroundAssetId: "asset_abc",
+        overlays: [{ id: "water", type: "fill", outputId: "volume", inMin: 0, inMax: 10, color: { token: "hotpink" }, box: { x: 20, y: 10, w: 60, h: 80 } }],
+      },
+    };
+    expect(validateSandboxConfig(cfg).ok).toBe(false);
   });
 });
