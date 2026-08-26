@@ -18,9 +18,13 @@ export async function createProject(formData: FormData) {
 }
 
 export async function deleteProject(formData: FormData) {
-  // TODO(Task 10): cascade delete is DB-only. Uploaded files are keyed by
-  // contentHash and may be shared across projects (dedup) — refcount before
-  // unlinking from disk/storage, don't delete on every project delete.
+  // TODO(follow-up, post Task 10): cascade delete is DB-only. Uploaded files
+  // (src/lib/assets/store.ts, LocalDiskAssetStore) are keyed by contentHash
+  // via assetKey() and may be shared across projects (dedup) — before
+  // unlinking a project's assets from disk, query prisma.asset.count({
+  // where: { contentHash, projectId: { not: id } } }) per asset to confirm
+  // no other project still references that hash. v1 intentionally keeps all
+  // uploaded files on disk (no deletion/GC) even after this delete.
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.project.delete({ where: { id } });
