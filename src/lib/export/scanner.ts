@@ -12,6 +12,27 @@ export interface ScanContext {
   urlAllowlist: string[];
   /** the authoring config as it will be exported (pre-runtime-mapping) */
   authoringConfig: unknown;
+  /**
+   * OPTIONAL, but Task 13 SHOULD always supply it: the exact bytes
+   * index.html is expected to be — i.e. the same
+   * buildIndexHtml({ title, configJson }) call the caller is about to
+   * write into the package. When present, the scanner requires the
+   * package's index.html to byte-equal this string/Buffer exactly
+   * (violation "index-html-mismatch" otherwise). This is what actually
+   * proves index.html is the audited launcher: a reference-only check
+   * (which files does it point to) can't see executable inline JS, so
+   * without this the scanner can only fall back to a much blunter rule —
+   * see below.
+   *
+   * If omitted (older callers, or this test suite exercising the
+   * fallback), the scanner instead: (1) keeps the existing "only
+   * checksummed/known engine paths may be <script src>/<link href>
+   * targets" check, and (2) rejects any inline `<script>` (no `src`
+   * attribute) whose body is non-empty outright — inline script
+   * provenance cannot be verified without the generator's exact expected
+   * output, so in fallback mode no inline script is trusted, period.
+   */
+  expectedIndexHtml?: string | Buffer;
 }
 
 const ALLOWED_EXTENSIONS = new Set(["html", "js", "css", "json", "xml", "png", "jpg", "jpeg", "webp"]);
@@ -63,8 +84,9 @@ const FORBIDDEN_URL_SCHEME_PATTERNS: Array<{ re: RegExp; label: string }> = [
 ];
 
 /** Strip characters the URL spec (and browsers) discard from a URL string
- *  before parsing its scheme, so scheme-obfuscation via embedded
- *  tab/newline/carriage-return can't slip past a literal-substring check. */
+ *  before parsing its scheme/authority, so obfuscation via embedded
+ *  tab/newline/carriage-return can't slip past a literal-substring check
+ *  or reshape how `new URL()` resolves the authority. */
 function stripUrlWhitespace(text: string): string {
   return text.replace(/[\t\r\n]/g, "");
 }
@@ -98,6 +120,56 @@ const FORBIDDEN_PATTERNS_CSS: Array<{ re: RegExp; label: string }> = [
  *  matched token is handed to the real WHATWG URL parser below rather than
  *  compared as a raw string. */
 const URL_TOKEN_RE = /\bhttps?:\/\/[^\s"'<>)]+/gi;
+
+/** Parse each http(s) token in `text` with the real WHATWG URL constructor
+ *  and check its (already lowercased/punycoded/userinfo-stripped)
+ *  hostname against the allowlist. Shared between the per-file text scan
+ *  and the authoring-config string walk below (N1/N2/N3) so both paths
+ *  apply the exact same logic. */
+function scanUrlTokensForAllowlist(text: string, file: string, urlAllowlist: string[], violations: Violation[]): void {
+  for (const m of text.matchAll(URL_TOKEN_RE)) {
+    const token = m[0];
+    let url: URL;
+    try {
+      url = new URL(token);
+    } catch {
+      violations.push({ file, rule: "invalid-url", detail: `unparseable URL "${token}"` });
+      continue;
+    }
+    const host = url.hostname;
+    if (!host) {
+      violations.push({ file, rule: "invalid-url", detail: `URL "${token}" has no hostname` });
+      continue;
+    }
+    const allowed = urlAllowlist.some((h) => host === h.toLowerCase() || host.endsWith(`.${h.toLowerCase()}`));
+    if (!allowed) violations.push({ file, rule: "url-allowlist", detail: `URL host "${host}" is not on the approved allowlist` });
+  }
+}
+
+function scanForbiddenUrlSchemes(text: string, file: string, violations: Violation[]): void {
+  for (const { re, label } of FORBIDDEN_URL_SCHEME_PATTERNS) {
+    if (re.test(text)) violations.push({ file, rule: "forbidden-pattern", detail: label });
+  }
+}
+
+/** Recursively collect every string value out of an arbitrary JSON-shaped
+ *  value (the authoring config). Guards against cycles defensively — the
+ *  config is normally JSON-safe, but ctx.authoringConfig is typed
+ *  `unknown` and a hostile/buggy caller could hand in a self-referencing
+ *  object. */
+function collectStrings(value: unknown, out: string[], seen: Set<unknown>): string[] {
+  if (typeof value === "string") {
+    out.push(value);
+    return out;
+  }
+  if (value && typeof value === "object") {
+    if (seen.has(value)) return out;
+    seen.add(value);
+    const items = Array.isArray(value) ? value : Object.values(value as Record<string, unknown>);
+    for (const item of items) collectStrings(item, out, seen);
+  }
+  return out;
+}
 
 export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanReport {
   const violations: Violation[] = [];
@@ -152,6 +224,36 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
       violations.push({ file: path, rule: "unapproved-code-file", detail: `${ext} files must be a checksummed engine file — "${path}" is not present in ctx.engineChecksums` });
     }
 
+    // Rule (N4): index.html must be the exact audited launcher — not
+    // merely "doesn't reference unaudited files" (below), because inline
+    // JS is executable and unchecksummed. Preferred path: byte-equal
+    // comparison against ctx.expectedIndexHtml, the exact bytes the caller
+    // is about to package. Fallback (see ScanContext.expectedIndexHtml
+    // doc): reject any inline <script> with non-empty content outright.
+    if (path === "index.html") {
+      if (ctx.expectedIndexHtml !== undefined) {
+        const expected = Buffer.isBuffer(ctx.expectedIndexHtml) ? ctx.expectedIndexHtml : Buffer.from(ctx.expectedIndexHtml, "utf8");
+        if (!buf.equals(expected)) {
+          violations.push({ file: path, rule: "index-html-mismatch", detail: "index.html does not byte-match the audited launcher (buildIndexHtml output)" });
+        }
+      } else {
+        const htmlText = buf.toString("utf8");
+        for (const m of htmlText.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
+          const [, attrs, body] = m;
+          // NOT `\bsrc` — a `\b` word boundary also fires inside
+          // "data-src=" (the "-"->"s" transition is a boundary too), which
+          // would misclassify a real inline script carrying a decoy
+          // `data-src` attribute as "externally sourced" and skip it,
+          // even though browsers execute it inline regardless. Require
+          // "src" to be preceded by whitespace (or start-of-attrs).
+          const hasSrc = /(?:^|\s)src\s*=/i.test(attrs);
+          if (!hasSrc && body.trim().length > 0) {
+            violations.push({ file: path, rule: "inline-script", detail: "index.html contains inline <script> content that cannot be verified without ctx.expectedIndexHtml" });
+          }
+        }
+      }
+    }
+
     if (!TEXT_EXTENSIONS.has(ext)) continue;
     const text = buf.toString("utf8");
 
@@ -159,14 +261,16 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
     for (const { re, label } of FORBIDDEN_PATTERNS) {
       if (re.test(text)) violations.push({ file: path, rule: "forbidden-pattern", detail: label });
     }
-    // javascript:/data: URL schemes: check the whitespace-stripped text so
-    // tab/newline-obfuscated schemes (a real browser-URL-parsing quirk) are
-    // still caught. Checking the stripped copy alone is sufficient — it
-    // still matches the ordinary, non-obfuscated form.
-    const urlSchemeText = stripUrlWhitespace(text);
-    for (const { re, label } of FORBIDDEN_URL_SCHEME_PATTERNS) {
-      if (re.test(urlSchemeText)) violations.push({ file: path, rule: "forbidden-pattern", detail: label });
-    }
+    // javascript:/data: URL schemes AND the URL-allowlist tokenizer both
+    // run against the whitespace-stripped text (N1/N2/N3, part b) — a
+    // literal tab/newline appearing directly in a text file (as opposed to
+    // JSON-escaped inside a serialized value, handled separately below by
+    // the authoring-config string walk) must not be able to truncate a
+    // token early or otherwise reshape how `new URL()` resolves it.
+    // Checking the stripped copy alone is sufficient: it still matches the
+    // ordinary, non-obfuscated form when there's nothing to strip.
+    const strippedText = stripUrlWhitespace(text);
+    scanForbiddenUrlSchemes(strippedText, path, violations);
     if (ext === "html") {
       for (const { re, label } of FORBIDDEN_PATTERNS_HTML) {
         if (re.test(text)) violations.push({ file: path, rule: "forbidden-pattern", detail: label });
@@ -211,33 +315,40 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
       }
     }
 
-    // Rule: URL allowlist, via real WHATWG URL parsing (C1/C2/C3). Each
-    // http(s) token is parsed with `new URL()`: an unparseable token is
-    // its own violation, and url.hostname (always ASCII, lowercased, and
-    // IDNA/punycode-normalized by the parser) is what gets compared to the
-    // allowlist — never a hand-rolled substring. This is what makes the
-    // check immune to uppercase schemes (C1), non-ASCII/homoglyph hosts
-    // (C2, the parser punycodes them so they never coincide with an ASCII
-    // allowlist entry), and userinfo spoofing (C3, e.g.
-    // "https://allowed.com@evil.com/" — hostname correctly resolves to
-    // "evil.com", not the "allowed.com" in the userinfo/username position).
-    for (const m of text.matchAll(URL_TOKEN_RE)) {
-      const token = m[0];
-      let url: URL;
-      try {
-        url = new URL(token);
-      } catch {
-        violations.push({ file: path, rule: "invalid-url", detail: `unparseable URL "${token}"` });
-        continue;
-      }
-      const host = url.hostname;
-      if (!host) {
-        violations.push({ file: path, rule: "invalid-url", detail: `URL "${token}" has no hostname` });
-        continue;
-      }
-      const allowed = ctx.urlAllowlist.some((h) => host === h.toLowerCase() || host.endsWith(`.${h.toLowerCase()}`));
-      if (!allowed) violations.push({ file: path, rule: "url-allowlist", detail: `URL host "${host}" is not on the approved allowlist` });
-    }
+    // Rule: URL allowlist, via real WHATWG URL parsing (C1/C2/C3). See
+    // scanUrlTokensForAllowlist for the mechanics; run against the
+    // whitespace-stripped text per above.
+    scanUrlTokensForAllowlist(strippedText, path, ctx.urlAllowlist, violations);
+  }
+
+  // Rule (N1/N2/N3, part a): scan the AUTHORING CONFIG'S ACTUAL string
+  // values — not just content/config.json's JSON-serialized bytes — for
+  // URL-allowlist/scheme violations, after stripping the same control
+  // characters a browser strips from a URL before parsing it.
+  //
+  // Why this is a separate pass from the per-file text scan above: a real
+  // control character (e.g. an authored tab) inside a config string gets
+  // JSON-escaped as the two-ASCII-character sequence \t when
+  // JSON.stringify writes content/config.json. Those two literal
+  // characters are not whitespace, so they don't truncate a token — but
+  // they DO become part of it, and a stray artifact from the *next*
+  // escaped quote (`\"` closing the JSON string) can land in the same
+  // token. That extra backslash changes how `new URL()` resolves the
+  // authority for a "special" scheme (http/https treat backslash like a
+  // path separator in some parser states), which can silently resolve the
+  // token back to the innocent-looking prefix host instead of the real
+  // one after "@" — i.e. a JSON-round-trip artifact, not a whitespace
+  // problem, defeats the raw-byte scan even though `new URL()` itself
+  // handles a real control character correctly. Walking the config's
+  // actual (pre-serialization) string values and stripping control
+  // characters there reproduces exactly what the browser will see at
+  // runtime (JSON/JS string escapes decoded back to the real characters,
+  // then the URL parser's own whitespace-stripping), independent of which
+  // file the value round-trips through.
+  for (const raw of collectStrings(ctx.authoringConfig, [], new Set())) {
+    const decoded = stripUrlWhitespace(raw);
+    scanForbiddenUrlSchemes(decoded, "content/config.json", violations);
+    scanUrlTokensForAllowlist(decoded, "content/config.json", ctx.urlAllowlist, violations);
   }
 
   // Rule: config revalidation + sanitizer idempotence

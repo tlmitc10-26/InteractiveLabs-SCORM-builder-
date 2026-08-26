@@ -19,7 +19,31 @@ import sanitizeHtml from "sanitize-html";
  * This matters because sanitizeRichText output is injected into innerHTML
  * in the exported SCORM runtime, and the export scanner (Task 12) enforces
  * sanitize(x) === x as its compliance gate — a bypass here is a bypass there.
+ *
+ * DEFENSE-IN-DEPTH (N1/N2/N3 follow-up): a raw C0 control character (code
+ * points 0-31, plus DEL/127) inside an href is never legitimate, and the
+ * WHATWG URL algorithm the browser actually uses strips ASCII tab/newline/
+ * CR from a URL *before* parsing it — so an href that visually starts with
+ * a safe host followed by a control character and then "@evil.example"
+ * looks safe here but the browser navigates to evil.example. Stripping
+ * control characters from href up front, before the scheme check and
+ * before storing it, means the sanitizer's own output never carries this
+ * ambiguity forward. Implemented as an explicit code-point filter (not a
+ * regex literal) to sidestep any tooling/encoding layer mangling escaped
+ * control-character regex syntax.
  */
+function stripControlChars(input: string): string {
+  let out = "";
+  for (const ch of input) {
+    const code = ch.codePointAt(0) ?? 0;
+    const isC0 = code <= 31;
+    const isDel = code === 127;
+    if (isC0 || isDel) continue;
+    out += ch;
+  }
+  return out;
+}
+
 const RICH_TEXT_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: ["p", "br", "b", "strong", "i", "em", "ul", "ol", "li", "sub", "sup", "a"],
   allowedAttributes: { a: ["href"] },
@@ -29,8 +53,9 @@ const RICH_TEXT_OPTIONS: sanitizeHtml.IOptions = {
   transformTags: {
     a: (tagName, attribs) => {
       const attribsOut: Record<string, string> = {};
-      if (/^https:\/\//i.test(attribs.href ?? "")) {
-        attribsOut.href = attribs.href;
+      const href = stripControlChars(attribs.href ?? "");
+      if (/^https:\/\//i.test(href)) {
+        attribsOut.href = href;
       }
       return { tagName: "a", attribs: attribsOut };
     },

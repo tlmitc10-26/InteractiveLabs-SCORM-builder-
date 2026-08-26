@@ -46,6 +46,25 @@ describe("sanitizeRichText href guard edge cases", () => {
   });
 });
 
+describe("sanitizeRichText control-character stripping (N1/N2/N3 defense-in-depth)", () => {
+  it("strips a raw control character out of href before validating/storing it", () => {
+    // Built via fromCharCode (not a literal escape) so the control byte's
+    // presence in this test is unambiguous. A raw tab inside an href is
+    // never legitimate, and the WHATWG URL algorithm a browser actually
+    // uses strips it before navigating — so it must not survive here either.
+    const tab = String.fromCharCode(9);
+    const input = `<a href="https://youtube.com${tab}@evil.example/x">c</a>`;
+    const out = sanitizeRichText(input);
+    expect(out).toBe('<a href="https://youtube.com@evil.example/x">c</a>');
+    expect(out.includes(tab)).toBe(false);
+  });
+  it("is idempotent once the control character is stripped", () => {
+    const newline = String.fromCharCode(10);
+    const once = sanitizeRichText(`<a href="https://good.example${newline}@evil.example/x">c</a>`);
+    expect(sanitizeRichText(once)).toBe(once);
+  });
+});
+
 describe("sanitizePlainText", () => {
   it("escapes all HTML", () => {
     expect(sanitizePlainText('<b>x</b>')).toBe("&lt;b&gt;x&lt;/b&gt;");
