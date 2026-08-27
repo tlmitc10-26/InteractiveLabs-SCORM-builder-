@@ -48,7 +48,10 @@ export function NewInteractiveForm({ projectId, engines }: { projectId: string; 
     <form action={createInteractive} className="mt-2 space-y-3">
       <input type="hidden" name="projectId" value={projectId} />
 
-      <fieldset className="m-0 border-0 p-0">
+      {/* Explicit mb-3: the parent's space-y utility proved unreliable here
+          (measured 0px gap), and the title input's focus ring painted over
+          the engine card above it without real spacing. */}
+      <fieldset className="m-0 mb-3 border-0 p-0">
         <legend className="mb-2 text-sm font-semibold text-gray-700">Interactive type</legend>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {engines.map((e) => {
@@ -73,7 +76,7 @@ export function NewInteractiveForm({ projectId, engines }: { projectId: string; 
         </div>
       </fieldset>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <input name="title" placeholder={`New ${engine.label} title`} maxLength={200}
           className="flex-1 rounded border border-gray-300 px-3 py-2" />
         <label htmlFor={starterSelectId} className="sr-only">Starter template</label>

@@ -30,6 +30,12 @@ body {
   align-items: center; justify-content: center; gap: 8px; cursor: pointer;
   border: 2px solid transparent; }
 .btn:focus-visible { outline: 3px solid var(--rds-primary); outline-offset: 2px; }
+/* App-wide form controls get the same 3:1-compliant maroon focus ring as
+   buttons (browser defaults vary by OS accent color and can fail contrast). */
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--rds-primary);
+  outline-offset: 2px;
+}
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 .btn-primary { background: var(--rds-primary); color: #fff; border-color: var(--rds-primary); }
 .btn-primary:hover { background: #741434; }
