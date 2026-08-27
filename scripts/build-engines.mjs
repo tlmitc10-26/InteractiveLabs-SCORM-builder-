@@ -9,6 +9,18 @@ const ENGINE_VERSION = "1.0.0";
 const SCORM_VERSION = "1.0.0";
 const DEFAULT_OUT = path.join(ROOT, "public", "engines");
 
+// Every engine bundle this build produces. Each gets its own
+// src/engine-runtime/<id>/{main.ts,engine.css,preview.html}, built into
+// public/engines/<id>/<version>/ with the same file shape, and one entry in
+// engines.manifest.json's `engines` array (in this order — order matters
+// only for readability/diffing, not behavior; engineEntry() looks entries up
+// by id). Adding a third engine is: add its src/engine-runtime/<id> files,
+// add one entry here.
+const ENGINES = [
+  { id: "param-sandbox", title: "Parameter Sandbox" },
+  { id: "branching-scenario", title: "Branching Scenario" },
+];
+
 // Mirrors src/lib/design/tokens.ts's GENERATED marker + emitters exactly.
 // Duplicated here (rather than imported) because this is a plain .mjs build
 // script with no TS toolchain — tests/engine-build-drift.test.ts cross-checks
@@ -30,12 +42,13 @@ function emitEngineTokensCss(tokens) {
 }
 
 /**
- * Build both engine bundles (+ manifest) into `outDir` (defaults to
- * public/engines). Pulled out of the CLI script's top-level code so that
- * tests/engine-build-drift.test.ts can call the EXACT SAME build logic
- * against a temp directory and diff the result against the committed
- * public/engines bytes — a dev editing src/engine-runtime/* and forgetting
- * to run `npm run build:engines` must not be able to ship a stale bundle.
+ * Build every engine bundle (+ the scorm adapter + manifest) into `outDir`
+ * (defaults to public/engines). Pulled out of the CLI script's top-level
+ * code so that tests/engine-build-drift.test.ts can call the EXACT SAME
+ * build logic against a temp directory and diff the result against the
+ * committed public/engines bytes — a dev editing src/engine-runtime/* and
+ * forgetting to run `npm run build:engines` must not be able to ship a
+ * stale bundle, for EITHER engine.
  *
  * Deterministic and cross-platform: no timestamps in the manifest, no
  * shell invocations, only path.join/path.resolve for paths.
@@ -43,9 +56,7 @@ function emitEngineTokensCss(tokens) {
 export async function buildEngines({ outDir } = {}) {
   const OUT = outDir ?? DEFAULT_OUT;
 
-  const sandboxDir = path.join(OUT, "param-sandbox", ENGINE_VERSION);
   const scormDir = path.join(OUT, "scorm", SCORM_VERSION);
-  mkdirSync(sandboxDir, { recursive: true });
   mkdirSync(scormDir, { recursive: true });
 
   const tokens = JSON.parse(readFileSync(path.join(ROOT, "src/lib/design/tokens.json"), "utf8"));
@@ -62,15 +73,46 @@ export async function buildEngines({ outDir } = {}) {
     writeFileSync(path.join(OUT, "app-tokens.css"), appTokensCss);
   }
 
-  await build({
-    entryPoints: [path.join(ROOT, "src/engine-runtime/param-sandbox/main.ts")],
-    bundle: true,
-    minify: false, // auditable output
-    format: "iife",
-    target: "es2019",
-    outfile: path.join(sandboxDir, "engine.js"),
-    alias: { "@": path.join(ROOT, "src") },
-  });
+  const sha256 = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
+
+  /** @type {Record<string, string>} */
+  const files = {};
+  const engineManifests = [];
+
+  for (const engine of ENGINES) {
+    const engineDir = path.join(OUT, engine.id, ENGINE_VERSION);
+    mkdirSync(engineDir, { recursive: true });
+    const srcDir = path.join(ROOT, "src/engine-runtime", engine.id);
+
+    await build({
+      entryPoints: [path.join(srcDir, "main.ts")],
+      bundle: true,
+      minify: false, // auditable output
+      format: "iife",
+      target: "es2019",
+      outfile: path.join(engineDir, "engine.js"),
+      alias: { "@": path.join(ROOT, "src") },
+    });
+
+    // engine.css ships the generated tokens layer prepended to the hand-
+    // written source rules (source may reference var(--rds-*) freely).
+    const engineCssSource = readFileSync(path.join(srcDir, "engine.css"), "utf8");
+    writeFileSync(path.join(engineDir, "engine.css"), `${engineTokensCss}\n${engineCssSource}`);
+    copyFileSync(path.join(srcDir, "preview.html"), path.join(engineDir, "preview.html"));
+
+    files[`${engine.id}/${ENGINE_VERSION}/engine.js`] = path.join(engineDir, "engine.js");
+    files[`${engine.id}/${ENGINE_VERSION}/engine.css`] = path.join(engineDir, "engine.css");
+
+    engineManifests.push({
+      id: engine.id,
+      version: ENGINE_VERSION,
+      title: engine.title,
+      files: {
+        "engine.js": sha256(path.join(engineDir, "engine.js")),
+        "engine.css": sha256(path.join(engineDir, "engine.css")),
+      },
+    });
+  }
 
   await build({
     entryPoints: [path.join(ROOT, "src/engine-runtime/scorm-adapter.ts")],
@@ -81,34 +123,17 @@ export async function buildEngines({ outDir } = {}) {
     outfile: path.join(scormDir, "scorm-adapter.js"),
     alias: { "@": path.join(ROOT, "src") },
   });
-
-  // engine.css ships the generated tokens layer prepended to the hand-
-  // written source rules (source may reference var(--rds-*) freely).
-  const engineCssSource = readFileSync(path.join(ROOT, "src/engine-runtime/param-sandbox/engine.css"), "utf8");
-  writeFileSync(path.join(sandboxDir, "engine.css"), `${engineTokensCss}\n${engineCssSource}`);
-  copyFileSync(path.join(ROOT, "src/engine-runtime/param-sandbox/preview.html"), path.join(sandboxDir, "preview.html"));
-
-  const sha256 = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
+  files[`scorm/${SCORM_VERSION}/scorm-adapter.js`] = path.join(scormDir, "scorm-adapter.js");
 
   // No timestamp field: rebuilds must be byte-identical given identical
   // source, since a later export-pipeline task gates on `git status` being
   // clean after `npm run build:engines`.
   //
-  // preview.html is deliberately NOT hashed here: it's an editor-only preview
-  // harness and never ships inside an exported SCORM package (an exported
-  // package gets a generated index.html from Task 11 instead).
+  // preview.html is deliberately NOT hashed here (for either engine): it's
+  // an editor-only preview harness and never ships inside an exported SCORM
+  // package (an exported package gets a generated index.html instead).
   const manifest = {
-    engines: [
-      {
-        id: "param-sandbox",
-        version: ENGINE_VERSION,
-        title: "Parameter Sandbox",
-        files: {
-          "engine.js": sha256(path.join(sandboxDir, "engine.js")),
-          "engine.css": sha256(path.join(sandboxDir, "engine.css")),
-        },
-      },
-    ],
+    engines: engineManifests,
     scorm: {
       version: SCORM_VERSION,
       files: { "scorm-adapter.js": sha256(path.join(scormDir, "scorm-adapter.js")) },
@@ -118,15 +143,10 @@ export async function buildEngines({ outDir } = {}) {
 
   return {
     outDir: OUT,
-    sandboxDir,
     scormDir,
     manifest,
     appTokensCss,
-    files: {
-      "param-sandbox/1.0.0/engine.js": path.join(sandboxDir, "engine.js"),
-      "param-sandbox/1.0.0/engine.css": path.join(sandboxDir, "engine.css"),
-      "scorm/1.0.0/scorm-adapter.js": path.join(scormDir, "scorm-adapter.js"),
-    },
+    files,
   };
 }
 

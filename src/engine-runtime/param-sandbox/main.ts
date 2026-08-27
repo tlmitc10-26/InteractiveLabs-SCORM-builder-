@@ -919,10 +919,10 @@ function setAttr(node: Element, name: string, value: string): void {
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/* Bundle entry: expose mount API. */
-declare global {
-  interface Window { ILBEngine?: { mount: typeof mountSandbox } }
-}
+/* Bundle entry: expose mount API. The ambient Window.ILBEngine type lives in
+ * the shared src/engine-runtime/globals.d.ts (not declared locally here) so
+ * every engine bundle's differently-typed mount function can coexist in the
+ * same TypeScript program — see that file's doc comment. */
 if (typeof window !== "undefined") {
   window.ILBEngine = { mount: mountSandbox };
 }

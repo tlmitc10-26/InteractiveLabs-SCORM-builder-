@@ -3,8 +3,7 @@ import path from "node:path";
 import JSZip from "jszip";
 import { buildManifestXml } from "@/lib/scorm/manifest";
 import { buildIndexHtml } from "@/lib/scorm/index-html";
-import { loadEngineManifest, engineDir, scormDir } from "@/lib/engines/registry";
-import { SandboxConfig, toRuntimeConfig, collectAssetIds } from "@/lib/engines/param-sandbox/schema";
+import { loadEngineManifest, engineEntry, engineDir, scormDir } from "@/lib/engines/registry";
 
 export interface ResolvedAsset { data: Buffer; ext: string }
 
@@ -20,10 +19,21 @@ export interface ResolvedAsset { data: Buffer; ext: string }
 export const MAX_PACKAGE_ASSETS = 40;
 export const MAX_PACKAGE_ASSET_BYTES = 50 * 1024 * 1024; // 50 MB
 
+/** Config-shape-specific behavior, supplied per engine by the caller (the
+ *  export route, golden/demo scripts) so this module never needs to import
+ *  a specific engine's schema/runtime-config directly. See
+ *  src/lib/engines/dispatch.ts for the concrete per-engine implementations. */
+export interface PackageRuntimeAdapter {
+  toRuntimeConfig(config: unknown, urlForAsset: (assetId: string) => string): unknown;
+  collectAssetIds(config: unknown): string[];
+}
+
 export interface AssembleOptions {
   identifier: string;
   title: string;
-  config: SandboxConfig;
+  engineId: string;
+  config: unknown;
+  runtime: PackageRuntimeAdapter;
   /** returns binary + extension for an assetId; throws if unknown */
   resolveAsset: (assetId: string) => Promise<ResolvedAsset>;
 }
@@ -52,8 +62,7 @@ async function readRuntimeFile(dir: string, name: string): Promise<Buffer> {
 
 export async function assemblePackage(opts: AssembleOptions): Promise<AssembledPackage> {
   const manifest = loadEngineManifest();
-  const engine = manifest.engines.find((e) => e.id === "param-sandbox");
-  if (!engine) throw new Error("param-sandbox engine not found in engines.manifest.json — run npm run build:engines");
+  const engine = engineEntry(manifest, opts.engineId);
 
   const files = new Map<string, Buffer>();
   const engineChecksums: Record<string, string> = {};
@@ -71,7 +80,7 @@ export async function assemblePackage(opts: AssembleOptions): Promise<AssembledP
   }
 
   // Assets: bundled under assets/, referenced by hashed filename.
-  const assetIds = collectAssetIds(opts.config);
+  const assetIds = opts.runtime.collectAssetIds(opts.config);
   if (assetIds.length > MAX_PACKAGE_ASSETS) {
     throw new Error(`too many assets referenced (max ${MAX_PACKAGE_ASSETS})`);
   }
@@ -100,17 +109,17 @@ export async function assemblePackage(opts: AssembleOptions): Promise<AssembledP
   }
 
   // Configs: runtime (inlined) + authoring (audit copy)
-  const runtimeConfig = toRuntimeConfig(opts.config, (id) => {
+  const runtimeConfig = opts.runtime.toRuntimeConfig(opts.config, (id) => {
     const p = assetPathById.get(id);
     if (!p) throw new Error(`config references unknown asset "${id}"`);
     return p;
   });
-  const indexHtml = buildIndexHtml({ title: opts.config.title, configJson: JSON.stringify(runtimeConfig) });
+  const indexHtml = buildIndexHtml({ title: opts.title, configJson: JSON.stringify(runtimeConfig) });
   files.set("content/config.json", Buffer.from(JSON.stringify(opts.config, null, 2)));
   files.set("index.html", Buffer.from(indexHtml));
   files.set("imsmanifest.xml", Buffer.from(buildManifestXml({
     identifier: opts.identifier,
-    title: opts.config.title,
+    title: opts.title,
     files: [...files.keys()].filter((f) => f !== "imsmanifest.xml").sort(),
   })));
 

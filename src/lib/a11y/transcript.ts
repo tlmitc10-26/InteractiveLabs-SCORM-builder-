@@ -14,12 +14,16 @@ import { computeAccessibleName } from "dom-accessibility-api";
  * changing what gets spoken.
  *
  * Scope, deliberately narrow: this covers exactly the element shapes our
- * engine runtime renders today (see src/engine-runtime/param-sandbox/main.ts)
- * -- headings, the handful of form control types the sandbox builds, its
- * canvas[role=img] charts, its role="status" live-region summary, and its
- * plain-text score/challenge carriers. `roleOf` below throws on any
+ * engine runtimes render today (see src/engine-runtime/param-sandbox/main.ts
+ * and src/engine-runtime/branching-scenario/main.ts) -- headings, the
+ * handful of form control types the sandbox builds plus the branching
+ * runtime's choice/Continue/Start-over buttons, its canvas[role=img] charts
+ * and the branching runtime's scene images, role="status" live-region
+ * summaries, and a short, explicit list of plain-text carriers (the
+ * sandbox's score/challenge strips; the branching runtime's role line,
+ * score line, and path-debrief list). `controlRoleOf` below throws on any
  * focusable element shape it doesn't recognize, on purpose: if engine work
- * ever adds a new focusable control kind (a button, a link, a radio group),
+ * ever adds a new focusable control kind (a radio group, a new link shape),
  * this module MUST be extended consciously rather than silently mis-mapping
  * (or silently omitting) its announcement.
  */
@@ -56,6 +60,18 @@ function isAriaHidden(el: Element): boolean {
   return el.getAttribute("aria-hidden") === "true";
 }
 
+/** True when `el` itself carries the `hidden` content attribute, or sits
+ *  inside an ancestor that does (e.g. the branching-scenario runtime's
+ *  feedback panel toggling `.hidden` between scene transitions). A hidden
+ *  element is removed from the accessibility tree entirely — nothing under
+ *  it is ever announced or focusable — so the transcript/live-region walks
+ *  below must skip it exactly like an aria-hidden subtree, or a live region
+ *  that merely stays hidden (never actually used this run) would still be
+ *  double-counted as present. */
+function isHidden(el: Element): boolean {
+  return (el as HTMLElement).hidden || el.closest("[hidden]") !== null;
+}
+
 /** Inline tags whose text runs directly into surrounding text with no
  *  implied word boundary -- matches the elements our runtime actually uses
  *  inline (spans, labels, links). Anything else (div, h1-h6, p, ...) is
@@ -64,15 +80,21 @@ function isAriaHidden(el: Element): boolean {
  *  them, so `visibleText` inserts a boundary there too. */
 const INLINE_TAGS = new Set(["SPAN", "A", "B", "I", "EM", "STRONG", "LABEL"]);
 
-/** The rendered text an AT would speak for a plain-content node: concatenates
- *  text node data in document order, skipping any `aria-hidden="true"`
- *  subtree (e.g. the challenge row's decorative glyph mark), inserting a
- *  word boundary around block-level children, and collapsing whitespace.
- *  This is deliberately NOT accname computation -- these nodes (a live-
- *  region summary, the score-status strip, a challenge row) have no formal
- *  accessible-name concept; what matters is the text content itself,
- *  because that's what gets spoken. */
-function visibleText(el: Element): string {
+/** Recursive collector behind `visibleText` below -- concatenates RAW text
+ *  node data in document order, skipping any `aria-hidden="true"` subtree,
+ *  and inserting a word boundary around block-level children. Deliberately
+ *  does NOT collapse/trim whitespace itself (that happens exactly once, in
+ *  `visibleText`, after the whole subtree is assembled): collapsing at each
+ *  recursion level instead would trim away a real, meaningful trailing/
+ *  leading space that lives inside one inline child's own text right at the
+ *  boundary with an adjacent inline sibling (e.g. the branching runtime's
+ *  debrief list, where a `<span>The First Vote: </span>` is immediately
+ *  followed by `<span>Raise your doubts...</span>` with no separate text
+ *  node between them) -- collapsing per-level previously ate that boundary
+ *  space entirely, producing an incorrect "Vote:Raise" run-on in the
+ *  transcript that a real screen reader, reading the actual (unmodified)
+ *  DOM text, would never actually produce. */
+function visibleTextRaw(el: Element): string {
   let out = "";
   for (const node of Array.from(el.childNodes)) {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -80,7 +102,7 @@ function visibleText(el: Element): string {
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const child = node as Element;
       if (isAriaHidden(child)) continue;
-      const childText = visibleText(child);
+      const childText = visibleTextRaw(child);
       if (!childText) continue;
       const block = !INLINE_TAGS.has(child.tagName);
       if (block) out += " ";
@@ -88,7 +110,21 @@ function visibleText(el: Element): string {
       if (block) out += " ";
     }
   }
-  return out.replace(/\s+/g, " ").trim();
+  return out;
+}
+
+/** The rendered text an AT would speak for a plain-content node: `visibleTextRaw`'s
+ *  concatenation, with whitespace collapsed and the ends trimmed exactly
+ *  once for the whole subtree -- matching how collapsible whitespace works
+ *  for rendered/accessible text generally (runs of whitespace anywhere in
+ *  the subtree collapse to one space; only the very start/end of the whole
+ *  result is trimmed). This is deliberately NOT accname computation --
+ *  these nodes (a live-region summary, the score-status strip, a challenge
+ *  row, the branching runtime's role/score-line/debrief-list carriers) have
+ *  no formal accessible-name concept; what matters is the text content
+ *  itself, because that's what gets spoken. */
+function visibleText(el: Element): string {
+  return visibleTextRaw(el).replace(/\s+/g, " ").trim();
 }
 
 /** Closest aria-live value on `el` itself or an ancestor (including `el`),
@@ -175,13 +211,28 @@ function isDecorativeImg(el: Element): boolean {
 
 type Category = "heading" | "control" | "img" | "status" | "text-carrier";
 
+/** Class names of plain-text/live-region "carrier" elements this contract
+ *  tracks -- see the `text-carrier` case in buildEntry and the file doc
+ *  comment. Param-sandbox: the score-status strip and each challenge row.
+ *  Branching scenario: the juror-role line, the ending's score-summary
+ *  line, and the debrief's whole ordered path list (tracked as ONE entry
+ *  covering the full rendered text of every step, per-item quality glyphs
+ *  and all -- the plan's own "keep scope minimal" guidance prefers this
+ *  over adding "list"/"listitem" categories and a per-step entry shape). */
+const TEXT_CARRIER_CLASSES = ["ilb-score-status", "ilb-challenge", "ilb-role", "ilb-score-line", "ilb-debrief-list"];
+
 function categoryOf(el: Element): Category | null {
   const role = el.getAttribute("role");
   if (role === "status") return "status";
   if (/^h[1-6]$/i.test(el.tagName)) return "heading";
   if (FOCUSABLE_TAGS.has(el.tagName.toLowerCase())) return "control";
-  if (role === "img") return "img";
-  if (el.classList.contains("ilb-score-status") || el.classList.contains("ilb-challenge")) return "text-carrier";
+  // role="img" covers the sandbox's canvas chart (no implicit role of its
+  // own); a plain <img> tag already HAS an implicit HTML-AAM role of "img"
+  // with no explicit attribute needed -- this only ever sees a NON-
+  // decorative <img> here, since `walk` skips alt="" images as a leaf
+  // before categoryOf is ever called on them.
+  if (role === "img" || el.tagName === "IMG") return "img";
+  if (TEXT_CARRIER_CLASSES.some((cls) => el.classList.contains(cls))) return "text-carrier";
   return null;
 }
 
@@ -217,6 +268,7 @@ function walk(root: Element, visit: (el: Element, category: Category) => void): 
   const recurse = (node: Element): void => {
     for (const child of Array.from(node.children)) {
       if (isAriaHidden(child)) continue; // skip subtree entirely
+      if (isHidden(child)) continue; // skip subtree entirely (removed from a11y tree)
       if (isDecorativeImg(child)) continue; // leaf; nothing to recurse into either
       const category = categoryOf(child);
       if (category) visit(child, category);
@@ -265,6 +317,7 @@ export function liveRegionsOf(root: Element): Array<{ politeness: string; atomic
   const out: Array<{ politeness: string; atomic: boolean; text: string }> = [];
   const visit = (node: Element): void => {
     for (const child of Array.from(node.children)) {
+      if (isHidden(child)) continue; // skip subtree entirely (removed from a11y tree)
       const politeness = child.getAttribute("aria-live");
       if (politeness) {
         const explicitAtomic = child.getAttribute("aria-atomic");

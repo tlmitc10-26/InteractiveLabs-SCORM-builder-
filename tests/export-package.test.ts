@@ -3,6 +3,12 @@ import JSZip from "jszip";
 import { assemblePackage, zipPackage, MAX_PACKAGE_ASSETS, MAX_PACKAGE_ASSET_BYTES } from "@/lib/export/package";
 import { scanPackage } from "@/lib/export/scanner";
 import { emptySandboxConfig, validateSandboxConfig, SandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { adapterFor } from "@/lib/engines/dispatch";
+
+// All assemblePackage calls in this file exercise the param-sandbox adapter
+// specifically (see tests/multi-engine.test.ts for engineId dispatch itself).
+const psAdapter = adapterFor("param-sandbox");
+const psRuntime = { toRuntimeConfig: psAdapter.toRuntimeConfig, collectAssetIds: psAdapter.collectAssetIds };
 
 /** Builds a config referencing exactly `n` distinct assetIds, spread across
  *  "swap" overlays (max 12 bands each per schema) — the cheapest way to
@@ -33,7 +39,9 @@ describe("assemblePackage", () => {
     const { files } = await assemblePackage({
       identifier: "ILB-test1",
       title: "Test",
+      engineId: "param-sandbox",
       config: emptySandboxConfig("Test"),
+      runtime: psRuntime,
       resolveAsset: async () => { throw new Error("no assets in this config"); },
     });
     const paths = [...files.keys()].sort();
@@ -55,7 +63,9 @@ describe("assemblePackage", () => {
     const { engineChecksums, indexHtml, files } = await assemblePackage({
       identifier: "ILB-test2",
       title: "Test",
+      engineId: "param-sandbox",
       config: emptySandboxConfig("Test"),
+      runtime: psRuntime,
       resolveAsset: async () => { throw new Error("no assets in this config"); },
     });
     expect(engineChecksums["engine/engine.js"]).toBeTruthy();
@@ -71,7 +81,9 @@ describe("assemblePackage: asset caps + parallel resolution + determinism", () =
       assemblePackage({
         identifier: "ILB-cap-test",
         title: config.title,
+        engineId: "param-sandbox",
         config,
+        runtime: psRuntime,
         resolveAsset: async () => ({ data: Buffer.from("x"), ext: "png" }),
       }),
     ).rejects.toThrow(`too many assets referenced (max ${MAX_PACKAGE_ASSETS})`);
@@ -84,7 +96,9 @@ describe("assemblePackage: asset caps + parallel resolution + determinism", () =
     const assembled = await assemblePackage({
       identifier: "ILB-cap-ok",
       title: config.title,
+      engineId: "param-sandbox",
       config,
+      runtime: psRuntime,
       resolveAsset: async (assetId) => {
         inFlight++;
         maxInFlight = Math.max(maxInFlight, inFlight);
@@ -108,6 +122,8 @@ describe("assemblePackage: asset caps + parallel resolution + determinism", () =
       engineChecksums: assembled.engineChecksums,
       urlAllowlist: [],
       authoringConfig: config,
+      validate: psAdapter.validate,
+      richTextFields: psAdapter.richTextValues,
       expectedIndexHtml: assembled.indexHtml,
     });
     expect(report.violations).toEqual([]);
@@ -123,7 +139,9 @@ describe("assemblePackage: asset caps + parallel resolution + determinism", () =
       assemblePackage({
         identifier: "ILB-bytes-cap",
         title: config.title,
+        engineId: "param-sandbox",
         config,
+        runtime: psRuntime,
         resolveAsset: async () => ({ data: oversizedChunk, ext: "png" }),
       }),
     ).rejects.toThrow(`package assets exceed ${MAX_PACKAGE_ASSET_BYTES / (1024 * 1024)} MB total`);
@@ -135,7 +153,9 @@ describe("assemblePackage: asset caps + parallel resolution + determinism", () =
       assemblePackage({
         identifier: "ILB-determinism",
         title: config.title,
+        engineId: "param-sandbox",
         config,
+        runtime: psRuntime,
         resolveAsset: async (assetId) => ({ data: Buffer.from(`data-for-${assetId}`), ext: "png" }),
       });
     const a = await assembleOnce();
@@ -158,7 +178,9 @@ describe("assemblePackage: title with '&' escapes correctly exactly once (Task f
     const { files } = await assemblePackage({
       identifier: "ILB-amp-test",
       title: result.config.title,
+      engineId: "param-sandbox",
       config: result.config,
+      runtime: psRuntime,
       resolveAsset: async () => { throw new Error("no assets in this config"); },
     });
 

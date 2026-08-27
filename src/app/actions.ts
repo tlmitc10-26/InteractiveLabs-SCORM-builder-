@@ -2,10 +2,11 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
-import { STARTERS, starterConfig, DEFAULT_STARTER_ID } from "@/lib/engines/param-sandbox/starter-configs";
+import { adapterFor, ENGINE_ADAPTERS } from "@/lib/engines/dispatch";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+
+const DEFAULT_ENGINE_ID = "param-sandbox";
 
 const MAX_DRAFT_BYTES = 200 * 1024;
 
@@ -36,17 +37,22 @@ export async function createInteractive(formData: FormData) {
   const projectId = String(formData.get("projectId") ?? "");
   if (!projectId) return;
   const title = String(formData.get("title") ?? "").trim().slice(0, 200) || "Untitled interactive";
-  // Unknown/missing starter id falls back to the blank starter — a stray or
+  // Unknown/missing engine id falls back to param-sandbox — a stray or
   // tampered form value must never 500 this action.
-  const requestedStarter = String(formData.get("starter") ?? DEFAULT_STARTER_ID);
-  const starterId = Object.prototype.hasOwnProperty.call(STARTERS, requestedStarter) ? requestedStarter : DEFAULT_STARTER_ID;
+  const requestedEngine = String(formData.get("engine") ?? DEFAULT_ENGINE_ID);
+  const engineId = Object.prototype.hasOwnProperty.call(ENGINE_ADAPTERS, requestedEngine) ? requestedEngine : DEFAULT_ENGINE_ID;
+  const adapter = adapterFor(engineId);
+  // adapter.starterConfig itself falls back to that engine's default starter
+  // for an unknown/missing starter id (see e.g. branchingStarterConfig) —
+  // no separate starter-id validation is needed here.
+  const starterId = String(formData.get("starter") ?? "");
   const interactive = await prisma.interactive.create({
     data: {
       projectId,
       title,
-      engineId: "param-sandbox",
-      engineVersion: "1.0.0",
-      configJson: JSON.stringify(starterConfig(starterId, title)),
+      engineId: adapter.engineId,
+      engineVersion: adapter.version,
+      configJson: JSON.stringify(adapter.starterConfig(starterId, title)),
     },
   });
   redirect(`/interactives/${interactive.id}`);
@@ -64,7 +70,27 @@ export async function deleteInteractive(formData: FormData) {
  *  throws to the caller, it caps payload size, and it reports save failures the same way
  *  it reports validation failures ({ok:false, errors}) — the editor just shows the messages. */
 export async function saveInteractiveConfig(id: string, rawConfig: unknown, title: string) {
-  const result = validateSandboxConfig(rawConfig);
+  let engineId: string;
+  try {
+    const row = await prisma.interactive.findUniqueOrThrow({ where: { id }, select: { engineId: true } });
+    engineId = row.engineId;
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return { ok: false as const, errors: ["This interactive no longer exists"] };
+    }
+    console.error("saveInteractiveConfig: failed to load interactive's engineId", err);
+    return { ok: false as const, errors: ["Draft could not be saved"] };
+  }
+
+  let result: { ok: true; config: unknown } | { ok: false; errors: string[] };
+  try {
+    result = adapterFor(engineId).validate(rawConfig);
+  } catch (err) {
+    // adapterFor throws on an unknown engineId — a data-integrity problem,
+    // not something the caller can fix by resubmitting the same draft.
+    console.error("saveInteractiveConfig: unknown engine", err);
+    return { ok: false as const, errors: ["This interactive's engine is not recognized"] };
+  }
 
   let configJson: string;
   try {
