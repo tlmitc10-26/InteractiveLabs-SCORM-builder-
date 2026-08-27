@@ -1,9 +1,10 @@
 # Interactive Lesson Builder (ILB)
 
-Build concept-experimentation interactives (parameter sandboxes, simulations) and export
-them as SCORM 1.2 packages for the Canvas LMS SCORM tool.
+Build interactives — parameter sandboxes/simulations, or role-based branching
+scenarios — and export them as SCORM 1.2 packages for the Canvas LMS SCORM tool.
 
 Spec: `docs/superpowers/specs/2026-08-25-scorm-interactive-builder-design.md`
+Branching Scenario engine spec: `docs/superpowers/specs/2026-08-27-branching-scenario-engine-design.md`
 
 ## Run locally
 
@@ -22,26 +23,77 @@ Prisma 7 requires an explicit driver adapter even for local SQLite (see
 
     npm test
 
-266 tests across schema validation, the formula interpreter, the sanitizer,
-asset upload/validation, engine-runtime build output, SCORM manifest/adapter
-generation, package assembly, the compliance scanner, a golden
-deterministic-export regression test (`tests/golden-export.test.ts`), the
-design-token/contrast/placement modules, and an automated axe-core
-accessibility gate over the rendered lesson runtime.
+488 tests across schema validation (both engines), the formula interpreter,
+the sanitizer, asset upload/validation, engine-runtime build output, SCORM
+manifest/adapter generation, package assembly, the compliance scanner,
+multi-engine dispatch/registry, a golden deterministic-export regression test
+per engine (`tests/golden-export.test.ts`, `tests/multi-engine.test.ts`), the
+design-token/contrast/placement modules, the branching-scenario state machine
+and graph validator, locked screen-reader announcement-contract transcripts
+for both engines, and an automated axe-core accessibility gate over the
+rendered lesson runtime in every engine's representative states (Parameter
+Sandbox; Branching Scenario's start scene, immediate-feedback panel, and
+ending/debrief).
+
+## Engines
+
+ILB ships two engines today, chosen (with a starter) when an interactive is
+created:
+
+- **Parameter Sandbox** — learners experiment with a live model: inputs
+  drive outputs through designer-authored formulas, with optional charts and
+  stage-anchored placement.
+- **Branching Scenario** — learners take a role and make a sequence of
+  decisions; each choice is graded `best` / `acceptable` / `poor`, can move
+  compounding variables (e.g. "Jury trust"), and routes to the next scene or
+  an ending. The grade is the mean of chosen-decision quality weights, not a
+  completion click.
+
+Both engines share the same contract: hand-audited runtime bundles
+(`src/engine-runtime/**` → `public/engines/**`, SHA-256-checked against
+`engines.manifest.json`), a strict Zod authoring schema, and the existing
+SCORM shell, compliance scanner, design tokens, and accessibility machinery.
+Adding an engine means adding a schema + runtime + editor panel, not
+touching the export/scan pipeline — `src/lib/engines/dispatch.ts` resolves
+validation and runtime-config mapping by the interactive's stored `engineId`,
+and `assemblePackage`/the export route resolve engine files the same way.
+
+**No authorable dead ends.** The Branching Scenario schema validates the
+scene graph at save time, not just field shapes: every `goTo`/`showIf`/effect
+reference must resolve, every scene reachable from the start scene must have
+a guaranteed (non-`showIf`-gated) path to some ending, unreachable scenes are
+flagged by name, and a scene where every choice carries a `showIf` is
+rejected outright (at least one choice per scene must be a guaranteed exit).
+The editor's Issues panel surfaces these as live, named errors as soon as a
+scene, choice, or `goTo` target changes — a scenario cannot be exported in a
+state that could strand a learner.
+
+**Accessibility contracts.** Both engines' screen-reader behavior is
+designed first and locked by tests, not verified after the fact: focus
+management (e.g. the new scene's heading receives focus on every transition),
+live-region inventory (one polite/atomic status region per visible variable,
+churn-guarded), and reading order are asserted in
+`tests/sr-transcript-branching.test.ts` (and the Parameter Sandbox
+equivalent). `npm run a11y:script` generates a keyboard-walkthrough NVDA
+verification script per engine — `docs/a11y/nvda-check-param-sandbox.md` and
+`docs/a11y/nvda-check-branching-scenario.md` — from the actual starter
+content, so the human screen-reader check follows the same contract the
+tests already lock, rather than an author's best guess at what NVDA will say.
 
 ## Design system
 
 **Token source.** `src/lib/design/tokens.json` is the single source of truth
 for the ASU/RDS Base (ASUO) theme — the 16 RDS colors, fonts, spacing, radii,
 and the heading scale. `src/lib/design/tokens.ts` is the typed accessor used
-by app code, the schema, and tests. Two generated artifacts are emitted from
-that one source by `npm run build:engines`, both committed:
-`src/app/tokens.css` (a Tailwind v4 `@theme` mapping + `--rds-*` variables for
-the app chrome) and a tokens layer prepended into
-`public/engines/param-sandbox/*/engine.css` (the audited, checksummed lesson
-runtime stylesheet). `tests/engine-build-drift.test.ts` fails the build if
-either committed artifact ever drifts from a fresh emit of the source —
-edit `tokens.json`, not the generated files.
+by app code, the schema, and tests. Generated artifacts are emitted from that
+one source by `npm run build:engines`, all committed: `src/app/tokens.css` (a
+Tailwind v4 `@theme` mapping + `--rds-*` variables for the app chrome) and a
+tokens layer prepended into each engine's `public/engines/<engine-id>/*/engine.css`
+(the audited, checksummed lesson runtime stylesheet — currently
+`param-sandbox` and `branching-scenario`). `tests/engine-build-drift.test.ts`
+fails the build if any committed artifact, for either engine, ever drifts
+from a fresh emit of the source — edit `tokens.json`, not the generated
+files.
 
 **Two styling surfaces.** The builder app (dashboard, editor forms, nav) is
 Arial throughout, per RDS Base, and never ships in an export. The lesson
@@ -124,5 +176,8 @@ tool; any import mode works (graded imports receive both completion and a
 
 ## Roadmap
 
-Branching Scenario, Case/Evidence Workspace, and Process Simulator engines; sign-in +
-admin policy UI; Vercel + Railway deployment; CreateAI generation provider.
+Case/Evidence Workspace and Process Simulator engines; visual flow-graph
+authoring for Branching Scenario; sign-in + admin policy UI; Vercel + Railway
+deployment; CreateAI generation provider (the Branching Scenario image-alt
+field's AI-suggest → human-accept seam is already in place, awaiting the
+provider).
