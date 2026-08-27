@@ -1,0 +1,128 @@
+/* GENERATED FILE - edit src/lib/design/tokens.json and run npm run build:engines */
+:root {
+  --rds-primary: #8c1d40;
+  --rds-secondary: #ffc627;
+  --rds-success: #446d12;
+  --rds-info: #00a3e0;
+  --rds-warning: #ff7f32;
+  --rds-danger: #b72a2a;
+  --rds-light: #f8f9fa;
+  --rds-dark: #212529;
+  --rds-light-1: #fafafa;
+  --rds-light-2: #f1f1f1;
+  --rds-light-3: #e8e8e8;
+  --rds-light-4: #d0d0d0;
+  --rds-light-5: #bfbfbf;
+  --rds-dark-1: #747474;
+  --rds-dark-2: #484848;
+  --rds-dark-3: #191919;
+}
+:root {
+  --ilb-font-heading: Georgia, 'Times New Roman', serif;
+  --ilb-font-body: Arial, Helvetica, sans-serif;
+  --radius-card: 8px;
+}
+
+.ilb-scenario { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 720px; margin: 0 auto; padding: 16px; }
+.ilb-scenario h2, .ilb-scenario h3 { font-family: var(--ilb-font-heading); color: var(--rds-primary); font-weight: 700; line-height: 1.2; margin: 0 0 12px; }
+.ilb-scenario h2 { font-size: 24px; }
+@media (min-width: 992px) { .ilb-scenario h2 { font-size: 32px; } }
+.ilb-scenario h3 { font-size: 18px; }
+
+.ilb-role { font-style: italic; color: var(--rds-dark-2); margin: 0 0 12px; }
+.ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: 8px 12px; margin-bottom: 12px; }
+
+.ilb-scene-body { line-height: 1.5; margin-bottom: 16px; }
+.ilb-scene-image { display: block; max-width: 100%; height: auto; border-radius: var(--radius-card, 8px); margin-bottom: 16px; }
+
+/* Visible-variable status line (spec 5/6): a normal, on-page status strip,
+   NOT visually hidden -- the aria-live/aria-atomic pair only governs how a
+   screen reader announces its text CHANGES (churn-guarded via main.ts's
+   setText), it is not sr-only content. */
+.ilb-vars-status {
+  font-weight: 700;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--rds-light-4);
+  border-radius: var(--radius-card, 8px);
+  background: #fff;
+}
+
+/* Choice buttons: vertical full-width stack, left-aligned label text,
+   pill-adjacent radius (a large rounded rectangle rather than the fully
+   circular --radius-pill, which reads oddly at this width/height). */
+.ilb-choices { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.ilb-scenario button.ilb-choice-btn {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  padding: 12px 16px;
+  font: inherit;
+  font-size: 1rem;
+  text-align: left;
+  color: var(--rds-primary);
+  background: #fff;
+  border: 2px solid var(--rds-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.ilb-scenario button.ilb-choice-btn:hover { background: var(--rds-light-1); }
+
+/* Immediate-feedback panel: visible content (not sr-only) announced once via
+   its own polite live region, then focus moves to Continue (main.ts). */
+.ilb-feedback {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: #fff8e1;
+  border: 1px solid var(--rds-light-4);
+  border-radius: var(--radius-card, 8px);
+}
+.ilb-feedback[hidden] { display: none; }
+.ilb-feedback p { margin: 0 0 12px; }
+.ilb-feedback button.ilb-continue-btn { width: auto; display: inline-block; }
+
+.ilb-score-line { font-weight: 700; margin: 0 0 16px; }
+
+/* Debrief: static content, no live regions -- a real <ol> per spec 5/6,
+   quality conveyed as text + an aria-hidden glyph (never color alone),
+   mirroring param-sandbox's .ilb-challenge-mark pattern. */
+.ilb-debrief[hidden] { display: none; }
+.ilb-debrief-list { padding-left: 1.5em; margin: 0; }
+.ilb-debrief-step { margin-bottom: 16px; }
+.ilb-debrief-quality { color: var(--rds-dark-2); }
+.ilb-debrief-other, .ilb-debrief-feedback {
+  margin: 4px 0 0;
+  color: var(--rds-dark-2);
+  font-size: 0.95rem;
+}
+
+/* 2.5.8 (WCAG 2.2) target size: every button in the scenario gets at least
+   a 24px-tall hit area. */
+.ilb-scenario button { min-height: 24px; }
+
+/* Focus visibility: a clearly visible ring on every interactive control,
+   distinct from any hover styling. */
+.ilb-scenario button:focus-visible {
+  outline: 3px solid var(--rds-primary);
+  outline-offset: 2px;
+}
+
+/* Visually-hidden but screen-reader-accessible text (unused by the runtime
+   today, kept for parity with param-sandbox/engine.css's audited utility
+   set -- a scene/ending author-visible affordance may need it later). */
+.ilb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ilb-scenario button.ilb-choice-btn { transition: none; }
+}

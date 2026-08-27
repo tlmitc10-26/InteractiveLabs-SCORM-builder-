@@ -49,29 +49,44 @@ describe("engine build drift", () => {
     // files it describes).
     expect(built.manifest).toEqual(committedManifest);
 
-    const relFiles: Array<[string, string]> = [
-      ["param-sandbox/1.0.0/engine.js", "engine.js"],
-      ["param-sandbox/1.0.0/engine.css", "engine.css"],
-      ["scorm/1.0.0/scorm-adapter.js", "scorm-adapter.js"],
-    ];
+    // At least the two engines this suite knows about must actually be
+    // present — a regression that silently dropped an engine from the
+    // manifest loop would otherwise make the loop below vacuously pass.
+    const manifestEngineIds = committedManifest.engines.map((e: { id: string }) => e.id);
+    expect(manifestEngineIds).toEqual(expect.arrayContaining(["param-sandbox", "branching-scenario"]));
 
     const filesByRelPath: Record<string, string> = built.files;
-    for (const [relPath, manifestKey] of relFiles) {
-      const freshBuf = readFileSync(filesByRelPath[relPath]);
-      const committedBuf = readFileSync(path.join(COMMITTED_OUT, relPath));
 
-      // Byte-for-byte identical to what's committed in public/engines.
-      expect(freshBuf.equals(committedBuf)).toBe(true);
+    // Generalized over EVERY engine in the manifest (not just param-sandbox)
+    // — a dev adding engine #3 and forgetting to rebuild is caught the same
+    // way engine #2 (branching-scenario) is here.
+    for (const engineManifest of committedManifest.engines as Array<{ id: string; version: string; files: Record<string, string> }>) {
+      for (const file of ["engine.js", "engine.css"]) {
+        const relPath = `${engineManifest.id}/${engineManifest.version}/${file}`;
+        const freshBuf = readFileSync(filesByRelPath[relPath]);
+        const committedBuf = readFileSync(path.join(COMMITTED_OUT, relPath));
 
-      // And the fresh build's own hash matches the committed manifest hash
-      // for that file (catches the case where public/engines was hand-
-      // edited without regenerating the manifest, or vice versa).
-      const expectedHash =
-        manifestKey === "scorm-adapter.js"
-          ? committedManifest.scorm.files["scorm-adapter.js"]
-          : committedManifest.engines[0].files[manifestKey];
-      expect(sha256(freshBuf)).toBe(expectedHash);
+        // Byte-for-byte identical to what's committed in public/engines.
+        expect(freshBuf.equals(committedBuf)).toBe(true);
+
+        // And the fresh build's own hash matches the committed manifest hash
+        // for that file (catches the case where public/engines was hand-
+        // edited without regenerating the manifest, or vice versa).
+        expect(sha256(freshBuf)).toBe(engineManifest.files[file]);
+      }
+
+      // (c) the committed engine.css begins with the current generated
+      // tokens layer (catches a stale prepend as well as a hand-edited
+      // engine.css), for every engine.
+      const engineCss = readFileSync(path.join(COMMITTED_OUT, engineManifest.id, engineManifest.version, "engine.css"), "utf8");
+      expect(engineCss.startsWith(emitEngineTokensCss())).toBe(true);
     }
+
+    const scormRelPath = `scorm/${committedManifest.scorm.version}/scorm-adapter.js`;
+    const freshScormBuf = readFileSync(filesByRelPath[scormRelPath]);
+    const committedScormBuf = readFileSync(path.join(COMMITTED_OUT, scormRelPath));
+    expect(freshScormBuf.equals(committedScormBuf)).toBe(true);
+    expect(sha256(freshScormBuf)).toBe(committedManifest.scorm.files["scorm-adapter.js"]);
 
     // (a) the .mjs build script's inline CSS templates and the TS emitters
     // used by app/schema/tests code must agree — they cannot silently drift
@@ -81,10 +96,5 @@ describe("engine build drift", () => {
     // (b) the committed src/app/tokens.css is exactly what a fresh emit
     // produces (catches "edited tokens.json but forgot to rebuild").
     expect(readFileSync(path.join(ROOT, "src", "app", "tokens.css"), "utf8")).toBe(emitAppThemeCss());
-
-    // (c) the committed engine.css begins with the current generated tokens
-    // layer (catches a stale prepend as well as a hand-edited engine.css).
-    const engineCss = readFileSync(path.join(COMMITTED_OUT, "param-sandbox", "1.0.0", "engine.css"), "utf8");
-    expect(engineCss.startsWith(emitEngineTokensCss())).toBe(true);
   });
 });

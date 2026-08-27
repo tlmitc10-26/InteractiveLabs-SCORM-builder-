@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { BRANCHING_STARTERS, branchingStarterConfig, DEFAULT_BRANCHING_STARTER_ID } from "@/lib/engines/branching-scenario/starters";
 import { validateBranchingConfig } from "@/lib/engines/branching-scenario/schema";
-import { initialState, applyChoice, scorePct } from "@/lib/engines/branching-scenario/state";
+import { initialState, applyChoice, scorePct, visibleChoices } from "@/lib/engines/branching-scenario/state";
 
 describe("BRANCHING_STARTERS", () => {
   it("has a blank and a jury starter", () => {
@@ -122,6 +122,16 @@ describe("jury starter — scoring via the state machine", () => {
     s = applyChoice(config, s, "walk_through"); // trust 60 -> 75, -> holdout
     expect(s.sceneId).toBe("holdout");
     expect(s.vars.jury_trust).toBe(75);
+
+    // The test's name promises call_break is reachable at trust>=60, but
+    // until now nothing actually exercised visibleChoices/applyChoice for
+    // it at this state — this closes that gap (drive-by fix flagged in
+    // Task 4 review: the name overclaimed what the assertions covered).
+    const visible = visibleChoices(config, s);
+    expect(visible.map((c) => c.id)).toContain("call_break");
+    const next = applyChoice(config, s, "call_break");
+    expect(next.endingId).toBe("verdict_reasoned");
+    expect(next.vars.jury_trust).toBe(80); // 75 + 5
   });
 });
 
