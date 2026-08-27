@@ -593,7 +593,15 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
       const status = el("span", "ilb-sr-only");
       status.textContent = "Not met yet";
       const text = el("span"); text.textContent = ch.prompt;
-      row.appendChild(mark); row.appendChild(status); row.appendChild(text);
+      row.appendChild(mark); row.appendChild(status);
+      // Defect fix: `status` and `text` are adjacent inline <span>s with no
+      // whitespace between them in the DOM, so a screen reader concatenated
+      // them with no word boundary ("Not met yetDisplace more than..."). The
+      // sr-only span is visually clipped to 1x1px, so this space is
+      // invisible on screen (and collapses harmlessly at the start of the
+      // visible line) but restores the missing announcement boundary.
+      row.appendChild(document.createTextNode(" "));
+      row.appendChild(text);
       panel.appendChild(row);
       challengeNodes.set(ch.id, status);
     }

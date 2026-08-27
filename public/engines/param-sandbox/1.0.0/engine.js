@@ -662,6 +662,7 @@
         text.textContent = ch.prompt;
         row.appendChild(mark);
         row.appendChild(status);
+        row.appendChild(document.createTextNode(" "));
         row.appendChild(text);
         panel.appendChild(row);
         challengeNodes.set(ch.id, status);
