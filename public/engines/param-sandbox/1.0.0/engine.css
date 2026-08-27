@@ -79,7 +79,7 @@
 .ilb-sandbox input:focus-visible,
 .ilb-sandbox select:focus-visible,
 .ilb-sandbox button:focus-visible {
-  outline: 3px solid var(--rds-info);
+  outline: 3px solid var(--rds-primary);
   outline-offset: 2px;
 }
 /* width:100% + margin-left/right:auto centers the stage in its grid cell
