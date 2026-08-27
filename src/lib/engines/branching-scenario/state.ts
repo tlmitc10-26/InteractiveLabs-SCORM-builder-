@@ -113,6 +113,37 @@ export function scorePct(state: ScenarioState): number {
  * `[sceneIdIndex, choiceIdIndex, qualityCode]` — indices into `d`. Since a
  * scene is revisited many times across a long/looping playthrough, this
  * keeps the payload compact regardless of path length.
+ *
+ * Honest budget bounds (measured, not assumed):
+ * - Realistic scenario (a handful of scenes, short auto-slugged ids, a
+ *   200-step looping playthrough): ~1.8KB. See the
+ *   "serializes a full 200-step path" test in branching-state.test.ts.
+ * - Absolute worst case the schema permits (40 scenes x 6 choices/scene x
+ *   40-char ids, a 200-step path that manages to hit ~all 240 distinct
+ *   (scene,choice) pairs the graph offers, defeating the dedup dictionary):
+ *   measured ~12.7KB — well OVER SCORM 1.2's 4096-char suspend_data limit.
+ *   At that size, `saveSuspendData` in engine-runtime/scorm-adapter.ts
+ *   (`json.length > MAX_SUSPEND` -> returns false without writing
+ *   cmi.suspend_data) silently drops the save; the learner's mid-scenario
+ *   position is not persisted for that attempt, though nothing crashes and
+ *   score/completion (which don't ride on suspend_data) are unaffected.
+ *   Mitigation: authors keeping ids short keeps this compact in practice —
+ *   auto-slugged ids derived from short labels (the editor's normal path,
+ *   Task 7) are naturally well under 40 chars. A dictionary-size safeguard
+ *   (e.g. capping/evicting `d`, or truncating `path` further once `d` grows
+ *   large) is a reasonable future hardening step but is out of scope here;
+ *   this module currently trusts that authored ids stay reasonably short.
+ * - Two accepted client-trust limitations, consistent with SCORM's model
+ *   (the LMS already trusts client-reported CMI data): restoreState
+ *   structurally validates every id in `p` and `vars` against the CURRENT
+ *   config, but does not re-derive or cross-check the path's *trajectory*
+ *   (that step N's scene actually follows from step N-1's choice.goTo) or
+ *   that each path step's quality code matches that choice's authored
+ *   quality in `config` — a tampered payload could claim an impossible
+ *   sequence or a mismatched quality and still restore. Likewise `b` (best
+ *   score) is trusted as reported, exactly like every other client-supplied
+ *   SCORM CMI value (cmi.core.score.raw included) — there is no
+ *   server-side authority to verify it against.
  */
 export interface SuspendPayload {
   v: 1;
@@ -184,11 +215,22 @@ export function restoreState(config: BranchingConfigLike, payload: unknown): Res
     if (!varsRaw || typeof varsRaw !== "object" || Array.isArray(varsRaw)) return null;
     const varsObj = varsRaw as Record<string, unknown>;
     if (Object.keys(varsObj).length !== varIds.size) return null;
+    const varDefs = new Map(config.variables.map((v) => [v.id, v]));
     const vars: Record<string, number> = {};
     for (const vid of varIds) {
       const val = varsObj[vid];
       if (typeof val !== "number" || !Number.isFinite(val)) return null;
-      vars[vid] = val;
+      // Clamp (don't reject) an out-of-range-but-finite value: a stale
+      // payload carrying a value outside the variable's current [min,max]
+      // (e.g. the author since narrowed the range) should degrade the same
+      // way live play's applyChoice would, not be treated as corrupt. Not
+      // clamping here would let a restored state violate the invariant live
+      // play maintains, which could silently flip a showIf condition's
+      // visibility (e.g. a gate meant to require "trust >= 999" — normally
+      // unreachable — becoming reachable from a stale value above the
+      // variable's real max).
+      const varDef = varDefs.get(vid) as { min: number; max: number };
+      vars[vid] = Math.min(varDef.max, Math.max(varDef.min, val));
     }
 
     const dictRaw = p.d;

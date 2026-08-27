@@ -179,6 +179,38 @@ describe("state — applyChoice", () => {
     expect(next.vars.trust).toBe(100);
   });
 
+  it("applies multiple effects on the same variable in sequence, clamping after EACH effect (not once at the end)", () => {
+    const multiEffectConfig: BranchingConfigLike = {
+      ...base,
+      variables: [{ id: "trust", label: "Trust", initial: 90, min: 0, max: 100, visible: true }],
+      scenes: [
+        {
+          id: "start",
+          body: "<p>Start</p>",
+          choices: [
+            {
+              id: "combo",
+              label: "Combo",
+              quality: "best",
+              effects: [
+                { variableId: "trust", delta: 20 }, // 90 + 20 = 110 -> clamps to 100
+                { variableId: "trust", delta: -50 }, // 100 - 50 = 50
+              ],
+              goTo: "scene:mid",
+            },
+          ],
+        },
+        base.scenes[1],
+      ],
+    };
+    const s = initialState(multiEffectConfig);
+    const next = applyChoice(multiEffectConfig, s, "combo");
+    // Clamp-after-each gives 50. A naive sum-then-clamp-once would instead
+    // compute 90 + 20 - 50 = 60 and never see the clamp at all — this test
+    // locks the (correct) per-effect clamping semantics.
+    expect(next.vars.trust).toBe(50);
+  });
+
   it("appends a {s,c,q} path entry and transitions sceneId on goTo scene:", () => {
     const s = initialState(base);
     const next = applyChoice(base, s, "goodChoice");
@@ -374,6 +406,25 @@ describe("state — suspendPayload / restoreState round trip", () => {
   it("returns null for a missing variable in vars", () => {
     const payload = { v: 1, s: "start", e: null, vars: {}, p: [], t: false, b: 0, c: false };
     expect(restoreState(base, payload)).toBeNull();
+  });
+
+  it("clamps a restored var above its configured max down to max, rather than rejecting", () => {
+    // trust's range in `base` is [0, 100]. A stale/tampered payload carrying
+    // a finite but out-of-range value should degrade gracefully — the same
+    // way live play would via applyChoice's clamp — not be treated as
+    // corrupt. An unclamped restore could silently make a showIf condition
+    // (e.g. "trust gte 999") visible when it never legitimately could be.
+    const payload = { v: 1, s: "start", e: null, vars: { trust: 500 }, d: [], p: [], t: false, b: 0, c: false };
+    const restored = restoreState(base, payload);
+    expect(restored).not.toBeNull();
+    expect(restored?.state.vars.trust).toBe(100);
+  });
+
+  it("clamps a restored var below its configured min up to min, rather than rejecting", () => {
+    const payload = { v: 1, s: "start", e: null, vars: { trust: -50 }, d: [], p: [], t: false, b: 0, c: false };
+    const restored = restoreState(base, payload);
+    expect(restored).not.toBeNull();
+    expect(restored?.state.vars.trust).toBe(0);
   });
 
   it("returns null for a path entry referencing an unknown choice id in a known scene", () => {
