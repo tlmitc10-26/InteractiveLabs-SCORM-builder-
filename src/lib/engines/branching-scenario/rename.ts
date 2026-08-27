@@ -92,6 +92,29 @@ export function renameVariableId<T extends RenameableBranchingConfig>(config: T,
  *  referenced from goTo/effects/showIf elsewhere), so this rewrites just the
  *  one choice inside the one named scene. A `sceneId` that doesn't match any
  *  scene is a no-op (returns a shallow-copied config, nothing renamed). */
+/** Strips every reference to a variable id from a config's choices — backs
+ *  the branching editor's variable-row delete (mirrors the rename-with-
+ *  rewrite philosophy above: destructive-but-consistent, so a deleted
+ *  variable never leaves a dangling reference behind). A choice's
+ *  `effects[]` entry for this variable is removed outright (unlike a
+ *  rename, there's no new id to rewrite it to), and a `showIf` condition
+ *  naming this variable is cleared (there's no variable left to evaluate
+ *  it against). Callers are still responsible for removing the variable's
+ *  own entry from `config.variables` — this only touches the OTHER places
+ *  a variable id can appear, same division of labor as the rename
+ *  functions above (which likewise never touch unrelated ids). */
+export function removeVariableReferences<T extends RenameableBranchingConfig>(config: T, variableId: string): T {
+  const scenes = config.scenes.map((s) => ({
+    ...s,
+    choices: s.choices.map((c) => ({
+      ...c,
+      effects: c.effects.filter((ef) => ef.variableId !== variableId),
+      showIf: c.showIf && c.showIf.variableId === variableId ? undefined : c.showIf,
+    })),
+  }));
+  return { ...config, scenes };
+}
+
 export function renameChoiceId<T extends RenameableBranchingConfig>(config: T, sceneId: string, oldId: string, newId: string): T {
   if (oldId === newId) return config;
   const scenes = config.scenes.map((s) =>

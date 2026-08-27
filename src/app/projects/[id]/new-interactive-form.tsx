@@ -1,0 +1,90 @@
+"use client";
+
+// Engine + starter picker for the "New interactive" form (Task 8). A client
+// component because the starter <select>'s options must update reactively
+// as the designer switches engines — the surrounding page stays a server
+// component and hands this the engines/starters metadata as serializable
+// props (sourced from dispatch.ts's ENGINE_ADAPTERS, so this file never
+// needs its own per-engine knowledge).
+//
+// Submits straight to the `createInteractive` server action (imported here,
+// same as any other client-importable server action) via the form's
+// `action`. `createInteractive` re-validates the engine/starter pair
+// server-side and falls back to a safe default on anything unrecognized
+// (see src/app/actions.ts), so this component only needs to get the common
+// case right, not defend against a tampered POST.
+//
+// The engine choice is a real radio group (`<input type="radio"
+// name="engine">` inside a `<fieldset>`/`<legend>`), not a styled
+// non-native control — arrow-key navigation between engines and Tab
+// in/out of the group come from the browser for free, and the checked
+// state is exposed to assistive tech by the input itself (no extra aria
+// wiring needed here).
+
+import { useId, useState } from "react";
+import { createInteractive } from "@/app/actions";
+
+export type StarterMetaProp = { id: string; label: string; description: string };
+export type EngineMetaProp = { id: string; label: string; blurb: string; starters: StarterMetaProp[] };
+
+export function NewInteractiveForm({ projectId, engines }: { projectId: string; engines: EngineMetaProp[] }) {
+  const [engineId, setEngineId] = useState(engines[0]?.id ?? "");
+  const engine = engines.find((e) => e.id === engineId) ?? engines[0];
+  const [starterId, setStarterId] = useState(engine?.starters[0]?.id ?? "");
+  const starterSelectId = useId();
+
+  function handleEngineChange(id: string) {
+    setEngineId(id);
+    // Reset the starter selection to the newly-chosen engine's first
+    // (default) starter — the previously-selected starter id almost
+    // certainly doesn't exist for the other engine.
+    const next = engines.find((e) => e.id === id);
+    setStarterId(next?.starters[0]?.id ?? "");
+  }
+
+  if (!engine) return null;
+
+  return (
+    <form action={createInteractive} className="mt-2 space-y-3">
+      <input type="hidden" name="projectId" value={projectId} />
+
+      <fieldset className="m-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-semibold text-gray-700">Interactive type</legend>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {engines.map((e) => {
+            const checked = e.id === engineId;
+            return (
+              <label key={e.id} className={`rds-engine-card${checked ? " is-selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="engine"
+                  value={e.id}
+                  checked={checked}
+                  onChange={() => handleEngineChange(e.id)}
+                  className="rds-engine-radio mt-0.5 shrink-0"
+                />
+                <span>
+                  <span className="block font-medium">{e.label}</span>
+                  <span className="block text-xs text-gray-600">{e.blurb}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input name="title" placeholder={`New ${engine.label} title`} maxLength={200}
+          className="flex-1 rounded border border-gray-300 px-3 py-2" />
+        <label htmlFor={starterSelectId} className="sr-only">Starter template</label>
+        <select id={starterSelectId} name="starter" value={starterId} onChange={(e) => setStarterId(e.target.value)}
+          className="rounded border border-gray-300 px-3 py-2 text-sm">
+          {engine.starters.map((s) => (
+            <option key={s.id} value={s.id} title={s.description}>{s.label}</option>
+          ))}
+        </select>
+        <button className="btn btn-primary">New {engine.label}</button>
+      </div>
+    </form>
+  );
+}

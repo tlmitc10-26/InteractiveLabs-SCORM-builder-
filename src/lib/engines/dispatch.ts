@@ -16,6 +16,10 @@ export interface EngineAdapter {
   engineId: string;
   version: string;
   label: string;
+  /** One-line description shown next to `label` on the "New interactive"
+   *  engine picker (Task 8) — plain text, no em dashes (period/colon only,
+   *  per house style). */
+  blurb: string;
   validate(raw: unknown): { ok: true; config: unknown } | { ok: false; errors: string[] };
   toRuntimeConfig(config: unknown, urlForAsset: (id: string) => string): unknown;
   collectAssetIds(config: unknown): string[];
@@ -41,6 +45,7 @@ export const ENGINE_ADAPTERS: Record<string, EngineAdapter> = {
     engineId: "param-sandbox",
     version: "1.0.0",
     label: "Parameter Sandbox",
+    blurb: "Learners experiment with a live model.",
     validate: (raw) => validateSandboxConfig(raw),
     toRuntimeConfig: (c, u) => psRuntime.toRuntimeConfig(c as never, u),
     collectAssetIds: (c) => psRuntime.collectAssetIds(c as never),
@@ -55,6 +60,7 @@ export const ENGINE_ADAPTERS: Record<string, EngineAdapter> = {
     engineId: "branching-scenario",
     version: "1.0.0",
     label: "Branching Scenario",
+    blurb: "Learners make decisions and live the consequences.",
     validate: (raw) => validateBranchingConfig(raw),
     toRuntimeConfig: (c, u) => branchingRuntime.toBranchingRuntimeConfig(c as BranchingConfigLike, u),
     collectAssetIds: (c) => branchingRuntime.collectBranchingAssetIds(c as BranchingConfigLike),

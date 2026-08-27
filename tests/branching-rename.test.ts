@@ -4,6 +4,7 @@ import {
   renameEndingId,
   renameVariableId,
   renameChoiceId,
+  removeVariableReferences,
   type RenameableBranchingConfig,
 } from "@/lib/engines/branching-scenario/rename";
 import { validateBranchingConfig } from "@/lib/engines/branching-scenario/schema";
@@ -227,6 +228,52 @@ describe("renameChoiceId", () => {
     const cfg = baseConfig();
     const snapshot = JSON.parse(JSON.stringify(cfg));
     renameChoiceId(cfg, "opening", "go_a", "speak_up");
+    expect(cfg).toEqual(snapshot);
+  });
+});
+
+describe("removeVariableReferences", () => {
+  it("removes effects entries referencing the deleted variable", () => {
+    const out = removeVariableReferences(baseConfig(), "trust");
+    expect(out.scenes[0].choices[0].effects).toEqual([]);
+  });
+
+  it("leaves effects referencing OTHER variables untouched", () => {
+    const out = removeVariableReferences(baseConfig(), "trust");
+    expect(out.scenes[1].choices[0].effects).toEqual([{ variableId: "risk", delta: -5 }]);
+  });
+
+  it("clears a showIf condition that names the deleted variable", () => {
+    const out = removeVariableReferences(baseConfig(), "trust");
+    expect(out.scenes[0].choices[1].showIf).toBeUndefined();
+  });
+
+  it("leaves a showIf condition naming a DIFFERENT variable untouched", () => {
+    const cfg = baseConfig();
+    cfg.scenes[0].choices[1].showIf = { variableId: "risk", comparator: "gte", value: 5 };
+    const out = removeVariableReferences(cfg, "trust");
+    expect(out.scenes[0].choices[1].showIf).toEqual({ variableId: "risk", comparator: "gte", value: 5 });
+  });
+
+  it("leaves choices with no showIf untouched (no crash on undefined)", () => {
+    const out = removeVariableReferences(baseConfig(), "trust");
+    expect(out.scenes[1].choices[0].showIf).toBeUndefined();
+  });
+
+  it("does not touch config.variables — callers remove the variable's own entry separately", () => {
+    const out = removeVariableReferences(baseConfig(), "trust");
+    expect(out.variables).toEqual(baseConfig().variables);
+  });
+
+  it("is a no-op (aside from a fresh scenes array) when the variable id is unused", () => {
+    const out = removeVariableReferences(baseConfig(), "nonexistent");
+    expect(out.scenes).toEqual(baseConfig().scenes);
+  });
+
+  it("does not mutate the input config", () => {
+    const cfg = baseConfig();
+    const snapshot = JSON.parse(JSON.stringify(cfg));
+    removeVariableReferences(cfg, "trust");
     expect(cfg).toEqual(snapshot);
   });
 });

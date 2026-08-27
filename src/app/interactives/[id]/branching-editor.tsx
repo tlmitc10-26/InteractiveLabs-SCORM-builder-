@@ -16,7 +16,7 @@ import { uniqueSlug } from "./slugify";
 // pure structural reference rewrites for the per-row "Rename to match label"
 // Advanced affordance.
 import {
-  renameSceneId, renameEndingId, renameVariableId, renameChoiceId,
+  renameSceneId, renameEndingId, renameVariableId, renameChoiceId, removeVariableReferences,
   type RenameableBranchingConfig,
 } from "@/lib/engines/branching-scenario/rename";
 
@@ -102,6 +102,19 @@ export function BranchingEditor({ interactiveId, initialTitle, initialConfig, as
     markSaving();
   }, [setConfig, markSaving]);
 
+  // Backs the variables section's row delete: strips every effects/showIf
+  // reference to the deleted variable in the SAME setConfig update that
+  // removes the variable's own entry, so the config is never briefly
+  // inconsistent (mirrors the rename callbacks above — see rename.ts's
+  // removeVariableReferences for the destructive-but-consistent rationale).
+  const removeVariable = useCallback((variableId: string) => {
+    setConfig((c) => {
+      const stripped = removeVariableReferences(c as unknown as RenameableBranchingConfig, variableId) as unknown as EBranchingConfig;
+      return { ...stripped, variables: stripped.variables.filter((v) => v.id !== variableId) };
+    });
+    markSaving();
+  }, [setConfig, markSaving]);
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="max-h-[85vh] space-y-4 overflow-y-auto pr-2">
@@ -125,7 +138,7 @@ export function BranchingEditor({ interactiveId, initialTitle, initialConfig, as
         )}
 
         <ScenarioSection config={config} onChange={patch} />
-        <VariablesSection variables={config.variables} onChange={(variables) => patch({ variables })} onRenameId={renameVariable} />
+        <VariablesSection variables={config.variables} onChange={(variables) => patch({ variables })} onRenameId={renameVariable} onRemove={removeVariable} />
         <ScenesSection
           scenes={config.scenes} endings={config.endings} variables={config.variables}
           startSceneId={config.startSceneId} assets={assets} errors={errors}
@@ -190,8 +203,9 @@ function ScenarioSection({ config, onChange }: {
 
 /* ---------- Variables section ---------- */
 
-function VariablesSection({ variables, onChange, onRenameId }: {
+function VariablesSection({ variables, onChange, onRenameId, onRemove }: {
   variables: EVariable[]; onChange: (v: EVariable[]) => void; onRenameId: (oldId: string, newId: string) => void;
+  onRemove: (variableId: string) => void;
 }) {
   const rowKeys = useRowKeys(variables.length);
   const update = (i: number, p: Partial<EVariable>) => onChange(variables.map((x, j) => (j === i ? { ...x, ...p } : x)));
@@ -204,7 +218,7 @@ function VariablesSection({ variables, onChange, onRenameId }: {
         onChange([...variables, { id, label, initial: 0, min: 0, max: 100, visible: false }]);
       }}>
       {variables.map((v, i) => (
-        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onChange(variables.filter((_, j) => j !== i)); }}>
+        <Row key={rowKeys.keys[i]} onRemove={() => { rowKeys.remove(i); onRemove(v.id); }}>
           <TextField label="Label" value={v.label} onChange={(label) => update(i, { label })} />
           <NumField label="Initial" value={v.initial} onChange={(initial) => update(i, { initial: initial ?? 0 })} />
           <NumField label="Min" value={v.min} onChange={(min) => update(i, { min: min ?? 0 })} />
@@ -266,7 +280,11 @@ function ScenesSection({ scenes, endings, variables, startSceneId, assets, error
     onSelectIndex(to);
   };
 
-  const sceneHasError = (id: string) => errors.some((e) => e.includes(`scene "${id}"`));
+  // Matches both the common `scene "<id>" ...` shape (unreachable/dead-end/
+  // goTo/showIf/effect errors — schema.ts) and `duplicate scene id "<id>"`,
+  // which puts "id" between "scene" and the quoted id so it doesn't contain
+  // the plain `scene "<id>"` substring.
+  const sceneHasError = (id: string) => errors.some((e) => e.includes(`scene "${id}"`) || e.includes(`duplicate scene id "${id}"`));
 
   const active = activeIndex >= 0 ? scenes[activeIndex] : undefined;
 

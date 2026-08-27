@@ -62,6 +62,16 @@ body {
    always-on inline `outline` previously did. */
 .ilb-authoring-outline:focus-visible { outline: 3px solid var(--rds-primary); outline-offset: 2px; }
 
+/* "New interactive" engine picker cards (Task 8): each card IS a <label>
+   wrapping a real radio input, so checked/focus state is native — these
+   classes are purely visual. */
+.rds-engine-card { display: flex; align-items: flex-start; gap: 8px;
+  border: 2px solid var(--rds-light-4); border-radius: var(--radius-card, 8px);
+  padding: 12px; cursor: pointer; background: #fff; }
+.rds-engine-card.is-selected { border-color: var(--rds-primary); background: var(--rds-light-1); }
+.rds-engine-radio { width: 24px; height: 24px; accent-color: var(--rds-primary); }
+.rds-engine-radio:focus-visible { outline: 3px solid var(--rds-primary); outline-offset: 2px; }
+
 /* Branded app shell */
 .app-header { background: var(--rds-primary); color: #fff; padding: 12px 24px; font-weight: 700; font-size: 18px; }
 .app-link { color: var(--rds-primary); text-decoration: underline; }

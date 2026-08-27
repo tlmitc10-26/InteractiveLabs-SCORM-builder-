@@ -35,6 +35,11 @@ export type AssetRef = { id: string; filename: string };
  *   - debounced (600ms) save + immediate preview repost on every
  *     config/title change once the preview is ready.
  */
+/** `toPreviewRuntime` need NOT be memoized by the caller: it's captured in
+ *  a ref (`toPreviewRuntimeRef` below), updated on every render, so
+ *  `postPreview`'s own identity never depends on the caller's — a fresh
+ *  closure passed in on every render behaves identically to a
+ *  `useCallback`-memoized one. */
 export function useDraftEditor<TConfig>({ interactiveId, initialTitle, initialConfig, toPreviewRuntime }: {
   interactiveId: string;
   initialTitle: string;
@@ -55,6 +60,14 @@ export function useDraftEditor<TConfig>({ interactiveId, initialTitle, initialCo
   // that effect first ran.
   const configRef = useRef(config);
   useEffect(() => { configRef.current = config; }, [config]);
+
+  // Same "latest ref" pattern, for `toPreviewRuntime` itself: kept in sync
+  // via an effect with NO dependency array (so it updates after every
+  // render, not just when some memoized identity changes) — this is what
+  // lets `postPreview` below have a permanently stable identity regardless
+  // of whether the caller wraps its `toPreviewRuntime` in `useCallback`.
+  const toPreviewRuntimeRef = useRef(toPreviewRuntime);
+  useEffect(() => { toPreviewRuntimeRef.current = toPreviewRuntime; });
 
   // Save serialization: at most one saveInteractiveConfig request may be in
   // flight. A debounce firing while a save is in flight stashes its
@@ -99,12 +112,12 @@ export function useDraftEditor<TConfig>({ interactiveId, initialTitle, initialCo
   }, [interactiveId]);
 
   const postPreview = useCallback((cfg: TConfig) => {
-    const runtime = toPreviewRuntime(cfg);
+    const runtime = toPreviewRuntimeRef.current(cfg);
     // Target the iframe's own origin explicitly (not "*"): preview.html only
     // accepts messages whose ev.origin matches its own origin, and since the
     // iframe is same-origin with this page, location.origin here is correct.
     iframeRef.current?.contentWindow?.postMessage({ type: "ilb-config", config: runtime }, location.origin);
-  }, [toPreviewRuntime]);
+  }, []);
 
   useEffect(() => {
     const onMsg = (ev: MessageEvent) => {
