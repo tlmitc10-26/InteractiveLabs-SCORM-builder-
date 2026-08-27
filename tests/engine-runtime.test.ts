@@ -193,7 +193,7 @@ describe("mountSandbox", () => {
 
     it("defines focus-visible outline styles scoped under .ilb-sandbox", () => {
       expect(css).toMatch(
-        /\.ilb-sandbox[^{]*input:focus-visible[^{]*,[^{]*select:focus-visible[^{]*,[^{]*button:focus-visible[^{]*\{[^}]*outline:\s*3px solid var\(--rds-info\)[^}]*outline-offset:\s*2px/,
+        /\.ilb-sandbox[^{]*input:focus-visible[^{]*,[^{]*select:focus-visible[^{]*,[^{]*button:focus-visible[^{]*\{[^}]*outline:\s*3px solid var\(--rds-primary\)[^}]*outline-offset:\s*2px/,
       );
     });
 
