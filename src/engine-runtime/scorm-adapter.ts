@@ -164,10 +164,10 @@ export function createScormSession(win: Window): ScormSession {
   };
 }
 
-/* Bundle entry behavior: attach to window and finish on unload/hide. */
-declare global {
-  interface Window { ILBScorm?: ScormSession }
-}
+/* Bundle entry behavior: attach to window and finish on unload/hide. The
+ * ambient Window.ILBScorm type lives in the shared
+ * src/engine-runtime/globals.d.ts (not declared locally here) alongside
+ * Window.ILBEngine's consolidated declaration. */
 if (typeof window !== "undefined" && typeof document !== "undefined" && !("__vitest_worker__" in globalThis)) {
   const session = createScormSession(window);
   window.ILBScorm = session;

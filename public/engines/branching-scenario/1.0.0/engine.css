@@ -48,11 +48,17 @@
   background: #fff;
 }
 
-/* Choice buttons: vertical full-width stack, left-aligned label text,
-   pill-adjacent radius (a large rounded rectangle rather than the fully
-   circular --radius-pill, which reads oddly at this width/height). */
+/* Shared button base (spec 9): every interactive button the scenario
+   renders -- a scene's choices, the ending's Start-over, the feedback
+   panel's Continue -- shares this pill-adjacent look (a large rounded
+   rectangle rather than the fully circular --radius-pill, which reads
+   oddly at this width/height) and the same minimum target size / focus
+   treatment. .ilb-choice-btn/.ilb-continue-btn/.ilb-start-over-btn are
+   selector-only modifiers used by main.ts (and tests) to distinguish WHICH
+   buttons are current-scene choices vs. the Continue button vs. Start-over
+   -- none of them carry their own base styling any more. */
 .ilb-choices { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.ilb-scenario button.ilb-choice-btn {
+.ilb-scenario .ilb-btn {
   display: block;
   width: 100%;
   min-height: 24px;
@@ -67,10 +73,16 @@
   cursor: pointer;
   transition: background-color 120ms ease;
 }
-.ilb-scenario button.ilb-choice-btn:hover { background: var(--rds-light-1); }
+.ilb-scenario .ilb-btn:hover { background: var(--rds-light-1); }
+/* Continue sits inside the feedback panel among prose, not in a full-width
+   choice stack -- an inline, content-width button reads more naturally
+   there than a full-width block. */
+.ilb-scenario .ilb-continue-btn { display: inline-block; width: auto; }
 
-/* Immediate-feedback panel: visible content (not sr-only) announced once via
-   its own polite live region, then focus moves to Continue (main.ts). */
+/* Immediate-feedback panel: visible content (not sr-only) announced via the
+   Continue button's aria-describedby on focus (main.ts); its own
+   role=status/aria-live is belt-and-braces. Built/appended only when the
+   scenario can actually use it (main.ts's `needsFeedbackPanel`). */
 .ilb-feedback {
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -80,7 +92,6 @@
 }
 .ilb-feedback[hidden] { display: none; }
 .ilb-feedback p { margin: 0 0 12px; }
-.ilb-feedback button.ilb-continue-btn { width: auto; display: inline-block; }
 
 .ilb-score-line { font-weight: 700; margin: 0 0 16px; }
 
@@ -88,6 +99,7 @@
    quality conveyed as text + an aria-hidden glyph (never color alone),
    mirroring param-sandbox's .ilb-challenge-mark pattern. */
 .ilb-debrief[hidden] { display: none; }
+.ilb-debrief-truncated-note { font-style: italic; color: var(--rds-dark-2); margin: 0 0 12px; }
 .ilb-debrief-list { padding-left: 1.5em; margin: 0; }
 .ilb-debrief-step { margin-bottom: 16px; }
 .ilb-debrief-quality { color: var(--rds-dark-2); }
@@ -124,5 +136,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ilb-scenario button.ilb-choice-btn { transition: none; }
+  .ilb-scenario .ilb-btn { transition: none; }
 }

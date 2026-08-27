@@ -5,6 +5,9 @@ import { mountSandbox } from "@/engine-runtime/param-sandbox/main";
 import { starterConfig } from "@/lib/engines/param-sandbox/starter-configs";
 import { toRuntimeConfig } from "@/lib/engines/param-sandbox/runtime-config";
 import { sandboxConfigSchema, type SandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { mountBranchingScenario } from "@/engine-runtime/branching-scenario/main";
+import { branchingStarterConfig } from "@/lib/engines/branching-scenario/starters";
+import { toBranchingRuntimeConfig } from "@/lib/engines/branching-scenario/runtime-config";
 
 /** Renders every violation (id, impact, help, and each offending node's
  *  outerHTML) so a failure tells you exactly what to fix without re-running
@@ -77,6 +80,41 @@ describe("axe-core accessibility gate", () => {
     });
     const runtimeConfig = toRuntimeConfig(config, (id) => `assets/${id}.png`);
     mountSandbox(document.getElementById("root")!, runtimeConfig);
+
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+describe("axe-core accessibility gate: branching scenario", () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="root"></div>';
+  });
+
+  const juryConfig = toBranchingRuntimeConfig(
+    branchingStarterConfig("jury", "Jury Deliberation"),
+    () => { throw new Error("no assets in the jury starter"); },
+  );
+
+  function clickChoice(label: string): void {
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".ilb-choice-btn"));
+    const btn = buttons.find((b) => b.textContent === label);
+    if (!btn) throw new Error(`no visible choice button labeled "${label}"`);
+    btn.click();
+  }
+
+  it("has zero violations at the jury starter's start scene", async () => {
+    mountBranchingScenario(document.getElementById("root")!, juryConfig);
+
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations at the jury starter's ending + debrief", async () => {
+    mountBranchingScenario(document.getElementById("root")!, juryConfig);
+    clickChoice("Raise your doubts about the timeline before anyone votes");
+    clickChoice("Walk the group through the conflict step by step");
+    clickChoice("Ask them to explain what evidence would change their mind");
 
     const results = await auditBody();
     expect(results.violations).toEqual([]);

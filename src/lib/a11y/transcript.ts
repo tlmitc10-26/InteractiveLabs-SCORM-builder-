@@ -56,6 +56,18 @@ function isAriaHidden(el: Element): boolean {
   return el.getAttribute("aria-hidden") === "true";
 }
 
+/** True when `el` itself carries the `hidden` content attribute, or sits
+ *  inside an ancestor that does (e.g. the branching-scenario runtime's
+ *  feedback panel toggling `.hidden` between scene transitions). A hidden
+ *  element is removed from the accessibility tree entirely — nothing under
+ *  it is ever announced or focusable — so the transcript/live-region walks
+ *  below must skip it exactly like an aria-hidden subtree, or a live region
+ *  that merely stays hidden (never actually used this run) would still be
+ *  double-counted as present. */
+function isHidden(el: Element): boolean {
+  return (el as HTMLElement).hidden || el.closest("[hidden]") !== null;
+}
+
 /** Inline tags whose text runs directly into surrounding text with no
  *  implied word boundary -- matches the elements our runtime actually uses
  *  inline (spans, labels, links). Anything else (div, h1-h6, p, ...) is
@@ -217,6 +229,7 @@ function walk(root: Element, visit: (el: Element, category: Category) => void): 
   const recurse = (node: Element): void => {
     for (const child of Array.from(node.children)) {
       if (isAriaHidden(child)) continue; // skip subtree entirely
+      if (isHidden(child)) continue; // skip subtree entirely (removed from a11y tree)
       if (isDecorativeImg(child)) continue; // leaf; nothing to recurse into either
       const category = categoryOf(child);
       if (category) visit(child, category);
@@ -265,6 +278,7 @@ export function liveRegionsOf(root: Element): Array<{ politeness: string; atomic
   const out: Array<{ politeness: string; atomic: boolean; text: string }> = [];
   const visit = (node: Element): void => {
     for (const child of Array.from(node.children)) {
+      if (isHidden(child)) continue; // skip subtree entirely (removed from a11y tree)
       const politeness = child.getAttribute("aria-live");
       if (politeness) {
         const explicitAtomic = child.getAttribute("aria-atomic");

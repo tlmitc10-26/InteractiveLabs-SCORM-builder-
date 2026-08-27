@@ -160,10 +160,20 @@
     poor: "\u25CB"
     // ○
   };
+  function salvageBestAndCompleted(payload) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+    const p = payload;
+    const b = p.b;
+    const c = p.c;
+    if (typeof b !== "number" || !Number.isFinite(b) || b < 0 || b > 100) return null;
+    if (typeof c !== "boolean") return null;
+    return { best: b, completed: c };
+  }
   function mountBranchingScenario(root, config) {
     root.innerHTML = "";
     root.classList.add("ilb-scenario");
     root.setAttribute("role", "main");
+    const mountId = `ilb-${Math.random().toString(36).slice(2, 9)}`;
     const scorm = typeof window !== "undefined" ? window.ILBScorm : void 0;
     let bestPct = 0;
     let reportedComplete = false;
@@ -178,6 +188,13 @@
       reportedComplete = restored.completed;
     } else {
       state = initialState(config);
+      if (saved != null) {
+        const salvaged = salvageBestAndCompleted(saved);
+        if (salvaged) {
+          bestPct = salvaged.best;
+          reportedComplete = salvaged.completed;
+        }
+      }
     }
     if (scorm && scorm.mode === "scorm") {
       if (bestPct > 0 || reportedComplete) {
@@ -201,19 +218,27 @@
     const debriefContainer = el("div", "ilb-debrief");
     debriefContainer.hidden = true;
     root.appendChild(debriefContainer);
-    const feedbackPanel = el("div", "ilb-feedback");
-    feedbackPanel.setAttribute("role", "status");
-    feedbackPanel.setAttribute("aria-live", "polite");
-    feedbackPanel.hidden = true;
-    const feedbackText = document.createElement("p");
-    feedbackPanel.appendChild(feedbackText);
-    const continueBtn = document.createElement("button");
-    continueBtn.type = "button";
-    continueBtn.className = "ilb-continue-btn";
-    continueBtn.textContent = "Continue";
-    continueBtn.addEventListener("click", () => completeTransition());
-    feedbackPanel.appendChild(continueBtn);
-    root.appendChild(feedbackPanel);
+    const needsFeedbackPanel = config.feedbackMode === "immediate" && config.scenes.some((s) => s.choices.some((c) => c.feedback));
+    let feedbackPanel = null;
+    let feedbackText = null;
+    let continueBtn = null;
+    if (needsFeedbackPanel) {
+      feedbackPanel = el("div", "ilb-feedback");
+      feedbackPanel.setAttribute("role", "status");
+      feedbackPanel.setAttribute("aria-live", "polite");
+      feedbackPanel.hidden = true;
+      feedbackText = document.createElement("p");
+      feedbackText.id = `${mountId}-feedback-text`;
+      feedbackPanel.appendChild(feedbackText);
+      continueBtn = document.createElement("button");
+      continueBtn.type = "button";
+      continueBtn.className = "ilb-btn ilb-continue-btn";
+      continueBtn.textContent = "Continue";
+      continueBtn.setAttribute("aria-describedby", feedbackText.id);
+      continueBtn.addEventListener("click", () => completeTransition());
+      feedbackPanel.appendChild(continueBtn);
+      root.appendChild(feedbackPanel);
+    }
     function updateVarsStatus() {
       if (!hasVisibleVars) return;
       const text = config.variables.filter((v) => v.visible).map((v) => `${v.label}: ${state.vars[v.id]}`).join(". ");
@@ -222,24 +247,29 @@
     function renderChoices() {
       choicesContainer.innerHTML = "";
       choicesContainer.hidden = false;
+      const renderedForSceneId = state.sceneId;
       for (const choice of visibleChoices(config, state)) {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "ilb-choice-btn";
+        btn.className = "ilb-btn ilb-choice-btn";
         btn.textContent = choice.label;
-        btn.addEventListener("click", () => handleChoiceClick(choice.id));
+        btn.addEventListener("click", () => handleChoiceClick(choice.id, renderedForSceneId));
         choicesContainer.appendChild(btn);
       }
     }
     function sceneHeading(scene) {
-      var _a;
-      return (_a = scene.title) != null ? _a : config.title;
+      if (scene.title) return scene.title;
+      const index = config.scenes.findIndex((s) => s.id === scene.id);
+      return `Part ${index + 1}`;
     }
     function renderScene(sceneId, focusHeading) {
       var _a;
       const scene = config.scenes.find((s) => s.id === sceneId);
-      if (!scene) throw new Error(`branching runtime: scene "${sceneId}" not found in config`);
-      feedbackPanel.hidden = true;
+      if (!scene) {
+        console.error(`branching runtime: scene "${sceneId}" not found in config`);
+        throw new Error("This lesson's content could not be loaded.");
+      }
+      if (feedbackPanel) feedbackPanel.hidden = true;
       debriefContainer.hidden = true;
       debriefContainer.innerHTML = "";
       sceneContainer.innerHTML = "";
@@ -274,11 +304,36 @@
       renderChoices();
       if (focusHeading) heading.focus();
     }
+    function computeVisibleOtherLabelsPerStep() {
+      const result = [];
+      let replay = initialState(config);
+      let fellBack = state.truncated;
+      for (const step of state.path) {
+        if (!fellBack && replay.sceneId !== step.s) fellBack = true;
+        const stepScene = config.scenes.find((s) => s.id === step.s);
+        if (!stepScene) {
+          result.push([]);
+          continue;
+        }
+        const visibleNow = fellBack ? stepScene.choices : visibleChoices(config, replay);
+        result.push(visibleNow.filter((c) => c.id !== step.c).map((c) => c.label));
+        if (!fellBack) {
+          try {
+            replay = applyChoice(config, replay, step.c);
+          } catch {
+            fellBack = true;
+          }
+        }
+      }
+      return result;
+    }
     function renderEnding(focusHeading) {
-      var _a;
       const ending = config.endings.find((e) => e.id === state.endingId);
-      if (!ending) throw new Error(`branching runtime: ending "${state.endingId}" not found in config`);
-      feedbackPanel.hidden = true;
+      if (!ending) {
+        console.error(`branching runtime: ending "${state.endingId}" not found in config`);
+        throw new Error("This lesson's content could not be loaded.");
+      }
+      if (feedbackPanel) feedbackPanel.hidden = true;
       sceneContainer.innerHTML = "";
       const heading = document.createElement("h2");
       heading.tabIndex = -1;
@@ -289,15 +344,20 @@
       sceneContainer.appendChild(body);
       const counts = { best: 0, acceptable: 0, poor: 0 };
       for (const step of state.path) counts[step.q]++;
+      const parts = [];
+      if (counts.best > 0) parts.push(`${counts.best} best`);
+      if (counts.acceptable > 0) parts.push(`${counts.acceptable} acceptable`);
+      if (counts.poor > 0) parts.push(`${counts.poor} poor`);
+      const decisionsClause = parts.length > 0 ? `Decisions: ${parts.join(", ")}.` : "No decisions recorded.";
       const scoreLine = el("p", "ilb-score-line");
-      scoreLine.textContent = `Decisions: ${counts.best} best, ${counts.acceptable} acceptable, ${counts.poor} poor. Score: ${scorePct(state)}%.`;
+      scoreLine.textContent = `${decisionsClause} Score: ${scorePct(state)}%.`;
       sceneContainer.appendChild(scoreLine);
       updateVarsStatus();
       choicesContainer.innerHTML = "";
       choicesContainer.hidden = false;
       const startOverBtn = document.createElement("button");
       startOverBtn.type = "button";
-      startOverBtn.className = "ilb-choice-btn ilb-start-over-btn";
+      startOverBtn.className = "ilb-btn ilb-choice-btn ilb-start-over-btn";
       startOverBtn.textContent = "Start over";
       startOverBtn.addEventListener("click", () => handleStartOver());
       choicesContainer.appendChild(startOverBtn);
@@ -307,9 +367,16 @@
         const debriefHeading = document.createElement("h3");
         debriefHeading.textContent = "Your path";
         debriefContainer.appendChild(debriefHeading);
+        if (state.truncated) {
+          const truncatedNote = el("p", "ilb-debrief-truncated-note");
+          truncatedNote.textContent = "This summary shows your most recent decisions.";
+          debriefContainer.appendChild(truncatedNote);
+        }
+        const othersPerStep = computeVisibleOtherLabelsPerStep();
         const ol = document.createElement("ol");
         ol.className = "ilb-debrief-list";
-        for (const step of state.path) {
+        state.path.forEach((step, i) => {
+          var _a;
           const stepScene = config.scenes.find((s) => s.id === step.s);
           const choice = stepScene == null ? void 0 : stepScene.choices.find((c) => c.id === step.c);
           const li = document.createElement("li");
@@ -328,13 +395,11 @@
           qualitySpan.appendChild(glyphSpan);
           qualitySpan.appendChild(document.createTextNode(` ${QUALITY_TEXT[step.q]})`));
           li.appendChild(qualitySpan);
-          if (stepScene) {
-            const others = stepScene.choices.filter((c) => c.id !== step.c).map((c) => c.label);
-            if (others.length > 0) {
-              const otherP = el("p", "ilb-debrief-other");
-              otherP.textContent = `Other options: ${others.join(", ")}.`;
-              li.appendChild(otherP);
-            }
+          const others = othersPerStep[i];
+          if (others.length > 0) {
+            const otherP = el("p", "ilb-debrief-other");
+            otherP.textContent = `Other options: ${others.join(", ")}.`;
+            li.appendChild(otherP);
           }
           if (config.feedbackMode === "debrief" && (choice == null ? void 0 : choice.feedback)) {
             const fb = el("p", "ilb-debrief-feedback");
@@ -342,7 +407,7 @@
             li.appendChild(fb);
           }
           ol.appendChild(li);
-        }
+        });
         debriefContainer.appendChild(ol);
       }
       if (focusHeading) heading.focus();
@@ -377,12 +442,12 @@
       reportScorm();
       renderCurrent(true);
     }
-    function handleChoiceClick(choiceId) {
+    function handleChoiceClick(choiceId, expectedSceneId) {
+      if (state.sceneId !== expectedSceneId) return;
       const chosen = visibleChoices(config, state).find((c) => c.id === choiceId);
       if (!chosen) return;
       state = applyChoice(config, state, choiceId);
-      updateVarsStatus();
-      if (config.feedbackMode === "immediate" && chosen.feedback) {
+      if (config.feedbackMode === "immediate" && chosen.feedback && feedbackPanel && feedbackText && continueBtn) {
         choicesContainer.hidden = true;
         feedbackText.innerHTML = chosen.feedback;
         feedbackPanel.hidden = false;
@@ -407,8 +472,6 @@
     if (node.textContent !== text) node.textContent = text;
   }
   if (typeof window !== "undefined") {
-    window.ILBEngine = {
-      mount: mountBranchingScenario
-    };
+    window.ILBEngine = { mount: mountBranchingScenario };
   }
 })();
