@@ -44,21 +44,22 @@ the new scene's heading (spec §6's focus-management contract), which NVDA annou
 instant the transition completes -- immediately followed by the variable-status live
 region's updated value:
 
-7. Press Enter on **"Raise your doubts about the timeline before anyone votes"** → NVDA should say: **"The Timeline heading level 2"**
-8. (same transition) NVDA should also announce the updated status: **"Jury trust: 60"**
-9. Press Enter on **"Walk the group through the conflict step by step"** → NVDA should say: **"The Holdout heading level 2"**
-10. (same transition) NVDA should also announce the updated status: **"Jury trust: 75"**
-11. Press Enter on **"Ask them to explain what evidence would change their mind"** → NVDA should say: **"A verdict the room can stand behind heading level 2"**
-12. (same transition) NVDA should also announce the updated status: **"Jury trust: 85"**
+7. Press Shift+Tab 2 times to return to the first choice button, "Raise your doubts about the timeline before anyone votes". NVDA should announce it again as you land on it: **"Raise your doubts about the timeline before anyone votes, button"**
+8. Press Enter on **"Raise your doubts about the timeline before anyone votes"** → NVDA should say: **"The Timeline heading level 2"**
+9. (same transition) NVDA should also announce the updated status: **"Jury trust: 60"**
+10. Press Enter on **"Walk the group through the conflict step by step"** → NVDA should say: **"The Holdout heading level 2"**
+11. (same transition) NVDA should also announce the updated status: **"Jury trust: 75"**
+12. Press Enter on **"Ask them to explain what evidence would change their mind"** → NVDA should say: **"A verdict the room can stand behind heading level 2"**
+13. (same transition) NVDA should also announce the updated status: **"Jury trust: 85"**
 
 ## 4. The ending and debrief
 
-13. Focus lands on the ending heading → NVDA should say: **"A verdict the room can stand behind heading level 2"**
-14. Continue reading → NVDA should say: **"Decisions: 3 best. Score: 100%."**
-15. Continue reading → NVDA should say the final variable status: **"Jury trust: 85"**
-16. Continue reading (or press Tab) → NVDA should say: **"Start over, button"**
-17. Press H → NVDA should say: **"Your path heading level 3"**
-18. Continue reading the path list → NVDA should say each step's scene, choice, quality,
+14. Focus lands on the ending heading → NVDA should say: **"A verdict the room can stand behind heading level 2"**
+15. Continue reading → NVDA should say: **"Decisions: 3 best. Score: 100%."**
+16. Continue reading → NVDA should say the final variable status: **"Jury trust: 85"**
+17. Continue reading (or press Tab) → NVDA should say: **"Start over, button"**
+18. Press H → NVDA should say: **"Your path heading level 3"**
+19. Continue reading the path list → NVDA should say each step's scene, choice, quality,
    and "Other options" summary, e.g. (the full text, verbatim):
    **"The First Vote: Raise your doubts about the timeline before anyone votes ( Best choice) Other options: Vote with the majority to keep things moving, Ask to re-examine the evidence list first. Speaking up before the vote keeps the deliberation grounded in the evidence instead of the room's momentum. The Timeline: Walk the group through the conflict step by step ( Best choice) Other options: Call it a clerical error and move on. Walking the room through the conflict turns a vague unease into a concrete point the jury can actually weigh. The Holdout: Ask them to explain what evidence would change their mind ( Best choice) Other options: Suggest the group proceed without their input, Call a break, since the room trusts you enough to reset. Inviting the holdout to explain their reasoning keeps deliberation open instead of forcing a verdict past it."**
 

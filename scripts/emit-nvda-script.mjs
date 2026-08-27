@@ -365,6 +365,22 @@ async function generateBranchingDoc() {
   push("instant the transition completes -- immediately followed by the variable-status live");
   push("region's updated value:");
   push();
+  // Section 2's tab-through audit deliberately visits every choice button in
+  // order, which leaves real focus on the LAST one -- not the first choice
+  // this section's first Enter press needs. Bridge that explicitly (mirrors
+  // the param-sandbox doc's "Tab to the mass slider (step 1 above)..."
+  // pattern) so a tester following the steps literally doesn't activate the
+  // wrong choice and silently invalidate the rest of the walkthrough.
+  const shiftTabsBack = tabSteps.length - 1;
+  if (shiftTabsBack > 0 && pathSteps.length > 0) {
+    const firstChoice = tabSteps[0];
+    const times = shiftTabsBack === 1 ? "once" : `${shiftTabsBack} times`;
+    push(
+      `${n}. Press Shift+Tab ${times} to return to the first choice button, ` +
+        `"${pathSteps[0].chosenLabel}". NVDA should announce it again as you land on it: **"${firstChoice.says}"**`,
+    );
+    n++;
+  }
   for (const s of pathSteps) {
     push(`${n}. Press Enter on **"${s.chosenLabel}"** → NVDA should say: **"${s.headingSays}"**`);
     n++;
