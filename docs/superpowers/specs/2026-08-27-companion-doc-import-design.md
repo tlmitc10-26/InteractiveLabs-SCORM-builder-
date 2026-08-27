@@ -30,6 +30,14 @@ but you have doubts about the timeline evidence.
 - Ask to re-examine the evidence list first (OK) -> The Timeline
   Feedback: A reasonable instinct, though it delays the harder conversation.
 
+SCENE: The Timeline
+The group re-reads the timeline. A witness statement conflicts with the security log.
+
+- Walk the group through the conflict step by step (BEST, Jury trust +15) -> The Holdout
+  Feedback: Method beats momentum.
+- Call it a clerical error and move on (POOR, Jury trust -15) -> Under Pressure
+  Feedback: The conflict does not resolve itself by being ignored.
+
 SCENE: Under Pressure
 Two jurors push to finish before the weekend.
 
@@ -39,6 +47,14 @@ Two jurors push to finish before the weekend.
   Feedback: The room trusted you enough to reset.
 - Suggest a quick second vote (POOR, Jury trust -10) -> ENDING: A verdict, but not deliberation
   Feedback: The vote closed the case without resolving the doubts.
+
+SCENE: The Holdout
+One juror still refuses to discuss. The room looks to you.
+
+- Ask what evidence would change their mind (BEST, Jury trust +10) -> ENDING: A verdict the room can stand behind
+  Feedback: Inviting reasons kept everyone deliberating.
+- Suggest the group proceed without their input (POOR, Jury trust -15) -> ENDING: A verdict, but not deliberation
+  Feedback: A unanimous verdict cannot exclude a voice.
 
 ENDING: A verdict the room can stand behind
 The deliberation stayed grounded in evidence, and the verdict follows the standard of proof.
