@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:engines": "node scripts/build-engines.mjs",
+    "a11y:script": "tsx scripts/emit-nvda-script.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "postinstall": "prisma generate"
   },
@@ -32,6 +33,7 @@
     "@types/sanitize-html": "^2.16.1",
     "@vitest/coverage-v8": "^4.1.11",
     "axe-core": "^4.13.0",
+    "dom-accessibility-api": "^0.7.1",
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.2",
     "eslint": "^9",
