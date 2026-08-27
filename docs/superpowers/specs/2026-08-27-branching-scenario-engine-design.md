@@ -56,7 +56,8 @@ showPathInDebrief bool (default true)
 
 ## 5. Runtime experience
 
-- **Scene view:** role line (first scene only) → scene title (h2) → body → optional image (content image with designer-authored alt? — v1: decorative treatment `alt=""` is wrong for meaningful scene images; schema gains `imageAlt` plain ≤300 REQUIRED when imageAssetId present) → visible-variable status line ("Jury trust: 62") → choice buttons (real `<button>`s, full label text).
+- **Scene view:** role line (first scene only) → scene title (h2) → body → optional image → visible-variable status line ("Jury trust: 62") → choice buttons (real `<button>`s, full label text).
+- **Scene images (Tamara's decision):** the designer explicitly marks each image `decorative` or `informative` (schema: `imageRole`, required when `imageAssetId` present). Decorative → `alt=""`. Informative → `imageAlt` plain ≤300 REQUIRED, and the authoring flow is **AI-suggest → human accept**: when CreateAI lands, a "Suggest description" action drafts alt text through the GenerationProvider; the human edits/accepts before it saves (the field is never auto-committed). v1 (NullProvider): the human authors it directly in the same field — the seam exists, the gate is identical.
 - **On choice:** effects apply (clamped); feedback per mode (immediate: shown with a "Continue" button before transition); transition to target scene/ending.
 - **Ending view:** ending title + body, score line ("Decisions: 3 best, 1 acceptable, 1 poor — score 70%"), then **debrief** (if enabled): the path as an ordered list — scene title, the choice made, its quality (text + glyph, never color alone), and per-scene "other options were: …" showing unchosen choice labels; per-choice feedback here when feedbackMode="debrief". Replay button.
 - Layout/branding: existing tokens; Georgia headings; no stage/placement concepts (scenes are prose-first).
