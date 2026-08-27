@@ -34,6 +34,8 @@ describe("golden export", () => {
       engineChecksums: a.engineChecksums,
       urlAllowlist: [],
       authoringConfig: v.config,
+      validate: psAdapter.validate,
+      richTextFields: psAdapter.richTextValues,
       expectedIndexHtml: a.indexHtml,
     });
     expect(report.violations).toEqual([]);

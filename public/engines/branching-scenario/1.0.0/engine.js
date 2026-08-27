@@ -136,9 +136,10 @@
       if (typeof p.t !== "boolean") return null;
       if (typeof p.b !== "number" || !Number.isFinite(p.b)) return null;
       if (typeof p.c !== "boolean") return null;
+      const best = Math.min(100, Math.max(0, p.b));
       return {
         state: { sceneId: s, endingId: e, vars, path, truncated: p.t },
-        best: p.b,
+        best,
         completed: p.c
       };
     } catch {
@@ -224,8 +225,6 @@
     let continueBtn = null;
     if (needsFeedbackPanel) {
       feedbackPanel = el("div", "ilb-feedback");
-      feedbackPanel.setAttribute("role", "status");
-      feedbackPanel.setAttribute("aria-live", "polite");
       feedbackPanel.hidden = true;
       feedbackText = document.createElement("p");
       feedbackText.id = `${mountId}-feedback-text`;
@@ -357,7 +356,7 @@
       choicesContainer.hidden = false;
       const startOverBtn = document.createElement("button");
       startOverBtn.type = "button";
-      startOverBtn.className = "ilb-btn ilb-choice-btn ilb-start-over-btn";
+      startOverBtn.className = "ilb-btn ilb-start-over-btn";
       startOverBtn.textContent = "Start over";
       startOverBtn.addEventListener("click", () => handleStartOver());
       choicesContainer.appendChild(startOverBtn);

@@ -257,10 +257,16 @@ export function restoreState(config: BranchingConfigLike, payload: unknown): Res
     if (typeof p.t !== "boolean") return null;
     if (typeof p.b !== "number" || !Number.isFinite(p.b)) return null;
     if (typeof p.c !== "boolean") return null;
+    // Clamp (don't reject) an out-of-[0,100] but finite `b`, same reasoning
+    // as the per-variable clamp above: a stale/malformed-but-otherwise-valid
+    // payload should degrade gracefully rather than be treated as corrupt,
+    // and this aligns restoreState with main.ts's salvageBestAndCompleted
+    // fallback path, which already only accepts b within [0,100].
+    const best = Math.min(100, Math.max(0, p.b));
 
     return {
       state: { sceneId: s as string | null, endingId: e as string | null, vars, path, truncated: p.t },
-      best: p.b,
+      best,
       completed: p.c,
     };
   } catch {

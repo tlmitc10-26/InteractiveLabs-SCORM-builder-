@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import { scanPackage, ScanContext } from "@/lib/export/scanner";
 import { buildManifestXml } from "@/lib/scorm/manifest";
 import { sanitizePlainText } from "@/lib/sanitize";
+import { adapterFor } from "@/lib/engines/dispatch";
 import { createHash } from "node:crypto";
+
+const psAdapter = adapterFor("param-sandbox");
 
 const sha256 = (b: Buffer | string) => createHash("sha256").update(b).digest("hex");
 
@@ -22,6 +25,8 @@ function ctx(overrides: Partial<ScanContext> = {}): ScanContext {
     engineChecksums: { "engine/engine.js": sha256(ENGINE_JS), "engine/engine.css": sha256(ENGINE_CSS), "engine/scorm-adapter.js": sha256(SCORM_JS) },
     urlAllowlist: [],
     authoringConfig: goodConfig,
+    validate: psAdapter.validate,
+    richTextFields: psAdapter.richTextValues,
     ...overrides,
   };
 }

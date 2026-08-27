@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import { sanitizeRichText } from "@/lib/sanitize";
 
 export interface Violation { file: string; rule: string; detail: string }
@@ -12,6 +11,33 @@ export interface ScanContext {
   urlAllowlist: string[];
   /** the authoring config as it will be exported (pre-runtime-mapping) */
   authoringConfig: unknown;
+  /**
+   * Revalidates `authoringConfig` using the SAME schema that originally
+   * accepted it. This module is engine-agnostic by design — it has no idea
+   * whether it's scanning a param-sandbox or branching-scenario config, and
+   * must never import a specific engine's schema module (that both avoids a
+   * dependency cycle with src/lib/engines/dispatch.ts, which imports every
+   * engine's schema, and keeps this module correct for engines it doesn't
+   * know about yet). Callers supply this from the dispatch layer:
+   * `adapterFor(engineId).validate` — see EngineAdapter in
+   * src/lib/engines/dispatch.ts. Required (not optional): every caller has
+   * an engineId and therefore an adapter to pull this from; a caller with
+   * no engine context at all should not be calling scanPackage.
+   */
+  validate: (raw: unknown) => { ok: true; config: unknown } | { ok: false; errors: string[] };
+  /**
+   * Enumerates every rich-text (sanitized HTML) string value in a config of
+   * this engine's shape, for the sanitizer-stability check below. Supplied
+   * by the caller as `adapterFor(engineId).richTextValues` — see that
+   * function's per-engine implementation (e.g. param-sandbox: just `intro`;
+   * branching-scenario: `intro` + every scene body + ending body + every
+   * choice's feedback) for exactly which fields count. Kept as a function
+   * (not a hardcoded field name) for the same engine-agnostic reason as
+   * `validate` above — a single `intro`-only check would silently stop
+   * "revalidated at export" from being true the moment a second engine
+   * introduces its own rich-text fields.
+   */
+  richTextFields: (config: unknown) => string[];
   /**
    * OPTIONAL, but Task 13 MUST supply it in production: the exact bytes
    * index.html is expected to be — i.e. the same
@@ -497,14 +523,18 @@ export function scanPackage(files: Map<string, Buffer>, ctx: ScanContext): ScanR
     scanForbiddenNonHtmlMarkup(raw, "content/config.json", violations);
   }
 
-  // Rule: config revalidation + sanitizer idempotence
-  const result = validateSandboxConfig(ctx.authoringConfig);
+  // Rule: config revalidation + sanitizer idempotence. Both dispatch through
+  // caller-supplied, engine-agnostic functions (see ScanContext.validate /
+  // ScanContext.richTextFields above) rather than importing a specific
+  // engine's schema module directly.
+  const result = ctx.validate(ctx.authoringConfig);
   if (!result.ok) {
     for (const e of result.errors) violations.push({ file: "content/config.json", rule: "schema", detail: e });
   } else {
-    const intro = (ctx.authoringConfig as { intro?: string }).intro;
-    if (typeof intro === "string" && sanitizeRichText(intro) !== intro) {
-      violations.push({ file: "content/config.json", rule: "sanitizer", detail: "intro is not sanitizer-stable (sanitize(x) != x)" });
+    for (const value of ctx.richTextFields(ctx.authoringConfig)) {
+      if (typeof value === "string" && sanitizeRichText(value) !== value) {
+        violations.push({ file: "content/config.json", rule: "sanitizer", detail: "rich text field is not sanitizer-stable (sanitize(x) != x)" });
+      }
     }
   }
 

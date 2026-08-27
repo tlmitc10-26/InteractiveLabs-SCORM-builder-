@@ -123,12 +123,16 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
   debriefContainer.hidden = true;
   root.appendChild(debriefContainer);
 
-  // The feedback panel is its own polite live region (belt-and-braces —
-  // the PRIMARY announcement mechanism is the Continue button's
-  // aria-describedby, which the accessible-description algorithm
-  // guarantees is spoken on focus regardless of live-region timing/support).
-  // It is built and appended to the DOM lazily, ONLY when it can ever be
-  // used (feedbackMode "immediate" AND at least one choice actually carries
+  // The feedback panel is NOT a live region: the announcement guarantee is
+  // the Continue button's aria-describedby (below), which the accessible-
+  // description algorithm spec-determines is spoken the instant the button
+  // receives focus — deterministic and independent of AT support/timing. A
+  // second, redundant live region here would only add a second, unreliably-
+  // timed announcement race against the first (live-region announcement
+  // timing relative to a synchronous focus move is not spec-guaranteed the
+  // way accessible-description-on-focus is), so it was removed. It is built
+  // and appended to the DOM lazily, ONLY when it can ever be used
+  // (feedbackMode "immediate" AND at least one choice actually carries
   // feedback text) — a scenario authored entirely in "debrief" mode (e.g.
   // both starters) must render exactly ZERO extra live regions, not one
   // that merely stays hidden forever.
@@ -139,8 +143,6 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
   let continueBtn: HTMLButtonElement | null = null;
   if (needsFeedbackPanel) {
     feedbackPanel = el("div", "ilb-feedback");
-    feedbackPanel.setAttribute("role", "status");
-    feedbackPanel.setAttribute("aria-live", "polite");
     feedbackPanel.hidden = true;
     feedbackText = document.createElement("p");
     feedbackText.id = `${mountId}-feedback-text`;
@@ -338,7 +340,11 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     choicesContainer.hidden = false;
     const startOverBtn = document.createElement("button");
     startOverBtn.type = "button";
-    startOverBtn.className = "ilb-btn ilb-choice-btn ilb-start-over-btn";
+    // Deliberately NOT ".ilb-choice-btn": that class is reserved for the
+    // current scene's visible-choice buttons (mirrors the ".ilb-continue-btn"
+    // exclusion above) so `.ilb-choice-btn` queries never need a `:not()`
+    // to exclude Start-over — it isn't a scenario choice.
+    startOverBtn.className = "ilb-btn ilb-start-over-btn";
     startOverBtn.textContent = "Start over";
     startOverBtn.addEventListener("click", () => handleStartOver());
     choicesContainer.appendChild(startOverBtn);

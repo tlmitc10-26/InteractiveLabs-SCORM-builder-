@@ -21,10 +21,17 @@ const juryConfig: RuntimeBranchingConfig = toBranchingRuntimeConfig(
  *  pattern of tests/engine-runtime.test.ts's hand-built RuntimeSandboxConfig
  *  fixtures) exercising feedbackMode "immediate" — the jury/blank starters
  *  are both "debrief" mode, so this fixture is needed to cover the
- *  Continue-button flow at all. */
+ *  Continue-button flow at all. A visible variable is included (unlike the
+ *  jury starter, which never shows a feedback panel at all since it's
+ *  debrief mode) specifically so the live-region tests below can prove that
+ *  the ONE live region present (vars status) stays exactly one while the
+ *  feedback panel is shown — i.e. the feedback panel itself is not a live
+ *  region (drive-by fix: role="status"/aria-live removed from it, since the
+ *  Continue button's aria-describedby is the real, spec-guaranteed
+ *  announcement mechanism). */
 const immediateConfig: RuntimeBranchingConfig = {
   title: "Immediate Test",
-  variables: [],
+  variables: [{ id: "confidence", label: "Confidence", initial: 50, min: 0, max: 100, visible: true }],
   scenes: [
     {
       id: "s1",
@@ -186,6 +193,31 @@ describe("mountBranchingScenario", () => {
       expect(varsStatus.textContent).toBe("Jury trust: 50");
     });
 
+    it("renders EXACTLY one live region (vars status) across every state of a scenario with a visible variable, INCLUDING while feedback is shown", () => {
+      // immediateConfig has a visible variable AND (unlike jury) a feedback
+      // panel that actually gets constructed and shown. The feedback panel
+      // must never itself count as a second live region — its announcement
+      // guarantee is the Continue button's aria-describedby, not aria-live.
+      mountBranchingScenario(document.getElementById("root")!, immediateConfig);
+      const oneLiveRegion = () => {
+        const liveRegions = document.querySelectorAll("[aria-live]");
+        expect(liveRegions.length).toBe(1);
+        expect(liveRegions[0]).toBe(document.querySelector(".ilb-vars-status"));
+      };
+
+      oneLiveRegion(); // start scene, before any choice
+
+      clickChoice("Go"); // feedback panel now visible (Continue button focused)
+      const feedback = document.querySelector(".ilb-feedback") as HTMLElement;
+      expect(feedback.hidden).toBe(false);
+      expect(feedback.hasAttribute("role")).toBe(false);
+      expect(feedback.hasAttribute("aria-live")).toBe(false);
+      oneLiveRegion(); // still exactly one -- the feedback panel isn't it
+
+      (document.querySelector(".ilb-continue-btn") as HTMLButtonElement).click();
+      oneLiveRegion(); // after the deferred transition to Scene Two
+    });
+
     it("renders ZERO live regions for the blank starter (debrief mode, no visible variable)", () => {
       const blank = branchingStarterConfig("blank", "Blank");
       const runtime = toBranchingRuntimeConfig(blank, noAssets);
@@ -342,8 +374,12 @@ describe("mountBranchingScenario", () => {
 
     it("no choice buttons remain at the ending; a Start over button appears instead", () => {
       playBestPath();
-      expect(document.querySelectorAll(".ilb-choices .ilb-choice-btn:not(.ilb-start-over-btn)").length).toBe(0);
+      // Start-over no longer carries .ilb-choice-btn (drive-by fix), so this
+      // query needs no :not() exclusion to prove zero scenario-choice
+      // buttons remain.
+      expect(document.querySelectorAll(".ilb-choices .ilb-choice-btn").length).toBe(0);
       expect(document.querySelector(".ilb-start-over-btn")).toBeTruthy();
+      expect(document.querySelector(".ilb-start-over-btn")!.classList.contains("ilb-choice-btn")).toBe(false);
     });
 
     it("renders the debrief ol with scene, chosen label, quality text+glyph, and other options", () => {

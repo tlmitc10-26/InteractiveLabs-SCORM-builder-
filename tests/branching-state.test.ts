@@ -427,6 +427,25 @@ describe("state — suspendPayload / restoreState round trip", () => {
     expect(restored?.state.vars.trust).toBe(0);
   });
 
+  it("clamps a restored best score (b) above 100 down to 100, aligning with main.ts's salvage path", () => {
+    // best/completed ride along independently of position (see
+    // salvageBestAndCompleted in src/engine-runtime/branching-scenario/main.ts,
+    // which only ever accepts a b already within [0,100]) — restoreState
+    // should degrade a stale/malformed-but-finite b the same way rather than
+    // trust it unclamped.
+    const payload = { v: 1, s: "start", e: null, vars: { trust: 50 }, d: [], p: [], t: false, b: 150, c: false };
+    const restored = restoreState(base, payload);
+    expect(restored).not.toBeNull();
+    expect(restored?.best).toBe(100);
+  });
+
+  it("clamps a restored best score (b) below 0 up to 0", () => {
+    const payload = { v: 1, s: "start", e: null, vars: { trust: 50 }, d: [], p: [], t: false, b: -10, c: false };
+    const restored = restoreState(base, payload);
+    expect(restored).not.toBeNull();
+    expect(restored?.best).toBe(0);
+  });
+
   it("returns null for a path entry referencing an unknown choice id in a known scene", () => {
     const payload = {
       v: 1, s: "mid", e: null, vars: { trust: 60 },

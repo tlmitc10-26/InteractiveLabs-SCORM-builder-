@@ -122,6 +122,8 @@ describe("assemblePackage: asset caps + parallel resolution + determinism", () =
       engineChecksums: assembled.engineChecksums,
       urlAllowlist: [],
       authoringConfig: config,
+      validate: psAdapter.validate,
+      richTextFields: psAdapter.richTextValues,
       expectedIndexHtml: assembled.indexHtml,
     });
     expect(report.violations).toEqual([]);

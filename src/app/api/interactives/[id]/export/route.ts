@@ -124,6 +124,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     engineChecksums: assembled.engineChecksums,
     urlAllowlist,
     authoringConfig: validation.config,
+    // Engine-agnostic revalidation seams (see ScanContext in scanner.ts):
+    // the route is the one place that knows the engineId, so it's the one
+    // place that resolves the adapter and hands the scanner plain functions.
+    validate: adapter.validate,
+    richTextFields: adapter.richTextValues,
     // Byte-exact match against what was actually packaged — this is what
     // makes the scanner's index.html check airtight rather than falling
     // back to the weaker inline-script heuristic.
