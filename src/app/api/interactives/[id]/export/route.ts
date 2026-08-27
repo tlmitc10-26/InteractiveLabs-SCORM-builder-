@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { adapterFor } from "@/lib/engines/dispatch";
 import { assemblePackage, zipPackage } from "@/lib/export/package";
 import { scanPackage } from "@/lib/export/scanner";
 import { assetStore, assetKey } from "@/lib/assets/store";
@@ -18,6 +18,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
   if (!interactive) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  let adapter;
+  try {
+    adapter = adapterFor(interactive.engineId);
+  } catch (err) {
+    console.error("export: unknown engine", err);
+    return NextResponse.json({ error: "unknown engine" }, { status: 422 });
+  }
+
   let rawConfig: unknown;
   try {
     rawConfig = JSON.parse(interactive.configJson);
@@ -28,7 +36,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "export failed" }, { status: 500 });
   }
 
-  const validation = validateSandboxConfig(rawConfig);
+  const validation = adapter.validate(rawConfig);
   if (!validation.ok) {
     return NextResponse.json(
       { error: "config invalid", violations: validation.errors.map((e) => ({ file: "config", rule: "schema", detail: e })) },
@@ -52,12 +60,20 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "export failed" }, { status: 500 });
   }
 
+  // Every engine's config carries a `title: string` — the one field the
+  // export route itself needs (identifier naming, download filename)
+  // without reaching into an engine-specific schema. Same narrow-cast
+  // pattern as scanner.ts's authoringConfig access below.
+  const configTitle = (validation.config as { title: string }).title;
+
   let assembled;
   try {
     assembled = await assemblePackage({
       identifier: `ILB-${interactive.id}`,
-      title: validation.config.title,
+      title: configTitle,
+      engineId: interactive.engineId,
       config: validation.config,
+      runtime: { toRuntimeConfig: adapter.toRuntimeConfig, collectAssetIds: adapter.collectAssetIds },
       resolveAsset: async (assetId) => {
         let asset;
         try {
@@ -135,7 +151,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "export failed" }, { status: 500 });
   }
 
-  const filename = `${validation.config.title.replace(/[^a-zA-Z0-9 _-]/g, "").trim().replace(/\s+/g, "-") || "interactive"}-scorm12.zip`;
+  const filename = `${configTitle.replace(/[^a-zA-Z0-9 _-]/g, "").trim().replace(/\s+/g, "-") || "interactive"}-scorm12.zip`;
   return new NextResponse(new Uint8Array(zip), {
     headers: {
       "Content-Type": "application/zip",

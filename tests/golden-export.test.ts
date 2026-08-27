@@ -4,6 +4,10 @@ import path from "node:path";
 import { validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import { assemblePackage, zipPackage } from "@/lib/export/package";
 import { scanPackage } from "@/lib/export/scanner";
+import { adapterFor } from "@/lib/engines/dispatch";
+
+const psAdapter = adapterFor("param-sandbox");
+const psRuntime = { toRuntimeConfig: psAdapter.toRuntimeConfig, collectAssetIds: psAdapter.collectAssetIds };
 
 describe("golden export", () => {
   it("golden config assembles, passes the scanner, and zips deterministically", async () => {
@@ -15,7 +19,9 @@ describe("golden export", () => {
     const build = () => assemblePackage({
       identifier: "ILB-golden",
       title: v.config.title,
+      engineId: "param-sandbox",
       config: v.config,
+      runtime: psRuntime,
       resolveAsset: async () => { throw new Error("golden config has no assets"); },
     });
 
