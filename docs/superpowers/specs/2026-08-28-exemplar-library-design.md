@@ -1,0 +1,100 @@
+# Exemplar Library: Design Spec
+
+**Date:** 2026-08-28
+**Status:** Draft for Tamara's review
+**Depends on:** Runtime visual pass (merged 2026-08-28, 582 tests)
+**Sequencing (Tamara's ruling):** exemplar library → engines 3–4 → platform phase last.
+
+## 1. Purpose
+
+Turn the two proof-demos into a **library of six pedagogically serious exemplars** that does three jobs at once:
+
+1. **Stress-test authoring** the way a real designer would — every exemplar is built through the app's own paths (editor, companion-doc import, export gate), so friction surfaces now, cheaply.
+2. **Stakeholder portfolio** — real-feeling interactives across five disciplines that Tamara can show faculty and leadership.
+3. **Starter-template library** — each exemplar ships as a committed, versioned starter in the New Interactive flow, so every future designer starts from a strong pattern and adapts it in the same flexible editor. Exemplars are pure JSON configs: they prove the flexible system, they never become features. Zero new executable code.
+
+Content is drafted by the agent from discipline knowledge and cross-institutional patterns of what online courses need (Tamara's ruling 2026-08-28); Tamara reviews each exemplar like a faculty deliverable. The library also becomes the quality bar the CreateAI seam is later judged against.
+
+The one feature in this sprint: the **sandbox companion-doc format** (§5) — the known authoring gap — built first, then exercised by authoring both sandbox exemplars through it.
+
+## 2. The library (six exemplars)
+
+Selection logic: the highest-demand interactive shapes across online programs are decision-under-uncertainty scenarios, relationship-discovery sandboxes, and applied-ethics branching; disciplines chosen for enrollment weight and portfolio breadth.
+
+### The arc — one scenario world across three modules (branching ×3)
+
+World: **"Sierra Vista Unified"**, a public school district; course pattern: education leadership. Three *separate* SCORM packages (independent grade objects) sharing the world, its named characters, and consequences that reference each other narratively — demonstrating how one engine scales from intro to capstone across a course:
+
+1. **The Budget Cut** (early-module shape): 4 scenes, ONE visible variable (Board confidence). A mid-year 3% cut must land somewhere; every option harms someone. Teaches the base pattern: choice → quality → consequence.
+2. **The Community Meeting** (mid-module shape): 5–6 scenes, TWO variables in tension (Community trust vs. District compliance), at least one conditional choice that unlocks only if trust was managed well. The world remembers module 1 (the cut is the meeting's subject).
+3. **The Crisis** (capstone shape): 7–8 scenes, three variables, conditional paths, 3+ endings ranked by quality, debrief that reads like a leadership after-action review. Full engine expressiveness.
+
+Each arc package's companion doc is committed alongside it (via "Copy as companion doc") — the arc doubles as format documentation faculty can imitate.
+
+### Standalones
+
+4. **Plea Bargain** (branching, criminal justice — the flagship discipline): defense attorney advising a client on a plea offer against trial risk; variables Client trust and Case strength; no comfortable path — quality rewards process integrity (informed consent, disclosure) over outcome luck. Uses a scene header image (exercises the image-header + alt-policy path).
+5. **Dose-Response** (sandbox, nursing/pharmacology): inputs dose, dosing interval, patient weight; outputs peak/trough concentration via one-compartment half-life math (dimensionally correct, sourced); chart concentration vs. interval; challenges: reach therapeutic window AND stay below toxicity. Authored **through the sandbox companion doc** (§5).
+6. **Break-Even Studio** (sandbox, business): inputs price, unit variable cost, fixed costs, projected volume; outputs contribution margin, break-even units, profit; chart profit vs. volume; challenges force price-vs-volume reasoning (e.g., reach profitability without exceeding a market-realistic price). Also authored through the companion doc.
+
+### Content quality bar (every exemplar)
+
+- A stated learning objective in the intro (visible to the learner, plain language).
+- Branching: every choice quality (best/ok/poor) defensible in one sentence a SME would accept; feedback teaches the principle, never a gotcha; endings differ in substance, not just tone.
+- Sandbox: formulas dimensionally correct with a citable source noted in the spec-side content brief; every challenge reachable within input ranges (proven by test); units on every input/output.
+- All images non-decorative get human-quality alt (Tamara accepts per the alt policy); WCAG gates automatic via existing suites.
+- Tamara reviews each exemplar in Canvas before it graduates to "starter" status.
+
+## 3. Delivery
+
+- **Committed starters:** each exemplar lands in the engine's starter list (`starter-configs.ts` / `starters.ts`) with a one-line description of the pattern it teaches ("Two variables in tension, conditional choices"). The New Interactive picker grows from 2 to ~5 starters per engine — small UI accommodation (grouping label per engine: "Blank / Patterns / Exemplars" or a flat list with descriptions; decided at plan time by what stays streamlined).
+- **Verified zips:** every exemplar exported through the real route, independently verified (hashes vs. manifest, fresh SCORM identity), delivered to Downloads for Tamara's Canvas review.
+- **Companion docs:** committed for all four branching exemplars (the arc's three + Plea Bargain) and both sandbox exemplars (post-§5), as faculty-facing format documentation.
+- Starters are config-only data: validated against schemas in tests like today's starters (drift = build failure).
+
+## 4. The arc principle (documented, not mechanized)
+
+Cross-module "building" is narrative and pedagogical, not technical: SCORM packages stay independent SCOs with independent grades and suspend state. The arc's continuity lives in the shared world, recurring characters, escalating variable count, and later scenes referencing earlier events in text. A short authoring note ("Designing arcs") is added to the companion-doc template's comment header so faculty can imitate the pattern. No new schema fields, no cross-package state.
+
+## 5. Sandbox companion-doc format (the sprint's one feature)
+
+The deterministic twin of the branching format, for the Parameter Sandbox — same doctrine: line-based, names-not-ids, never-throws parser returning `{ config, report: ImportIssue[] }`, config re-validated by the existing schema (double gate), serializer for round-trip, same editor disclosure UI (Import textarea + confirm-replace + line-numbered report + "Copy as companion doc" + template download), Word-friendly tolerances (CRLF, smart quotes, dash variants). Example is normative:
+
+```
+TITLE: Break-Even Studio
+INTRO: Set a price and see when the venture stops losing money.
+
+INPUT: Price (slider, $, 5 to 60, step 1, start 20)
+INPUT: Unit cost (slider, $, 1 to 40, step 1, start 12)
+INPUT: Fixed costs (slider, $, 1000 to 50000, step 500, start 12000)
+INPUT: Volume (slider, units, 0 to 10000, step 100, start 2000)
+
+OUTPUT: Contribution margin ($) = price - unit_cost
+OUTPUT: Break-even units (units) = fixed_costs / (price - unit_cost)
+OUTPUT: Profit ($) = (price - unit_cost) * volume - fixed_costs
+
+CHART: Profit vs Volume
+
+CHALLENGE: Reach a profit above 0 -> profit > 0
+CHALLENGE: Break even under 3000 units -> break_even_units < 3000
+```
+
+**Rules:**
+- Directives: `TITLE:`, `INTRO:`, `INPUT:`, `OUTPUT:`, `CHART:`, `CHALLENGE:`. Unknown directive → error, line skipped (same contract as branching).
+- `INPUT: <Label> (slider, <units>, <min> to <max>, step <step>, start <default>)` or `INPUT: <Label> (select: <opt>=<value>, ...)`. Placement defaults to Panel (placement/layout stay editor-side — spatial authoring is not a text concern).
+- `OUTPUT: <Label> (<units>) = <formula>` — formula references inputs/outputs by the same identifiers the editor's Insert-name picker inserts (the slugified id; the example's `unit_cost`-style spelling is illustrative — the plan verifies the real slugify output, and if it produces hyphenated ids the format must NOT accept them bare in formulas, since `unit-cost` is ambiguous with subtraction; the parser then maps labels/ids to whatever spelling the interpreter actually accepts). Formulas are parsed by the existing no-eval interpreter's validation at import (bad formula → line-numbered error, output imported with formula `0` and flagged). The committed template file is generated from a real config via `serializeCompanionDoc`, so its spelling is correct by construction.
+- `CHART: <Output label> vs <Input label>` — resolved case-insensitively against labels; unresolved → error, chart skipped.
+- `CHALLENGE: <Learner-facing text> -> <condition formula>` — condition through the same interpreter; unresolved names → error, challenge skipped (a broken challenge must never block completion silently).
+- Names → ids via existing slugify (collision-suffixed); caps per schema; visual-state image layers are editor-only (out of the text format by design — they require uploads).
+- Module: `src/lib/engines/param-sandbox/companion-doc.ts` (pure, light); tests mirror the branching suite: normative example parses clean, positive+negative per rule, serialize→parse round-trip on the buoyancy starter and both new exemplars, seeded-flaws report completeness, template file parse-clean drift test (`public/companion-doc-sandbox-template.txt`).
+
+## 6. Testing / acceptance
+
+- All existing 582 tests stay green; engine runtimes untouched (zero `public/engines` diff except none expected at all).
+- New: sandbox companion-doc suite (§5); starter-validation tests extended to all new starters (validate + export-scan clean + zip <40KB each); challenge-reachability test per sandbox exemplar (there exist input values within ranges satisfying every challenge — computed through the real interpreter); branching exemplars pass graph validation by construction (schema gate).
+- Editor E2E: import the Break-Even doc into a blank sandbox interactive → playable preview → export scans clean.
+- Acceptance (Tamara's bar): six exemplars she would show a dean; each opens as an editable starter; the two sandbox exemplars demonstrably authored via companion doc; Canvas spot-check of at least the arc's module 3 and one sandbox exemplar.
+
+## 7. Out of scope
+
+Engines 3–4 (next milestone). Platform phase (last). AI drafting (CreateAI seam unchanged). Visual-state image layers in the text format. Cross-package state sharing. Localization. .docx upload.
