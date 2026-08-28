@@ -1,0 +1,50 @@
+# Welcome! This is a companion doc for writing a branching scenario.
+# Fill in the brackets below with your own content and send this file
+# back. No special software or training is needed to use it.
+# A scenario is made of SCENEs and ENDINGs: each scene is a moment in
+# the story, and the learner picks one of a few choices to move on.
+# Every choice needs a label, a quality, and an arrow to where it
+# leads, like this: - Speak up right away (BEST) -> The Next Scene
+# The quality is BEST, OK, or POOR, and it tells the learner how
+# strong that choice was. The arrow -> points to the name of the next
+# SCENE or ENDING, spelled the same as its own SCENE: or ENDING: line
+# (capitalization does not matter).
+# You can also track a running number through the story, such as a
+# trust score, and let a choice only appear past a threshold (shown
+# here as an example only, not turned on in this template):
+#   TRACK: Confidence (0 to 100, start at 50, visible)
+#   - Push back gently (OK, Confidence +10, only if Confidence is at least 40) -> Next Scene
+# Everything else is plain writing: describe each situation and write
+# what happens at each ending. Leave a bracketed placeholder in place
+# if you are not sure what goes there yet; a colleague can fill it in
+# later. When you are done, save and share this file with whoever is
+# building the lesson.
+
+TITLE: [Give your scenario a title]
+ROLE: [Describe the role the learner plays, for example: You are a new advisor meeting your first student.]
+INTRO: [Set the scene in a sentence or two.]
+FEEDBACK: debrief
+
+SCENE: [Name your first scene]
+[Describe the situation the learner faces here. Write as many sentences as you like.]
+
+- [Write the best choice here] (BEST) -> [Name your second scene]
+  Feedback: [What the learner should take away from making this choice.]
+- [Write an okay choice here] (OK) -> [Name your second scene]
+  Feedback: [What the learner should take away from making this choice.]
+- [Write a poor choice here] (POOR) -> [Name your first ending]
+  Feedback: [What the learner should take away from making this choice.]
+
+SCENE: [Name your second scene]
+[Describe what happens next.]
+
+- [Write the best choice here] (BEST) -> [Name your first ending]
+  Feedback: [What the learner should take away from making this choice.]
+- [Write a poor choice here] (POOR) -> [Name your second ending]
+  Feedback: [What the learner should take away from making this choice.]
+
+ENDING: [Name your first ending]
+[Describe this outcome for the learner.]
+
+ENDING: [Name your second ending]
+[Describe this outcome for the learner.]

@@ -80,6 +80,21 @@ verification script per engine — `docs/a11y/nvda-check-param-sandbox.md` and
 content, so the human screen-reader check follows the same contract the
 tests already lock, rather than an author's best guess at what NVDA will say.
 
+**Companion doc import.** A Branching Scenario draft can also be authored
+outside the editor entirely: a faculty subject-matter expert writes scenes,
+choices, and endings in plain text using the template at
+`/companion-doc-template.txt`, and the editor's "Import from companion doc"
+panel turns that text into a full scenario config in one paste. Parsing is
+deterministic and fail-visible — every line that couldn't be understood is
+reported with its line number rather than silently dropped or guessed at,
+and an imported config passes through the exact same `validateBranchingConfig`
+gate as anything hand-authored in the editor, so it can't create an
+authorable dead end the UI wouldn't also catch. A "Copy as companion doc"
+button serializes the current draft back to the same plain-text format,
+round-tripping cleanly, so a designer and a faculty reviewer can hand a
+scenario back and forth across revision cycles without either side touching
+JSON.
+
 ## Design system
 
 **Token source.** `src/lib/design/tokens.json` is the single source of truth
