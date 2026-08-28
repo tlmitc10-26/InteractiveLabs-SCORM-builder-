@@ -106,22 +106,72 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
 
   // ---------- persistent DOM (survives every re-render; see setText below
   // for the churn-guard pattern that makes this safe inside a live region) ----------
+  // Single visual "card" shell (mock's .scene-card): every persistent
+  // section below is appended INTO it (rather than directly onto `root`, as
+  // before) purely so they read as one continuous card on screen (one
+  // shadow/border, no visible seams) -- this is a pure re-parenting of the
+  // SAME node identities, in the SAME relative order they were already
+  // appended in, so it changes no event listener, no id, and no document
+  // order between any of them (a plain wrapper div is transparent to
+  // src/lib/a11y/transcript.ts's walk -- see that file's `categoryOf`).
+  const card = el("div", "ilb-scene-card");
+  root.appendChild(card);
+
   const sceneContainer = el("div", "ilb-scene");
-  root.appendChild(sceneContainer);
+  card.appendChild(sceneContainer);
 
   const hasVisibleVars = config.variables.some((v) => v.visible);
+
+  // Aria-hidden meter-chip visuals (spec 2/plan Task 2): built once here
+  // (config.variables never changes shape after mount, only state.vars'
+  // VALUES do), one .ilb-meter-chip per visible variable. The wrapper is
+  // aria-hidden wholesale -- the ONLY announced source of truth for
+  // variable values remains `varsStatus` below, untouched. See
+  // updateMeterChips().
+  const visibleVars = config.variables.filter((v) => v.visible);
+  let metersWrap: HTMLElement | null = null;
+  const meterFillByVar = new Map<string, HTMLElement>();
+  const meterValueByVar = new Map<string, HTMLElement>();
+  if (hasVisibleVars) {
+    metersWrap = el("div", "ilb-meters");
+    metersWrap.setAttribute("aria-hidden", "true");
+    for (const v of visibleVars) {
+      const chip = el("span", "ilb-meter-chip");
+      const label = document.createElement("span");
+      label.className = "ilb-meter-label";
+      label.textContent = v.label;
+      chip.appendChild(label);
+      const track = el("span", "ilb-meter-track");
+      const fill = el("span", "ilb-meter-fill");
+      track.appendChild(fill);
+      chip.appendChild(track);
+      const value = document.createElement("span");
+      value.className = "ilb-meter-value";
+      chip.appendChild(value);
+      metersWrap.appendChild(chip);
+      meterFillByVar.set(v.id, fill);
+      meterValueByVar.set(v.id, value);
+    }
+    card.appendChild(metersWrap);
+  }
+
+  // The variable-status live region: id/attributes/churn-guard/announced
+  // text UNCHANGED from before this pass. Only its own CSS visibility
+  // changes (now visually sr-only) -- the meter chips above are the sole
+  // SIGHTED representation of the same values, the redundancy doctrine's
+  // other half (see engine.css's .ilb-vars-status rule for the rationale).
   const varsStatus = el("div", "ilb-vars-status");
   varsStatus.setAttribute("role", "status");
   varsStatus.setAttribute("aria-live", "polite");
   varsStatus.setAttribute("aria-atomic", "true");
-  if (hasVisibleVars) root.appendChild(varsStatus);
+  if (hasVisibleVars) card.appendChild(varsStatus);
 
   const choicesContainer = el("div", "ilb-choices");
-  root.appendChild(choicesContainer);
+  card.appendChild(choicesContainer);
 
   const debriefContainer = el("div", "ilb-debrief");
   debriefContainer.hidden = true;
-  root.appendChild(debriefContainer);
+  card.appendChild(debriefContainer);
 
   // The feedback panel is NOT a live region: the announcement guarantee is
   // the Continue button's aria-describedby (below), which the accessible-
@@ -144,6 +194,15 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
   if (needsFeedbackPanel) {
     feedbackPanel = el("div", "ilb-feedback");
     feedbackPanel.hidden = true;
+    // Aria-hidden decorative glyph (mirrors the debrief's quality glyphs):
+    // purely visual "coach note" accent, contributes nothing to the
+    // announcement -- the Continue button's aria-describedby (below) is the
+    // real, spec-guaranteed mechanism.
+    const feedbackGlyph = document.createElement("span");
+    feedbackGlyph.className = "ilb-feedback-glyph";
+    feedbackGlyph.setAttribute("aria-hidden", "true");
+    feedbackGlyph.textContent = "★";
+    feedbackPanel.appendChild(feedbackGlyph);
     feedbackText = document.createElement("p");
     feedbackText.id = `${mountId}-feedback-text`;
     feedbackPanel.appendChild(feedbackText);
@@ -154,7 +213,7 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     // button) so `.ilb-choice-btn` queries only ever match genuinely
     // interactive-right-now buttons, never this persistent-but-usually-
     // hidden Continue button.
-    continueBtn.className = "ilb-btn ilb-continue-btn";
+    continueBtn.className = "ilb-btn ilb-continue-btn ilb-btn-pill";
     continueBtn.textContent = "Continue";
     // The accessible-description algorithm guarantees this is announced
     // alongside the button's name the instant it receives focus — spec-
@@ -162,7 +221,7 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     continueBtn.setAttribute("aria-describedby", feedbackText.id);
     continueBtn.addEventListener("click", () => completeTransition());
     feedbackPanel.appendChild(continueBtn);
-    root.appendChild(feedbackPanel);
+    card.appendChild(feedbackPanel);
   }
 
   // ---------- rendering ----------
@@ -174,6 +233,27 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
       .map((v) => `${v.label}: ${state.vars[v.id]}`)
       .join(". ");
     setText(varsStatus, text);
+    updateMeterChips();
+  }
+
+  /** Updates the aria-hidden meter-chip visuals from the SAME values
+   *  updateVarsStatus just rendered into the (untouched) live region —
+   *  purely decorative, so a missing/unchanged update here can never affect
+   *  what's announced. Churn-guarded (setText / a width-only style write)
+   *  so an unrelated re-render never mutates a chip whose value didn't
+   *  actually change. */
+  function updateMeterChips(): void {
+    if (!metersWrap) return;
+    for (const v of visibleVars) {
+      const value = meterValueByVar.get(v.id);
+      const fill = meterFillByVar.get(v.id);
+      if (value) setText(value, String(state.vars[v.id]));
+      if (fill) {
+        const span = Math.max(1, v.max - v.min); // schema guarantees min < max
+        const pct = Math.min(100, Math.max(0, ((state.vars[v.id] - v.min) / span) * 100));
+        setWidthPct(fill, pct);
+      }
+    }
   }
 
   function renderChoices(): void {
@@ -185,14 +265,31 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     // reuse the same choice id (a same-shaped-graph collision) — see
     // handleChoiceClick's guard.
     const renderedForSceneId = state.sceneId;
-    for (const choice of visibleChoices(config, state)) {
+    visibleChoices(config, state).forEach((choice, i) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "ilb-btn ilb-choice-btn";
-      btn.textContent = choice.label;
+      btn.className = "ilb-btn ilb-choice-btn ilb-choice-card";
+      // Aria-hidden A/B/C marker (decorative letter, never the sole carrier
+      // of "which choice is which" — the button's accessible name is
+      // computed from content and SKIPS aria-hidden descendants per the
+      // accname algorithm, so this contributes nothing to it; see
+      // tests/sr-transcript-branching.test.ts's focus-order assertions,
+      // which lock the name down to exactly the label). The visible label
+      // itself lives in its own span (.ilb-choice-label) purely so
+      // DOM-level tests can select the label text without the marker
+      // letter, mirroring the debrief's own scene/choice span split.
+      const marker = document.createElement("span");
+      marker.className = "ilb-choice-marker";
+      marker.setAttribute("aria-hidden", "true");
+      marker.textContent = String.fromCharCode(65 + i); // A, B, C, ... (max 6 choices per schema)
+      btn.appendChild(marker);
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "ilb-choice-label";
+      labelSpan.textContent = choice.label;
+      btn.appendChild(labelSpan);
       btn.addEventListener("click", () => handleChoiceClick(choice.id, renderedForSceneId));
       choicesContainer.appendChild(btn);
-    }
+    });
   }
 
   /** Scene heading: an author-supplied title takes precedence; an untitled
@@ -220,11 +317,45 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     debriefContainer.innerHTML = "";
 
     sceneContainer.innerHTML = "";
+    retriggerEnter(sceneContainer);
+
+    // Header rule (spec 2, Tamara's 2026-08-28 decision): an uploaded scene
+    // image IS the header (full-bleed 16:7 crop); with no image, a clean
+    // brand-color band with a gold rule beneath. Title/body always sit BELOW
+    // the header, on the card surface -- never overlaid on a photo (text-
+    // over-arbitrary-photo contrast is unverifiable, so this doctrine
+    // doesn't fake it). Every scene gets a header, start scene or not.
+    const header = el("div", "ilb-scene-header");
+    if (scene.imageUrl) {
+      header.classList.add("ilb-scene-header--image");
+      const img = document.createElement("img");
+      img.className = "ilb-scene-image";
+      img.src = scene.imageUrl;
+      img.alt = scene.imageRole === "informative" ? (scene.imageAlt ?? "") : "";
+      header.appendChild(img);
+    } else {
+      header.classList.add("ilb-scene-header--band");
+      const band = el("div", "ilb-brand-band");
+      band.style.background = `var(--rds-${config.headerColor ?? "primary"})`;
+      header.appendChild(band);
+    }
+    sceneContainer.appendChild(header);
+
     const isStart = sceneId === config.startSceneId;
     if (isStart) {
       if (config.role) {
-        const roleLine = el("p", "ilb-role");
-        roleLine.textContent = config.role;
+        // .ilb-role-line wraps a decorative aria-hidden accent bar around
+        // the SAME .ilb-role text-carrier element the transcript contract
+        // already tracks (src/lib/a11y/transcript.ts's TEXT_CARRIER_CLASSES)
+        // — the wrapper and bar are both transparent to that walk, so this
+        // adds zero transcript entries and changes no announced text.
+        const roleLine = el("div", "ilb-role-line");
+        const roleBar = el("span", "ilb-role-bar");
+        roleBar.setAttribute("aria-hidden", "true");
+        roleLine.appendChild(roleBar);
+        const roleText = el("p", "ilb-role");
+        roleText.textContent = config.role;
+        roleLine.appendChild(roleText);
         sceneContainer.appendChild(roleLine);
       }
       if (config.intro) {
@@ -242,14 +373,6 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     const body = el("div", "ilb-scene-body");
     body.innerHTML = scene.body; // sanitized at authoring + revalidated at export
     sceneContainer.appendChild(body);
-
-    if (scene.imageUrl) {
-      const img = document.createElement("img");
-      img.className = "ilb-scene-image";
-      img.src = scene.imageUrl;
-      img.alt = scene.imageRole === "informative" ? (scene.imageAlt ?? "") : "";
-      sceneContainer.appendChild(img);
-    }
 
     updateVarsStatus();
     renderChoices();
@@ -313,14 +436,41 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     if (feedbackPanel) feedbackPanel.hidden = true;
 
     sceneContainer.innerHTML = "";
+    retriggerEnter(sceneContainer);
+
+    // Result head (spec 2's "the emotional beat"): eyebrow, title, an
+    // aria-hidden big numeral, the UNCHANGED score-line text as the visible/
+    // announced summary below it, and aria-hidden quality-breakdown chips.
+    // No image/brand-band header here — the mock's ending state never shows
+    // one (endings aren't scenes; nothing to attach a header rule to).
+    const resultHead = el("div", "ilb-result-head");
+    sceneContainer.appendChild(resultHead);
+
+    // The ONE deliberate new visible/announced text this pass adds (plan
+    // Task 2): tracked as a transcript "text-carrier" via .ilb-eyebrow (see
+    // src/lib/a11y/transcript.ts's TEXT_CARRIER_CLASSES) so it shows up as
+    // its own reading-order entry, right before the ending heading — the
+    // one expected transcript diff for the ending path (besides the header/
+    // image reordering noted in main.ts's renderScene).
+    const eyebrow = el("p", "ilb-eyebrow");
+    eyebrow.textContent = "Scenario complete";
+    resultHead.appendChild(eyebrow);
+
     const heading = document.createElement("h2");
     heading.tabIndex = -1;
     heading.textContent = ending.title;
-    sceneContainer.appendChild(heading);
+    resultHead.appendChild(heading);
 
-    const body = el("div", "ilb-scene-body");
-    body.innerHTML = ending.body; // sanitized at authoring + revalidated at export
-    sceneContainer.appendChild(body);
+    const pct = scorePct(state);
+    const numeral = el("div", "ilb-score-num");
+    numeral.setAttribute("aria-hidden", "true");
+    const numeralValue = document.createElement("span");
+    numeralValue.textContent = String(pct);
+    numeral.appendChild(numeralValue);
+    const numeralUnit = document.createElement("small");
+    numeralUnit.textContent = "%";
+    numeral.appendChild(numeralUnit);
+    resultHead.appendChild(numeral);
 
     const counts: Record<Quality, number> = { best: 0, acceptable: 0, poor: 0 };
     for (const step of state.path) counts[step.q]++;
@@ -329,10 +479,35 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     if (counts.acceptable > 0) parts.push(`${counts.acceptable} acceptable`);
     if (counts.poor > 0) parts.push(`${counts.poor} poor`);
     const decisionsClause = parts.length > 0 ? `Decisions: ${parts.join(", ")}.` : "No decisions recorded.";
+    // UNCHANGED text/class from before this pass -- the accessible summary
+    // for the score, now styled small beneath the (aria-hidden) big numeral
+    // rather than being the only visual score representation.
     const scoreLine = el("p", "ilb-score-line");
     // Learner-facing copy: no em dashes. Two sentences, plain punctuation.
     scoreLine.textContent = `${decisionsClause} Score: ${scorePct(state)}%.`;
-    sceneContainer.appendChild(scoreLine);
+    resultHead.appendChild(scoreLine);
+
+    // Quality-breakdown chips: the SAME counts already in scoreLine's text,
+    // rendered as one aria-hidden .ilb-qchip per nonzero category —
+    // decorative-only (the redundancy doctrine: scoreLine already carries
+    // this as the announced text), never the sole carrier of the breakdown.
+    const QUALITY_CHIP_SUFFIX: Record<Quality, string> = { best: "best", acceptable: "ok", poor: "poor" };
+    if (parts.length > 0) {
+      const chipsWrap = el("div", "ilb-quality-chips");
+      chipsWrap.setAttribute("aria-hidden", "true");
+      (Object.keys(counts) as Quality[]).forEach((q) => {
+        if (counts[q] === 0) return;
+        const chip = document.createElement("span");
+        chip.className = `ilb-qchip ilb-qchip--${QUALITY_CHIP_SUFFIX[q]}`;
+        chip.textContent = `${counts[q]} ${q}`;
+        chipsWrap.appendChild(chip);
+      });
+      resultHead.appendChild(chipsWrap);
+    }
+
+    const body = el("div", "ilb-scene-body");
+    body.innerHTML = ending.body; // sanitized at authoring + revalidated at export
+    sceneContainer.appendChild(body);
 
     updateVarsStatus();
 
@@ -344,7 +519,7 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
     // current scene's visible-choice buttons (mirrors the ".ilb-continue-btn"
     // exclusion above) so `.ilb-choice-btn` queries never need a `:not()`
     // to exclude Start-over — it isn't a scenario choice.
-    startOverBtn.className = "ilb-btn ilb-start-over-btn";
+    startOverBtn.className = "ilb-btn ilb-start-over-btn ilb-btn-pill ilb-btn-pill--ghost";
     startOverBtn.textContent = "Start over";
     startOverBtn.addEventListener("click", () => handleStartOver());
     choicesContainer.appendChild(startOverBtn);
@@ -364,22 +539,42 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
 
       const othersPerStep = computeVisibleOtherLabelsPerStep();
       const ol = document.createElement("ol");
-      ol.className = "ilb-debrief-list";
+      // .ilb-debrief-list is UNCHANGED (it's how src/lib/a11y/transcript.ts's
+      // TEXT_CARRIER_CLASSES finds this list at all -- renaming it away
+      // would silently drop the whole debrief from the transcript). Adding
+      // .ilb-timeline is purely a second, styling-only class name.
+      ol.className = "ilb-debrief-list ilb-timeline";
       state.path.forEach((step, i) => {
         const stepScene = config.scenes.find((s) => s.id === step.s);
         const choice = stepScene?.choices.find((c) => c.id === step.c);
         const li = document.createElement("li");
-        li.className = "ilb-debrief-step";
+        li.className = "ilb-debrief-step ilb-tstep";
 
-        const sceneSpan = el("span", "ilb-debrief-scene");
+        // Aria-hidden timeline-node marker (mock's .tnode): a purely visual
+        // per-step glyph-in-a-circle, inserted BEFORE any text-bearing
+        // content. It contributes nothing to the transcript (aria-hidden
+        // subtrees are skipped outright by transcript.ts's walk), so its
+        // presence/position here cannot add or reorder a single entry.
+        const tnode = document.createElement("span");
+        tnode.className = `ilb-tnode ilb-tnode--${QUALITY_CHIP_SUFFIX[step.q]}`;
+        tnode.setAttribute("aria-hidden", "true");
+        tnode.textContent = QUALITY_GLYPH[step.q];
+        li.appendChild(tnode);
+
+        // Every element below is UNCHANGED in tag/text from before this
+        // pass (only a second, styling-only class name is added to each) —
+        // see this file's/tests' "zero transcript diff" contract for the
+        // debrief: reading order and announced text must stay byte-
+        // identical, only appearance changes.
+        const sceneSpan = el("span", "ilb-debrief-scene ilb-tstep-where");
         sceneSpan.textContent = `${stepScene ? sceneHeading(stepScene) : step.s}: `;
         li.appendChild(sceneSpan);
 
-        const choiceSpan = el("span", "ilb-debrief-choice");
+        const choiceSpan = el("span", "ilb-debrief-choice ilb-tstep-chose");
         choiceSpan.textContent = choice?.label ?? step.c;
         li.appendChild(choiceSpan);
 
-        const qualitySpan = el("span", "ilb-debrief-quality");
+        const qualitySpan = el("span", "ilb-debrief-quality ilb-tstep-qual");
         qualitySpan.appendChild(document.createTextNode(" ("));
         const glyphSpan = document.createElement("span");
         glyphSpan.setAttribute("aria-hidden", "true");
@@ -390,13 +585,13 @@ export function mountBranchingScenario(root: HTMLElement, config: RuntimeBranchi
 
         const others = othersPerStep[i];
         if (others.length > 0) {
-          const otherP = el("p", "ilb-debrief-other");
+          const otherP = el("p", "ilb-debrief-other ilb-tstep-others");
           otherP.textContent = `Other options: ${others.join(", ")}.`;
           li.appendChild(otherP);
         }
 
         if (config.feedbackMode === "debrief" && choice?.feedback) {
-          const fb = el("p", "ilb-debrief-feedback");
+          const fb = el("p", "ilb-debrief-feedback ilb-tstep-fb");
           fb.innerHTML = choice.feedback; // sanitized at authoring + revalidated at export
           li.appendChild(fb);
         }
@@ -506,6 +701,32 @@ function el(tag: string, className?: string): HTMLElement {
  *  setText exactly. */
 function setText(node: Element, text: string): void {
   if (node.textContent !== text) node.textContent = text;
+}
+
+/** Sets a meter-fill's width (0-100) only when it actually changed — the
+ *  same churn-guard idea as setText, applied to a style write instead of a
+ *  text write. This node is always inside an aria-hidden subtree, so the
+ *  guard here is purely a "don't touch the DOM for nothing" courtesy, not an
+ *  announcement-correctness requirement. */
+function setWidthPct(node: HTMLElement, pct: number): void {
+  const value = `${pct}%`;
+  if (node.style.width !== value) node.style.width = value;
+}
+
+/** Re-triggers the 150ms fade/rise transition (`.ilb-enter`, engine.css) on
+ *  a persistent node whose CONTENT is about to be replaced — removing the
+ *  class, forcing a reflow (reading `offsetWidth`), then re-adding it is the
+ *  standard technique for restarting a CSS animation on an element that
+ *  never left the DOM (simply adding the class once at mount time would
+ *  only ever play once). `@media (prefers-reduced-motion: reduce)` kills the
+ *  animation itself in engine.css; this function still runs either way
+ *  (it's inert with no animation to restart), so no separate JS branch is
+ *  needed here for that preference. Focus management is entirely unaffected
+ *  — this only ever touches `class`, never anything else. */
+function retriggerEnter(node: HTMLElement): void {
+  node.classList.remove("ilb-enter");
+  void node.offsetWidth; // force reflow so the next class add is seen as a fresh animation start
+  node.classList.add("ilb-enter");
 }
 
 /* Bundle entry: expose mount API on the same window.ILBEngine global every

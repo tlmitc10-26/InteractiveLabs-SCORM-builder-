@@ -21,13 +21,42 @@
   --ilb-font-heading: Georgia, 'Times New Roman', serif;
   --ilb-font-body: Arial, Helvetica, sans-serif;
   --radius-card: 8px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --radius-chip: 999px;
+  --elev-card: 0 1px 3px rgba(25,25,25,.08), 0 4px 14px rgba(25,25,25,.06);
+  --motion-fast: 150ms;
 }
 
-.ilb-sandbox { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 960px; margin: 0 auto; padding: 16px; }
+/* Runtime visual pass, Task 3 (2026-08-28): values transplanted from the
+   normative mock's sandbox strip (docs/superpowers/specs/mock-runtime-
+   visual.html, State 4) onto the token system (--sp-*, --radius-*,
+   --elev-card — see src/lib/design/tokens.json/.ts). Polish only: every
+   a11y rule from before this pass (24px min targets, focus-visible ring,
+   sr-only utility, reduced-motion) is preserved verbatim below. */
+
+.ilb-sandbox { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 960px; margin: 0 auto; padding: var(--sp-4); }
 .ilb-sandbox h2 { font-family: var(--ilb-font-heading); color: var(--rds-primary); font-weight: 700; line-height: 1.2; font-size: 18px; margin: 16px 0 8px; }
 @media (min-width: 992px) { .ilb-sandbox h2 { font-size: 24px; } }
 .ilb-sandbox h2.ilb-title { font-size: 24px; margin: 0 0 8px; }
 @media (min-width: 992px) { .ilb-sandbox h2.ilb-title { font-size: 36px; } }
+/* Small-caps section label (mock's .panel-label): styles the existing
+   "Challenges" <h2> via a class only -- text/level unchanged. Higher
+   specificity than the generic `.ilb-sandbox h2` rule above so it wins
+   without needing `!important`. */
+.ilb-sandbox h2.ilb-section-label {
+  font-family: var(--ilb-font-body);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rds-dark-1);
+  font-weight: 700;
+  margin: 0 0 var(--sp-3);
+}
 .ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: 8px 12px; margin-bottom: 12px; }
 /* Layout presets (Task 11 / focus-order fix): the DOM order of
    .ilb-layout's zone containers is chosen PER PRESET by main.ts
@@ -36,7 +65,7 @@
    Placement below is therefore grid-column ONLY (which column/row a zone
    spans); it must never reorder zones relative to their DOM order, or tab
    order would again diverge from what's on screen. */
-.ilb-layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.ilb-layout { display: grid; grid-template-columns: 1fr; gap: var(--sp-4); }
 .ilb-layout > .ilb-below-panel { grid-column: 1 / -1; }
 .ilb-layout > .ilb-charts { grid-column: 1 / -1; }
 
@@ -51,7 +80,17 @@
   .ilb-layout.ilb-layout-stacked { grid-template-columns: 1fr; }
   .ilb-layout.ilb-layout-stage-focus { grid-template-columns: 1fr 1fr; }
 }
-.ilb-inputs, .ilb-outputs, .ilb-below-panel, .ilb-challenges, .ilb-charts { background: #fff; border: 1px solid var(--rds-light-4); border-radius: 8px; padding: 12px; }
+/* Panel soft elevation (mock's .sandbox card, transplanted per-panel since
+   the runtime has more independent zones -- stage/below/challenges/charts --
+   than the mock's two-column illustration): shadow + radius + spacing from
+   the token scale, border lightened to match the mock's card border. */
+.ilb-inputs, .ilb-outputs, .ilb-below-panel, .ilb-challenges, .ilb-charts {
+  background: #fff;
+  border: 1px solid var(--rds-light-3);
+  border-radius: var(--radius-card);
+  box-shadow: var(--elev-card);
+  padding: var(--sp-4);
+}
 .ilb-input-row { display: block; margin-bottom: 14px; }
 .ilb-input-label { display: block; font-weight: bold; font-size: 0.9rem; margin-bottom: 4px; }
 .ilb-input-control { display: flex; align-items: center; gap: 8px; }
@@ -60,6 +99,53 @@
    old read-only ".ilb-input-value" text badge) and is also used standalone
    for type:"number" inputs. */
 .ilb-input-number { width: 6ch; font-variant-numeric: tabular-nums; text-align: right; flex: 0 0 auto; }
+
+/* Styled range track/thumb (Task 3): native semantics (value/step/keyboard)
+   are entirely untouched by `appearance: none` -- it only opts the element
+   out of the browser's own track/thumb PAINTING, nothing else. The shared
+   focus-visible rule further below still targets this exact <input> (an
+   outline draws around the element's box regardless of its internal
+   track/thumb styling), so the required ring survives unchanged.
+   WebKit/Blink and Gecko require separate, non-shareable pseudo-element
+   rule blocks -- a selector combining both is invalid in every engine and
+   silently drops the whole rule. */
+.ilb-sandbox input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.ilb-sandbox input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-chip);
+  background: var(--rds-light-3);
+}
+.ilb-sandbox input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px; /* centers the 24px thumb on the 6px track above */
+  border-radius: 50%;
+  background: var(--rds-primary);
+  border: 2px solid #fff;
+  box-shadow: var(--elev-card);
+  cursor: pointer;
+}
+.ilb-sandbox input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-chip);
+  background: var(--rds-light-3);
+}
+.ilb-sandbox input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--rds-primary);
+  border: 2px solid #fff;
+  box-shadow: var(--elev-card);
+  cursor: pointer;
+}
 
 /* 2.5.8 (WCAG 2.2) target size: every interactive control in the sandbox
    gets at least a 24x24px hit area. */
@@ -95,7 +181,7 @@
    background image needs capping) then constrains that 100%, and the auto
    margins center the result within the grid cell's leftover space -- inert
    (no extra space to distribute) for the no-background/uncapped stage. */
-.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: 8px; overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; width: 100%; margin-left: auto; margin-right: auto; }
+.ilb-stage { position: relative; border: 1px solid #D6D2CC; border-radius: var(--radius-card); overflow: hidden; min-height: 240px; background: var(--rds-light-1); align-self: start; width: 100%; margin-left: auto; margin-right: auto; }
 .ilb-stage-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .ilb-overlay { position: absolute; }
 /* Stage-zone controls: a layer of small cards positioned by box percents,
@@ -120,31 +206,64 @@
    panel/below controls (enforced globally below, not re-declared here). */
 .ilb-fill { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; opacity: 0.65; transition: height 120ms ease; }
 .ilb-overlay-img { width: 100%; height: 100%; object-fit: contain; transition: transform 120ms ease, opacity 120ms ease; }
-.ilb-output { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid #eee; }
+/* Output card typography (mock's .outcard): the value is the visual
+   focal point (Georgia, large, primary); the unit trails it, muted. */
+.ilb-output { display: flex; align-items: baseline; gap: 8px; padding: var(--sp-3) 0; border-bottom: 1px solid var(--rds-light-3); }
 .ilb-output-label { flex: 1; }
-.ilb-output-value { font-size: 1.3rem; font-weight: bold; color: var(--rds-primary); font-variant-numeric: tabular-nums; }
-.ilb-output-units { color: #5f6368; font-size: 0.85rem; }
+.ilb-output-value { font-family: var(--ilb-font-heading); font-size: 26px; font-weight: bold; color: var(--rds-primary); font-variant-numeric: tabular-nums; }
+.ilb-output-units { color: var(--rds-dark-1); font-size: 14px; margin-left: var(--sp-1); }
 .ilb-chart { margin-top: 12px; }
 .ilb-chart:first-child { margin-top: 0; }
 .ilb-chart canvas { width: 100%; height: auto; }
 .ilb-chart-title { font-size: 0.9rem; font-weight: bold; margin-bottom: 4px; }
-.ilb-challenge { display: flex; gap: 8px; align-items: center; padding: 6px 0; }
-.ilb-challenge-mark::before { content: "○"; color: var(--rds-dark-1); }
+
+/* Challenge rows as status chips (mock-inspired; glyph + text unchanged
+   from today, only the row's container gets chip styling): neutral chip by
+   default, success border/background once its challenge is met -- reuses
+   the same success-on-#f2f7ec pair already shipped in the branching
+   scenario's .ilb-qchip--best (Task 2), so no new color pair is introduced
+   by this rule. */
+.ilb-challenge {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  padding: 6px var(--sp-3);
+  margin-bottom: var(--sp-2);
+  background: var(--rds-light-1);
+  border: 1px solid var(--rds-light-4);
+  border-radius: var(--radius-chip);
+  font-size: 14px;
+}
+.ilb-challenge:last-child { margin-bottom: 0; }
+.ilb-challenge-mark::before { content: "○"; color: var(--rds-dark-1); font-size: 16px; }
+.ilb-challenge.met {
+  background: #f2f7ec;
+  border-color: var(--rds-success);
+}
 .ilb-challenge.met .ilb-challenge-mark::before { content: "●"; color: var(--rds-success); }
 
-/* Score status strip (learner-visible grading feedback): always shows what
-   was graded and what's been achieved, using the high-water score so it
-   never appears to go down. #446d12 (--rds-success) on white is 6.1:1. */
-.ilb-score-status {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--rds-light-4);
-  font-size: 14px;
-  color: var(--rds-dark-2);
-}
-.ilb-score-status.complete {
-  color: var(--rds-success);
+/* Score banner (mock's .score-banner): neutral state while ungraded/in
+   progress, `.complete` success state once the attempt is done -- both
+   pairs use only token colors or the mock's approved success literal
+   (#f2f7ec, already shipped in Task 2's .ilb-qchip--best), so no new color
+   pair beyond what Task 4's contrast suite already covers is introduced
+   here. `.ilb-score-status` stays on the element (main.ts) as the stable
+   query/announcement hook this class always had; all its VISUAL styling now
+   lives on `.ilb-score-banner` instead. */
+.ilb-score-banner {
+  margin-top: var(--sp-4);
+  border-radius: var(--radius-card);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 15px;
   font-weight: 700;
+  background: var(--rds-light-2);
+  color: var(--rds-dark-2);
+  border: 1px solid var(--rds-light-4);
+}
+.ilb-score-banner.complete {
+  background: #f2f7ec;
+  color: var(--rds-success);
+  border-color: var(--rds-success);
 }
 
 /* Visually-hidden but screen-reader-accessible text. */

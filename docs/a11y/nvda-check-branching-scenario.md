@@ -54,12 +54,13 @@ region's updated value:
 
 ## 4. The ending and debrief
 
-14. Focus lands on the ending heading → NVDA should say: **"A verdict the room can stand behind heading level 2"**
-15. Continue reading → NVDA should say: **"Decisions: 3 best. Score: 100%."**
-16. Continue reading → NVDA should say the final variable status: **"Jury trust: 85"**
-17. Continue reading (or press Tab) → NVDA should say: **"Start over, button"**
-18. Press H → NVDA should say: **"Your path heading level 3"**
-19. Continue reading the path list → NVDA should say each step's scene, choice, quality,
+14. Move the browse cursor up one line from the heading → NVDA should say: **"Scenario complete"**
+15. Focus lands on the ending heading → NVDA should say: **"A verdict the room can stand behind heading level 2"**
+16. Continue reading → NVDA should say: **"Decisions: 3 best. Score: 100%."**
+17. Continue reading → NVDA should say the final variable status: **"Jury trust: 85"**
+18. Continue reading (or press Tab) → NVDA should say: **"Start over, button"**
+19. Press H → NVDA should say: **"Your path heading level 3"**
+20. Continue reading the path list → NVDA should say each step's scene, choice, quality,
    and "Other options" summary, e.g. (the full text, verbatim):
    **"The First Vote: Raise your doubts about the timeline before anyone votes ( Best choice) Other options: Vote with the majority to keep things moving, Ask to re-examine the evidence list first. Speaking up before the vote keeps the deliberation grounded in the evidence instead of the room's momentum. The Timeline: Walk the group through the conflict step by step ( Best choice) Other options: Call it a clerical error and move on. Walking the room through the conflict turns a vague unease into a concrete point the jury can actually weigh. The Holdout: Ask them to explain what evidence would change their mind ( Best choice) Other options: Suggest the group proceed without their input, Call a break, since the room trusts you enough to reset. Inviting the holdout to explain their reasoning keeps deliberation open instead of forcing a verdict past it."**
 

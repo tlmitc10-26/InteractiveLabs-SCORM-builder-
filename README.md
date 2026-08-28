@@ -146,6 +146,22 @@ every control carries a visible `:focus-visible` outline. An automated
 axe-core pass (`tests/axe.test.ts`) runs against the mounted lesson runtime
 in the test suite so accessibility regressions fail CI like any other test.
 
+**Runtime visual design pass.** Both engines were raised to a shared visual
+bar — presentation only, no behavior change — using the new spacing/radius/
+elevation/motion tokens from the same `tokens.json` source: a brand-band
+scene header (exact ASU maroon with a gold rule when no scene image is
+uploaded, the designer's image otherwise — never a gradient), styled
+decision cards with hover/focus states, meter chips, a coach-note feedback
+panel, and an ending debrief with a scored numeral, quality chips, and a
+result timeline for Branching Scenario; panel elevation, a styled range
+thumb, Georgia-set output values, and a chart with gridlines and area fill
+for Parameter Sandbox. Every new color pairing introduced by the pass is
+contrast-asserted (`tests/contrast-pairs.test.ts`) and every DOM change is
+`aria-hidden` garnish layered over the unchanged live regions and reading
+order — the screen-reader announcement contracts stayed locked, re-verified
+by the same transcript tests and regenerated NVDA scripts as any other
+runtime change.
+
 **Spatial authoring.** Designers place overlays and stage-anchored controls
 by dragging, resizing, and keyboard-nudging directly over the live preview
 (`stage-authoring.tsx`) — but all of that authoring code lives in the editor

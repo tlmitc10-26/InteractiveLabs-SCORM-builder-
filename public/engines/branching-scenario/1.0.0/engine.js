@@ -206,19 +206,47 @@
         scorm.setCompleted();
       }
     }
+    const card = el("div", "ilb-scene-card");
+    root.appendChild(card);
     const sceneContainer = el("div", "ilb-scene");
-    root.appendChild(sceneContainer);
+    card.appendChild(sceneContainer);
     const hasVisibleVars = config.variables.some((v) => v.visible);
+    const visibleVars = config.variables.filter((v) => v.visible);
+    let metersWrap = null;
+    const meterFillByVar = /* @__PURE__ */ new Map();
+    const meterValueByVar = /* @__PURE__ */ new Map();
+    if (hasVisibleVars) {
+      metersWrap = el("div", "ilb-meters");
+      metersWrap.setAttribute("aria-hidden", "true");
+      for (const v of visibleVars) {
+        const chip = el("span", "ilb-meter-chip");
+        const label = document.createElement("span");
+        label.className = "ilb-meter-label";
+        label.textContent = v.label;
+        chip.appendChild(label);
+        const track = el("span", "ilb-meter-track");
+        const fill = el("span", "ilb-meter-fill");
+        track.appendChild(fill);
+        chip.appendChild(track);
+        const value = document.createElement("span");
+        value.className = "ilb-meter-value";
+        chip.appendChild(value);
+        metersWrap.appendChild(chip);
+        meterFillByVar.set(v.id, fill);
+        meterValueByVar.set(v.id, value);
+      }
+      card.appendChild(metersWrap);
+    }
     const varsStatus = el("div", "ilb-vars-status");
     varsStatus.setAttribute("role", "status");
     varsStatus.setAttribute("aria-live", "polite");
     varsStatus.setAttribute("aria-atomic", "true");
-    if (hasVisibleVars) root.appendChild(varsStatus);
+    if (hasVisibleVars) card.appendChild(varsStatus);
     const choicesContainer = el("div", "ilb-choices");
-    root.appendChild(choicesContainer);
+    card.appendChild(choicesContainer);
     const debriefContainer = el("div", "ilb-debrief");
     debriefContainer.hidden = true;
-    root.appendChild(debriefContainer);
+    card.appendChild(debriefContainer);
     const needsFeedbackPanel = config.feedbackMode === "immediate" && config.scenes.some((s) => s.choices.some((c) => c.feedback));
     let feedbackPanel = null;
     let feedbackText = null;
@@ -226,35 +254,62 @@
     if (needsFeedbackPanel) {
       feedbackPanel = el("div", "ilb-feedback");
       feedbackPanel.hidden = true;
+      const feedbackGlyph = document.createElement("span");
+      feedbackGlyph.className = "ilb-feedback-glyph";
+      feedbackGlyph.setAttribute("aria-hidden", "true");
+      feedbackGlyph.textContent = "\u2605";
+      feedbackPanel.appendChild(feedbackGlyph);
       feedbackText = document.createElement("p");
       feedbackText.id = `${mountId}-feedback-text`;
       feedbackPanel.appendChild(feedbackText);
       continueBtn = document.createElement("button");
       continueBtn.type = "button";
-      continueBtn.className = "ilb-btn ilb-continue-btn";
+      continueBtn.className = "ilb-btn ilb-continue-btn ilb-btn-pill";
       continueBtn.textContent = "Continue";
       continueBtn.setAttribute("aria-describedby", feedbackText.id);
       continueBtn.addEventListener("click", () => completeTransition());
       feedbackPanel.appendChild(continueBtn);
-      root.appendChild(feedbackPanel);
+      card.appendChild(feedbackPanel);
     }
     function updateVarsStatus() {
       if (!hasVisibleVars) return;
       const text = config.variables.filter((v) => v.visible).map((v) => `${v.label}: ${state.vars[v.id]}`).join(". ");
       setText(varsStatus, text);
+      updateMeterChips();
+    }
+    function updateMeterChips() {
+      if (!metersWrap) return;
+      for (const v of visibleVars) {
+        const value = meterValueByVar.get(v.id);
+        const fill = meterFillByVar.get(v.id);
+        if (value) setText(value, String(state.vars[v.id]));
+        if (fill) {
+          const span = Math.max(1, v.max - v.min);
+          const pct = Math.min(100, Math.max(0, (state.vars[v.id] - v.min) / span * 100));
+          setWidthPct(fill, pct);
+        }
+      }
     }
     function renderChoices() {
       choicesContainer.innerHTML = "";
       choicesContainer.hidden = false;
       const renderedForSceneId = state.sceneId;
-      for (const choice of visibleChoices(config, state)) {
+      visibleChoices(config, state).forEach((choice, i) => {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "ilb-btn ilb-choice-btn";
-        btn.textContent = choice.label;
+        btn.className = "ilb-btn ilb-choice-btn ilb-choice-card";
+        const marker = document.createElement("span");
+        marker.className = "ilb-choice-marker";
+        marker.setAttribute("aria-hidden", "true");
+        marker.textContent = String.fromCharCode(65 + i);
+        btn.appendChild(marker);
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "ilb-choice-label";
+        labelSpan.textContent = choice.label;
+        btn.appendChild(labelSpan);
         btn.addEventListener("click", () => handleChoiceClick(choice.id, renderedForSceneId));
         choicesContainer.appendChild(btn);
-      }
+      });
     }
     function sceneHeading(scene) {
       if (scene.title) return scene.title;
@@ -262,7 +317,7 @@
       return `Part ${index + 1}`;
     }
     function renderScene(sceneId, focusHeading) {
-      var _a;
+      var _a, _b;
       const scene = config.scenes.find((s) => s.id === sceneId);
       if (!scene) {
         console.error(`branching runtime: scene "${sceneId}" not found in config`);
@@ -272,11 +327,32 @@
       debriefContainer.hidden = true;
       debriefContainer.innerHTML = "";
       sceneContainer.innerHTML = "";
+      retriggerEnter(sceneContainer);
+      const header = el("div", "ilb-scene-header");
+      if (scene.imageUrl) {
+        header.classList.add("ilb-scene-header--image");
+        const img = document.createElement("img");
+        img.className = "ilb-scene-image";
+        img.src = scene.imageUrl;
+        img.alt = scene.imageRole === "informative" ? (_a = scene.imageAlt) != null ? _a : "" : "";
+        header.appendChild(img);
+      } else {
+        header.classList.add("ilb-scene-header--band");
+        const band = el("div", "ilb-brand-band");
+        band.style.background = `var(--rds-${(_b = config.headerColor) != null ? _b : "primary"})`;
+        header.appendChild(band);
+      }
+      sceneContainer.appendChild(header);
       const isStart = sceneId === config.startSceneId;
       if (isStart) {
         if (config.role) {
-          const roleLine = el("p", "ilb-role");
-          roleLine.textContent = config.role;
+          const roleLine = el("div", "ilb-role-line");
+          const roleBar = el("span", "ilb-role-bar");
+          roleBar.setAttribute("aria-hidden", "true");
+          roleLine.appendChild(roleBar);
+          const roleText = el("p", "ilb-role");
+          roleText.textContent = config.role;
+          roleLine.appendChild(roleText);
           sceneContainer.appendChild(roleLine);
         }
         if (config.intro) {
@@ -292,13 +368,6 @@
       const body = el("div", "ilb-scene-body");
       body.innerHTML = scene.body;
       sceneContainer.appendChild(body);
-      if (scene.imageUrl) {
-        const img = document.createElement("img");
-        img.className = "ilb-scene-image";
-        img.src = scene.imageUrl;
-        img.alt = scene.imageRole === "informative" ? (_a = scene.imageAlt) != null ? _a : "" : "";
-        sceneContainer.appendChild(img);
-      }
       updateVarsStatus();
       renderChoices();
       if (focusHeading) heading.focus();
@@ -334,13 +403,26 @@
       }
       if (feedbackPanel) feedbackPanel.hidden = true;
       sceneContainer.innerHTML = "";
+      retriggerEnter(sceneContainer);
+      const resultHead = el("div", "ilb-result-head");
+      sceneContainer.appendChild(resultHead);
+      const eyebrow = el("p", "ilb-eyebrow");
+      eyebrow.textContent = "Scenario complete";
+      resultHead.appendChild(eyebrow);
       const heading = document.createElement("h2");
       heading.tabIndex = -1;
       heading.textContent = ending.title;
-      sceneContainer.appendChild(heading);
-      const body = el("div", "ilb-scene-body");
-      body.innerHTML = ending.body;
-      sceneContainer.appendChild(body);
+      resultHead.appendChild(heading);
+      const pct = scorePct(state);
+      const numeral = el("div", "ilb-score-num");
+      numeral.setAttribute("aria-hidden", "true");
+      const numeralValue = document.createElement("span");
+      numeralValue.textContent = String(pct);
+      numeral.appendChild(numeralValue);
+      const numeralUnit = document.createElement("small");
+      numeralUnit.textContent = "%";
+      numeral.appendChild(numeralUnit);
+      resultHead.appendChild(numeral);
       const counts = { best: 0, acceptable: 0, poor: 0 };
       for (const step of state.path) counts[step.q]++;
       const parts = [];
@@ -350,13 +432,29 @@
       const decisionsClause = parts.length > 0 ? `Decisions: ${parts.join(", ")}.` : "No decisions recorded.";
       const scoreLine = el("p", "ilb-score-line");
       scoreLine.textContent = `${decisionsClause} Score: ${scorePct(state)}%.`;
-      sceneContainer.appendChild(scoreLine);
+      resultHead.appendChild(scoreLine);
+      const QUALITY_CHIP_SUFFIX = { best: "best", acceptable: "ok", poor: "poor" };
+      if (parts.length > 0) {
+        const chipsWrap = el("div", "ilb-quality-chips");
+        chipsWrap.setAttribute("aria-hidden", "true");
+        Object.keys(counts).forEach((q) => {
+          if (counts[q] === 0) return;
+          const chip = document.createElement("span");
+          chip.className = `ilb-qchip ilb-qchip--${QUALITY_CHIP_SUFFIX[q]}`;
+          chip.textContent = `${counts[q]} ${q}`;
+          chipsWrap.appendChild(chip);
+        });
+        resultHead.appendChild(chipsWrap);
+      }
+      const body = el("div", "ilb-scene-body");
+      body.innerHTML = ending.body;
+      sceneContainer.appendChild(body);
       updateVarsStatus();
       choicesContainer.innerHTML = "";
       choicesContainer.hidden = false;
       const startOverBtn = document.createElement("button");
       startOverBtn.type = "button";
-      startOverBtn.className = "ilb-btn ilb-start-over-btn";
+      startOverBtn.className = "ilb-btn ilb-start-over-btn ilb-btn-pill ilb-btn-pill--ghost";
       startOverBtn.textContent = "Start over";
       startOverBtn.addEventListener("click", () => handleStartOver());
       choicesContainer.appendChild(startOverBtn);
@@ -373,20 +471,25 @@
         }
         const othersPerStep = computeVisibleOtherLabelsPerStep();
         const ol = document.createElement("ol");
-        ol.className = "ilb-debrief-list";
+        ol.className = "ilb-debrief-list ilb-timeline";
         state.path.forEach((step, i) => {
           var _a;
           const stepScene = config.scenes.find((s) => s.id === step.s);
           const choice = stepScene == null ? void 0 : stepScene.choices.find((c) => c.id === step.c);
           const li = document.createElement("li");
-          li.className = "ilb-debrief-step";
-          const sceneSpan = el("span", "ilb-debrief-scene");
+          li.className = "ilb-debrief-step ilb-tstep";
+          const tnode = document.createElement("span");
+          tnode.className = `ilb-tnode ilb-tnode--${QUALITY_CHIP_SUFFIX[step.q]}`;
+          tnode.setAttribute("aria-hidden", "true");
+          tnode.textContent = QUALITY_GLYPH[step.q];
+          li.appendChild(tnode);
+          const sceneSpan = el("span", "ilb-debrief-scene ilb-tstep-where");
           sceneSpan.textContent = `${stepScene ? sceneHeading(stepScene) : step.s}: `;
           li.appendChild(sceneSpan);
-          const choiceSpan = el("span", "ilb-debrief-choice");
+          const choiceSpan = el("span", "ilb-debrief-choice ilb-tstep-chose");
           choiceSpan.textContent = (_a = choice == null ? void 0 : choice.label) != null ? _a : step.c;
           li.appendChild(choiceSpan);
-          const qualitySpan = el("span", "ilb-debrief-quality");
+          const qualitySpan = el("span", "ilb-debrief-quality ilb-tstep-qual");
           qualitySpan.appendChild(document.createTextNode(" ("));
           const glyphSpan = document.createElement("span");
           glyphSpan.setAttribute("aria-hidden", "true");
@@ -396,12 +499,12 @@
           li.appendChild(qualitySpan);
           const others = othersPerStep[i];
           if (others.length > 0) {
-            const otherP = el("p", "ilb-debrief-other");
+            const otherP = el("p", "ilb-debrief-other ilb-tstep-others");
             otherP.textContent = `Other options: ${others.join(", ")}.`;
             li.appendChild(otherP);
           }
           if (config.feedbackMode === "debrief" && (choice == null ? void 0 : choice.feedback)) {
-            const fb = el("p", "ilb-debrief-feedback");
+            const fb = el("p", "ilb-debrief-feedback ilb-tstep-fb");
             fb.innerHTML = choice.feedback;
             li.appendChild(fb);
           }
@@ -469,6 +572,15 @@
   }
   function setText(node, text) {
     if (node.textContent !== text) node.textContent = text;
+  }
+  function setWidthPct(node, pct) {
+    const value = `${pct}%`;
+    if (node.style.width !== value) node.style.width = value;
+  }
+  function retriggerEnter(node) {
+    node.classList.remove("ilb-enter");
+    void node.offsetWidth;
+    node.classList.add("ilb-enter");
   }
   if (typeof window !== "undefined") {
     window.ILBEngine = { mount: mountBranchingScenario };

@@ -21,93 +21,270 @@
   --ilb-font-heading: Georgia, 'Times New Roman', serif;
   --ilb-font-body: Arial, Helvetica, sans-serif;
   --radius-card: 8px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --radius-chip: 999px;
+  --elev-card: 0 1px 3px rgba(25,25,25,.08), 0 4px 14px rgba(25,25,25,.06);
+  --motion-fast: 150ms;
 }
 
-.ilb-scenario { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 720px; margin: 0 auto; padding: 16px; }
-.ilb-scenario h2, .ilb-scenario h3 { font-family: var(--ilb-font-heading); color: var(--rds-primary); font-weight: 700; line-height: 1.2; margin: 0 0 12px; }
+/* Runtime visual pass (2026-08-28): values transplanted from the normative
+   mock (docs/superpowers/specs/mock-runtime-visual.html) onto the token
+   system (--sp-*, --radius-*, --elev-card, --motion-fast — see
+   src/lib/design/tokens.json/.ts). Every a11y rule from before this pass
+   (24px min targets, focus-visible ring, sr-only utility, reduced-motion)
+   is preserved verbatim below; only presentation is new. */
+
+.ilb-scenario { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 720px; margin: 0 auto; padding: var(--sp-4); line-height: 1.55; }
+.ilb-scenario h2, .ilb-scenario h3 { font-family: var(--ilb-font-heading); color: var(--rds-primary); font-weight: 700; line-height: 1.2; margin: 0 0 var(--sp-3); }
 .ilb-scenario h2 { font-size: 24px; }
-@media (min-width: 992px) { .ilb-scenario h2 { font-size: 32px; } }
-.ilb-scenario h3 { font-size: 18px; }
+@media (min-width: 992px) { .ilb-scenario h2 { font-size: 30px; } }
+.ilb-scenario h3 { font-size: 18px; margin: 0 0 var(--sp-3); padding: 0 var(--sp-6); }
 
-.ilb-role { font-style: italic; color: var(--rds-dark-2); margin: 0 0 12px; }
-.ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: 8px 12px; margin-bottom: 12px; }
-
-.ilb-scene-body { line-height: 1.5; margin-bottom: 16px; }
-.ilb-scene-image { display: block; max-width: 100%; height: auto; border-radius: var(--radius-card, 8px); margin-bottom: 16px; }
-
-/* Visible-variable status line (spec 5/6): a normal, on-page status strip,
-   NOT visually hidden -- the aria-live/aria-atomic pair only governs how a
-   screen reader announces its text CHANGES (churn-guarded via main.ts's
-   setText), it is not sr-only content. */
-.ilb-vars-status {
-  font-weight: 700;
-  padding: 8px 12px;
-  margin-bottom: 16px;
-  border: 1px solid var(--rds-light-4);
-  border-radius: var(--radius-card, 8px);
+/* ---------- scene card shell (mock's .scene-card) ---------- */
+/* .ilb-scene-card wraps every persistent section (main.ts appends the
+   heading/body container, the meter chips, the vars-status live region, the
+   choices, the debrief, and the feedback panel all INTO it) so they read as
+   one continuous card: single shadow/border, no visible seams between the
+   sections' own padding. */
+.ilb-scene-card {
   background: #fff;
+  border-radius: var(--radius-card);
+  box-shadow: var(--elev-card);
+  border: 1px solid var(--rds-light-3);
+  overflow: hidden;
+  margin-bottom: var(--sp-5);
 }
 
-/* Shared button base (spec 9): every interactive button the scenario
-   renders -- a scene's choices, the ending's Start-over, the feedback
-   panel's Continue -- shares this pill-adjacent look (a large rounded
-   rectangle rather than the fully circular --radius-pill, which reads
-   oddly at this width/height) and the same minimum target size / focus
-   treatment. .ilb-choice-btn/.ilb-continue-btn/.ilb-start-over-btn are
-   selector-only modifiers used by main.ts (and tests) to distinguish WHICH
-   buttons are current-scene choices vs. the Continue button vs. Start-over
-   -- none of them carry their own base styling any more. */
-.ilb-choices { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.ilb-scenario .ilb-btn {
+/* ---------- header: brand band OR uploaded image (never both, never a
+   gradient) ---------- */
+.ilb-scene-header { width: 100%; }
+.ilb-scene-header--band .ilb-brand-band {
+  width: 100%;
+  height: 96px;
+  /* background-color is set inline per-scene (main.ts) to var(--rds-<headerColor>) */
+  border-bottom: 4px solid var(--rds-secondary);
+}
+.ilb-scene-header--image .ilb-scene-image {
   display: block;
   width: 100%;
-  min-height: 24px;
-  padding: 12px 16px;
+  aspect-ratio: 16 / 7;
+  object-fit: cover;
+  margin: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--rds-light-4);
+}
+
+.ilb-scene, .ilb-meters, .ilb-vars-status, .ilb-choices, .ilb-debrief, .ilb-feedback {
+  padding-left: var(--sp-6);
+  padding-right: var(--sp-6);
+}
+.ilb-scene { padding-top: var(--sp-5); padding-bottom: var(--sp-2); }
+.ilb-scene > h2 { margin-bottom: var(--sp-3); }
+.ilb-scene-body { line-height: 1.5; max-width: 70ch; font-size: 17px; margin-bottom: var(--sp-2); }
+.ilb-choices { padding-top: var(--sp-2); padding-bottom: var(--sp-6); }
+.ilb-debrief { padding-bottom: var(--sp-6); }
+.ilb-feedback { padding-top: var(--sp-4); padding-bottom: var(--sp-5); }
+
+/* ---------- role opener (mock's .role-line): small-caps label + gold bar,
+   start scene only ---------- */
+.ilb-role-line { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.ilb-role-bar { flex: none; width: 4px; height: 28px; background: var(--rds-secondary); border-radius: 2px; }
+.ilb-role {
+  font-style: normal;
+  font-size: 13px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rds-dark-2);
+  font-weight: 700;
+  margin: 0;
+}
+.ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3); }
+
+/* ---------- variable meter chips (aria-hidden visual) + the (now visually
+   sr-only) live-region text that remains the sole announced source ---------- */
+.ilb-meters { display: flex; gap: var(--sp-3); flex-wrap: wrap; padding-top: 0; padding-bottom: var(--sp-4); }
+.ilb-meter-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--rds-light-1);
+  border: 1px solid var(--rds-light-4);
+  border-radius: var(--radius-chip);
+  padding: 6px 14px;
+  font-size: 14px;
+}
+.ilb-meter-track { width: 72px; height: 6px; background: var(--rds-light-3); border-radius: 3px; overflow: hidden; }
+.ilb-meter-fill { display: block; height: 100%; width: 0%; background: var(--rds-primary); border-radius: 3px; }
+.ilb-meter-value { font-weight: 700; color: var(--rds-primary); }
+
+/* The live region stays fully present/announced (role=status/aria-live/
+   aria-atomic all untouched by this pass) but is no longer the sighted
+   representation of the same values — the meter chips above are — so it's
+   visually sr-only, matching .ilb-sr-only's own clip technique below. */
+.ilb-vars-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- shared button base ---------- */
+/* .ilb-choice-btn/.ilb-continue-btn/.ilb-start-over-btn are selector-only
+   modifiers used by main.ts (and tests) to distinguish WHICH buttons are
+   current-scene choices vs. Continue vs. Start-over — none of them carry
+   their own base styling beyond .ilb-btn. */
+.ilb-scenario .ilb-btn {
   font: inherit;
   font-size: 1rem;
-  text-align: left;
-  color: var(--rds-primary);
-  background: #fff;
-  border: 2px solid var(--rds-primary);
-  border-radius: 12px;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  min-height: 24px;
 }
-.ilb-scenario .ilb-btn:hover { background: var(--rds-light-1); }
-/* Continue sits inside the feedback panel among prose, not in a full-width
-   choice stack -- an inline, content-width button reads more naturally
-   there than a full-width block. */
-.ilb-scenario .ilb-continue-btn { display: inline-block; width: auto; }
 
-/* Immediate-feedback panel: visible content (not sr-only) announced via the
-   Continue button's aria-describedby on focus (main.ts); its own
-   role=status/aria-live is belt-and-braces. Built/appended only when the
-   scenario can actually use it (main.ts's `needsFeedbackPanel`). */
+/* ---------- choice decision cards (mock's .choice) ---------- */
+.ilb-choices { display: flex; flex-direction: column; gap: var(--sp-3); }
+.ilb-scenario .ilb-choice-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  color: var(--rds-dark);
+  border: 2px solid var(--rds-light-4);
+  border-radius: var(--radius-card);
+  padding: var(--sp-4) var(--sp-5);
+  min-height: 56px;
+  transition: border-color var(--motion-fast) ease, transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+.ilb-scenario .ilb-choice-card:hover {
+  border-color: var(--rds-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-card);
+}
+.ilb-choice-marker {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--rds-light-2);
+  color: var(--rds-dark-2);
+  font-weight: 700;
+  font-size: 15px;
+  display: grid;
+  place-items: center;
+}
+.ilb-scenario .ilb-choice-card:hover .ilb-choice-marker { background: var(--rds-primary); color: #fff; }
+.ilb-choice-label { flex: 1 1 auto; }
+
+/* ---------- pill buttons (Continue, Start over) ---------- */
+.ilb-scenario .ilb-btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  background: var(--rds-primary);
+  color: #fff;
+  border: 2px solid var(--rds-primary);
+  border-radius: var(--radius-chip);
+  font-weight: 700;
+  padding: 10px 28px;
+}
+.ilb-scenario .ilb-btn-pill--ghost { background: #fff; color: var(--rds-primary); }
+
+/* ---------- immediate-feedback panel (mock's "coach note") ---------- */
 .ilb-feedback {
-  padding: 12px 16px;
-  margin-bottom: 16px;
   background: #fff8e1;
-  border: 1px solid var(--rds-light-4);
-  border-radius: var(--radius-card, 8px);
+  border-left: 4px solid var(--rds-secondary);
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
 }
 .ilb-feedback[hidden] { display: none; }
-.ilb-feedback p { margin: 0 0 12px; }
+.ilb-feedback-glyph { flex: none; font-size: 20px; color: var(--rds-secondary); }
+.ilb-feedback p { flex: 1 1 100%; margin: 0 0 var(--sp-3); min-width: 0; }
+.ilb-feedback .ilb-btn-pill { flex: none; }
 
-.ilb-score-line { font-weight: 700; margin: 0 0 16px; }
+/* ---------- ending result head (mock's .result-head) ---------- */
+.ilb-result-head { text-align: center; padding: var(--sp-6) var(--sp-6) var(--sp-5); }
+.ilb-eyebrow {
+  font-size: 13px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rds-dark-1);
+  font-weight: 700;
+  margin: 0 0 var(--sp-2);
+}
+.ilb-result-head h2 { font-size: 28px; }
+@media (min-width: 992px) { .ilb-result-head h2 { font-size: 32px; } }
+.ilb-score-num { font-size: 56px; font-weight: 700; color: var(--rds-primary); line-height: 1; margin-top: var(--sp-3); }
+.ilb-score-num small { font-size: 22px; color: var(--rds-dark-1); font-weight: 400; }
+.ilb-score-line { font-weight: 700; font-size: 14px; color: var(--rds-dark-2); margin: var(--sp-2) 0 0; }
+.ilb-quality-chips { display: flex; gap: var(--sp-2); justify-content: center; margin-top: var(--sp-4); flex-wrap: wrap; }
+.ilb-qchip { border-radius: var(--radius-chip); padding: 5px 14px; font-size: 14px; font-weight: 700; border: 1px solid; }
+.ilb-qchip--best { color: var(--rds-success); border-color: var(--rds-success); background: #f2f7ec; }
+.ilb-qchip--ok { color: #7a5a00; border-color: #7a5a00; background: #fff8e1; }
+.ilb-qchip--poor { color: #8b1f1f; border-color: var(--rds-danger); background: #fbeeee; }
 
-/* Debrief: static content, no live regions -- a real <ol> per spec 5/6,
-   quality conveyed as text + an aria-hidden glyph (never color alone),
-   mirroring param-sandbox's .ilb-challenge-mark pattern. */
+/* ---------- debrief timeline (mock's .timeline) ---------- */
+/* .ilb-debrief-list is UNCHANGED — see main.ts's comment on why it must
+   never be renamed away. .ilb-timeline is the styling-only companion class. */
 .ilb-debrief[hidden] { display: none; }
-.ilb-debrief-truncated-note { font-style: italic; color: var(--rds-dark-2); margin: 0 0 12px; }
-.ilb-debrief-list { padding-left: 1.5em; margin: 0; }
-.ilb-debrief-step { margin-bottom: 16px; }
-.ilb-debrief-quality { color: var(--rds-dark-2); }
-.ilb-debrief-other, .ilb-debrief-feedback {
+.ilb-debrief-truncated-note { font-style: italic; color: var(--rds-dark-2); margin: 0 0 var(--sp-3); }
+.ilb-timeline { list-style: none; padding-left: 0; margin: 0; position: relative; }
+.ilb-tstep { position: relative; padding: 0 0 var(--sp-5) 44px; margin-bottom: 0; }
+.ilb-tstep::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 26px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--rds-light-4);
+}
+.ilb-tstep:last-child::before { display: none; }
+.ilb-tnode {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+.ilb-tnode--best { background: var(--rds-success); }
+.ilb-tnode--poor { background: var(--rds-danger); }
+.ilb-tnode--ok { background: #7a5a00; }
+.ilb-tstep-where { display: block; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--rds-dark-1); font-weight: 700; }
+.ilb-tstep-chose { display: block; font-size: 16px; margin: 2px 0 4px; color: var(--rds-dark); }
+.ilb-tstep-qual { display: block; font-size: 13px; font-weight: 700; color: var(--rds-dark-2); }
+.ilb-tstep-qual.ilb-debrief-quality { color: var(--rds-dark-2); }
+.ilb-tstep-fb, .ilb-tstep-others {
   margin: 4px 0 0;
   color: var(--rds-dark-2);
   font-size: 0.95rem;
 }
+.ilb-tstep-fb { background: var(--rds-light-1); border-radius: 8px; padding: var(--sp-2) var(--sp-3); margin-top: var(--sp-2); display: block; }
+.ilb-tstep-others { display: block; margin-top: var(--sp-2); font-size: 13px; }
+
+/* ---------- 150ms scene-transition fade/rise (spec 2) ---------- */
+@keyframes ilb-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.ilb-enter { animation: ilb-enter var(--motion-fast) ease-out; }
 
 /* 2.5.8 (WCAG 2.2) target size: every button in the scenario gets at least
    a 24px-tall hit area. */
@@ -120,9 +297,7 @@
   outline-offset: 2px;
 }
 
-/* Visually-hidden but screen-reader-accessible text (unused by the runtime
-   today, kept for parity with param-sandbox/engine.css's audited utility
-   set -- a scene/ending author-visible affordance may need it later). */
+/* Visually-hidden but screen-reader-accessible text utility. */
 .ilb-sr-only {
   position: absolute;
   width: 1px;
@@ -137,4 +312,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ilb-scenario .ilb-btn { transition: none; }
+  .ilb-scenario .ilb-choice-card { transition: none; }
+  .ilb-scenario .ilb-choice-card:hover { transform: none; }
+  .ilb-enter { animation: none; }
 }

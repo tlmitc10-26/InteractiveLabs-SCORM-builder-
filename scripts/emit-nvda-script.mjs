@@ -264,7 +264,14 @@ async function generateBranchingDoc() {
   mountBranchingScenario(root, runtimeConfig);
 
   const clickChoice = (label) => {
-    const btn = Array.from(root.querySelectorAll(".ilb-choice-btn")).find((b) => b.textContent === label);
+    // Match on the visible label span's own text, not the button's raw
+    // (marker-inclusive) textContent — the runtime prepends an aria-hidden
+    // A/B/C marker span before the label (visual pass, 2026-08-28; see
+    // tests/sr-transcript-branching.test.ts's `choiceLabelText` helper,
+    // which this mirrors).
+    const btn = Array.from(root.querySelectorAll(".ilb-choice-btn")).find(
+      (b) => b.querySelector(".ilb-choice-label")?.textContent === label,
+    );
     if (!btn) throw new Error(`no visible choice button labeled "${label}"`);
     btn.click();
   };
@@ -297,12 +304,18 @@ async function generateBranchingDoc() {
 
   // ==================== 4. Debrief reading order at the ending ====================
   const readingEnd = readingOrderTranscript(root);
+  // NEW (visual pass, 2026-08-28): the "Scenario complete" eyebrow is now the
+  // FIRST "text"-role entry, ahead of the ending heading — see main.ts's
+  // renderEnding and tests/sr-transcript-branching.test.ts group 5. Excluded
+  // by identity (not just scoreLine) below so `debriefText` still resolves to
+  // the actual path-list entry rather than this new eyebrow.
+  const eyebrowEntry = readingEnd.find((e) => e.role === "text");
   const endingHeading = readingEnd.find((e) => e.role === "heading level 2");
   const scoreLine = readingEnd.find((e) => e.role === "text" && /^Decisions:/.test(e.name));
   const endStatus = readingEnd.find((e) => e.role === "status");
   const startOverButton = readingEnd.find((e) => e.role === "button");
   const debriefHeading = readingEnd.find((e) => e.role === "heading level 3");
-  const debriefText = readingEnd.find((e) => e.role === "text" && e !== scoreLine);
+  const debriefText = readingEnd.find((e) => e.role === "text" && e !== eyebrowEntry && e !== scoreLine);
 
   // ==================== Emit markdown ====================
   const lines = [];
@@ -392,6 +405,15 @@ async function generateBranchingDoc() {
   push();
   push("## 4. The ending and debrief");
   push();
+  if (eyebrowEntry) {
+    // NEW (visual pass, 2026-08-28): the "Scenario complete" eyebrow sits
+    // just above the ending heading in reading order — focus still lands on
+    // the heading itself (the focus-management contract is unchanged), so a
+    // sighted-equivalent browse-cursor read of the line just before it is
+    // what surfaces this new text.
+    push(`${n}. Move the browse cursor up one line from the heading → NVDA should say: **"${eyebrowEntry.name}"**`);
+    n++;
+  }
   push(`${n}. Focus lands on the ending heading → NVDA should say: **"${headingUtterance(endingHeading)}"**`);
   n++;
   if (scoreLine) {

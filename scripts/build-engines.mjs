@@ -32,13 +32,18 @@ function emitRootVariables(tokens) {
   return `:root {\n${lines.join("\n")}\n}`;
 }
 
+function emitSpacingMotionVars(tokens) {
+  const spaceLines = Object.keys(tokens.space).map((n) => `  --sp-${n}: ${tokens.space[n]};`);
+  return `${spaceLines.join("\n")}\n  --radius-chip: ${tokens.radius.chip};\n  --elev-card: ${tokens.elevation.card};\n  --motion-fast: ${tokens.motion.fast};`;
+}
+
 function emitAppThemeCss(tokens) {
   const colorLines = Object.keys(tokens.colors).map((n) => `  --color-rds-${n}: ${tokens.colors[n]};`);
-  return `${GENERATED}\n${emitRootVariables(tokens)}\n\n@theme {\n${colorLines.join("\n")}\n  --font-app: ${tokens.fonts.app};\n  --radius-pill: ${tokens.radius.pill};\n  --radius-card: ${tokens.radius.card};\n}\n`;
+  return `${GENERATED}\n${emitRootVariables(tokens)}\n\n@theme {\n${colorLines.join("\n")}\n  --font-app: ${tokens.fonts.app};\n  --radius-pill: ${tokens.radius.pill};\n  --radius-card: ${tokens.radius.card};\n${emitSpacingMotionVars(tokens)}\n}\n`;
 }
 
 function emitEngineTokensCss(tokens) {
-  return `${GENERATED}\n${emitRootVariables(tokens)}\n:root {\n  --ilb-font-heading: ${tokens.fonts.lessonHeading};\n  --ilb-font-body: ${tokens.fonts.lessonBody};\n  --radius-card: ${tokens.radius.card};\n}\n`;
+  return `${GENERATED}\n${emitRootVariables(tokens)}\n:root {\n  --ilb-font-heading: ${tokens.fonts.lessonHeading};\n  --ilb-font-body: ${tokens.fonts.lessonBody};\n  --radius-card: ${tokens.radius.card};\n${emitSpacingMotionVars(tokens)}\n}\n`;
 }
 
 /**

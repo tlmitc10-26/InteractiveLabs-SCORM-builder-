@@ -12,6 +12,8 @@
  * types.
  */
 
+import type { TokenName } from "@/lib/design/tokens";
+
 export const QUALITY_WEIGHTS = { best: 1, acceptable: 0.5, poor: 0 } as const;
 export type Quality = keyof typeof QUALITY_WEIGHTS;
 
@@ -47,6 +49,9 @@ export type BranchingConfigLike = {
   title: string;
   intro?: string;
   role?: string;
+  /** Header band color when a scene has no image (see schema.ts's
+   *  headerColor doc comment); absent means "primary" at the runtime. */
+  headerColor?: TokenName;
   variables: Variable[];
   scenes: Scene[];
   startSceneId: string;

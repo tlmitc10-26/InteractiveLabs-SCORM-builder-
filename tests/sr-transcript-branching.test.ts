@@ -41,13 +41,24 @@ function mountJury(): HTMLElement {
   return root;
 }
 
+/** The visible label text of a choice button, EXCLUDING the aria-hidden A/B/C
+ *  marker span the runtime prepends (visual pass, 2026-08-28) -- see
+ *  main.ts's renderChoices doc comment. The accessible-name computation
+ *  this file's transcript assertions rely on (computeAccessibleName, via
+ *  focusOrderTranscript/readingOrderTranscript) already correctly skips
+ *  aria-hidden content on its own; this helper exists only so the TEST
+ *  DRIVER can find/click the right button by its plain label text too. */
+function choiceLabelText(btn: Element): string | null {
+  return btn.querySelector(".ilb-choice-label")?.textContent ?? null;
+}
+
 /** Clicks the choice button with exactly this visible label. Mirrors how a
  *  real pointer/keyboard-activation click reaches the runtime's click
  *  handler -- there is no lower-level "applyChoice" entry point exposed to
  *  callers outside the module, by design (see main.ts's stale-click-guard
  *  comment), so driving the DOM is the correct way to advance scenes here. */
 function clickChoice(root: HTMLElement, label: string): void {
-  const btn = Array.from(root.querySelectorAll<HTMLButtonElement>(".ilb-choice-btn")).find((b) => b.textContent === label);
+  const btn = Array.from(root.querySelectorAll<HTMLButtonElement>(".ilb-choice-btn")).find((b) => choiceLabelText(b) === label);
   if (!btn) throw new Error(`no visible choice button labeled "${label}"`);
   btn.click();
 }
@@ -64,6 +75,36 @@ function oneSceneImageConfig(imageRole: "decorative" | "informative"): RuntimeBr
         imageUrl: "courtroom.png",
         imageRole,
         ...(imageRole === "informative" ? { imageAlt: "A courtroom sketch" } : {}),
+        choices: [{ id: "c1", label: "Choice one", quality: "best", effects: [], goTo: "ending:end1" }],
+      },
+    ],
+    startSceneId: "scene1",
+    endings: [{ id: "end1", title: "The End", body: "<p>Done.</p>" }],
+    feedbackMode: "debrief",
+    showPathInDebrief: true,
+  };
+}
+
+/** Same shape as `oneSceneImageConfig("informative")`, PLUS a start-scene
+ *  `role` line and an `intro` block -- the combination the review round
+ *  after commit 4cb0827 asked to lock explicitly: a start scene can carry
+ *  an informative header image AND a role line (and an intro) at once, and
+ *  main.ts's renderScene must keep them in this exact order: header image,
+ *  then role line, then intro, then the h2. */
+function startSceneWithRoleAndImageConfig(): RuntimeBranchingConfig {
+  return {
+    title: "Role + image test",
+    role: "You are a new hire.",
+    intro: "<p>Welcome to week one.</p>",
+    variables: [],
+    scenes: [
+      {
+        id: "scene1",
+        title: "Scene One",
+        body: "<p>Body text.</p>",
+        imageUrl: "orientation.png",
+        imageRole: "informative",
+        imageAlt: "An orientation packet on a desk",
         choices: [{ id: "c1", label: "Choice one", quality: "best", effects: [], goTo: "ending:end1" }],
       },
     ],
@@ -162,6 +203,10 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
 
       const entries = readingOrderTranscript(root);
       expect(entries).toEqual([
+        // NEW (visual pass, 2026-08-28): the "Scenario complete" eyebrow —
+        // the ONE deliberate new visible/announced text this pass adds (see
+        // main.ts's renderEnding and transcript.ts's TEXT_CARRIER_CLASSES).
+        { role: "text", name: "Scenario complete" },
         { role: "heading level 2", name: "A verdict the room can stand behind" },
         { role: "text", name: "Decisions: 3 best. Score: 100%." },
         { role: "status", name: "Jury trust: 85", live: "polite" },
@@ -196,13 +241,18 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
   });
 
   describe("6. image contract", () => {
-    it("gives an informative scene image its own transcript entry with the authored alt text", () => {
+    it("gives an informative scene image its own transcript entry with the authored alt text, BEFORE the heading (the image is now the scene's header — spec 2's 2026-08-28 header rule)", () => {
       document.body.innerHTML = '<div id="root"></div>';
       const root = document.getElementById("root")!;
       mountBranchingScenario(root, oneSceneImageConfig("informative"));
+      // NEW ORDER (visual pass, 2026-08-28): an uploaded image is now the
+      // scene's HEADER (Google-Forms model — spec 2), rendered above the
+      // title/body rather than after them, so its transcript entry moves
+      // ahead of the heading too. This is the pass's other deliberate
+      // reading-order diff (alongside the ending eyebrow).
       expect(readingOrderTranscript(root)).toEqual([
-        { role: "heading level 2", name: "Scene One" },
         { role: "img", name: "A courtroom sketch" },
+        { role: "heading level 2", name: "Scene One" },
         { role: "button", name: "Choice one" },
       ]);
     });
@@ -214,6 +264,25 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
       const img = root.querySelector("img.ilb-scene-image")!;
       expect(img.getAttribute("alt")).toBe(""); // decorative: alt="" per the runtime's image-role contract
       expect(readingOrderTranscript(root)).toEqual([
+        { role: "heading level 2", name: "Scene One" },
+        { role: "button", name: "Choice one" },
+      ]);
+    });
+
+    it("orders the header image ahead of the role line and heading when a start scene carries both an informative image AND a role line (locks the two reading-order diffs together, not just each alone)", () => {
+      document.body.innerHTML = '<div id="root"></div>';
+      const root = document.getElementById("root")!;
+      mountBranchingScenario(root, startSceneWithRoleAndImageConfig());
+      // Full DOM order per main.ts's renderScene: header image, role line,
+      // intro, h2, body, choices. The intro paragraph sits between the role
+      // line and the heading in the DOM but -- like the scene's own body
+      // copy -- is plain prose with no tracked category of its own (see
+      // transcript.ts's TEXT_CARRIER_CLASSES / categoryOf), so it
+      // contributes zero transcript entries; only the img, role-line text,
+      // heading, and button entries are asserted here.
+      expect(readingOrderTranscript(root)).toEqual([
+        { role: "img", name: "An orientation packet on a desk" },
+        { role: "text", name: "You are a new hire." },
         { role: "heading level 2", name: "Scene One" },
         { role: "button", name: "Choice one" },
       ]);

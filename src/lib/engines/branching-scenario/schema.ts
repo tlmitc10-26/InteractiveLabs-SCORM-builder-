@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sanitizeRichText, sanitizePlainText } from "@/lib/sanitize";
+import { RDS_COLOR_NAMES, type TokenName } from "@/lib/design/tokens";
 
 const idPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const safeId = z.string().min(1).max(40).regex(idPattern, "ids must be letters/digits/underscore");
@@ -48,6 +49,13 @@ export const branchingConfigSchema = z.object({
   title: plain(200),
   intro: rich(5000).optional(),
   role: plain(200).optional(),
+  // Scenario-level header band color (visual pass only — see
+  // docs/superpowers/specs/2026-08-27-runtime-visual-design.md §2): used ONLY
+  // when a scene has no uploaded image, in which case the runtime paints a
+  // solid brand band in this token color (default "primary" when absent —
+  // see main.ts's `config.headerColor ?? "primary"`). Token-only, like every
+  // other color in this app — never a raw hex/gradient.
+  headerColor: z.enum(RDS_COLOR_NAMES as [TokenName, ...TokenName[]]).optional(),
   variables: z.array(variableSchema).max(8).default([]),
   scenes: z.array(sceneSchema).min(1).max(40),
   startSceneId: safeId,

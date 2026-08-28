@@ -61,11 +61,13 @@ const preloadedBandUrls = new Set<string>();
 //                #B8860B marker which read too light against #fff8e1/white)
 //   axisText -> --rds-dark-2   (#484848)
 //   frame    -> --rds-light-5  (#bfbfbf)
+//   gridline -> --rds-light-3  (#e8e8e8; Task 3 visual polish)
 const ILB_CHART_COLORS = {
   line: "#8c1d40",
   marker: "#747474",
   axisText: "#484848",
   frame: "#bfbfbf",
+  gridline: "#e8e8e8",
 } as const;
 
 /** Placement model (schema.ts's `placementSchema`): where an input/output
@@ -579,11 +581,17 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
   // challenge-met changes -- one live region, text changes together, no
   // separate/duplicate announcement.
   const challengeNodes = new Map<string, HTMLElement>();
-  const scoreStatus = el("div", "ilb-score-status");
+  // Task 3 visual polish: `.ilb-score-banner` carries the new banner
+  // styling (neutral / `.complete` success, see engine.css); `.ilb-score-
+  // status` stays on the same element as the stable query/announcement
+  // hook it always was (tests, src/lib/a11y/transcript.ts's
+  // TEXT_CARRIER_CLASSES, scripts/emit-nvda-script.mjs) -- unchanged text,
+  // structure, and live-region behavior, styling only.
+  const scoreStatus = el("div", "ilb-score-status ilb-score-banner");
   if (config.challenges.length) {
     const panel = el("div", "ilb-challenges");
     panel.setAttribute("aria-live", "polite");
-    const h = el("h2"); h.textContent = "Challenges"; panel.appendChild(h);
+    const h = el("h2", "ilb-section-label"); h.textContent = "Challenges"; panel.appendChild(h);
     panel.appendChild(scoreStatus);
     for (const ch of config.challenges) {
       const row = el("div", "ilb-challenge");
@@ -753,6 +761,59 @@ export function mountSandbox(root: HTMLElement, config: RuntimeSandboxConfig): v
 
     const px = (x: number) => rect.x + ((x - xMin) / (xMax - xMin || 1)) * rect.w;
     const py = (y: number) => rect.y + rect.h - ((y - yMin) / (yMax - yMin || 1)) * rect.h;
+
+    // Light gridlines (Task 3 visual polish): drawn first, full opacity, so
+    // every later element (area fill, frame, line, marker, axis text) sits
+    // visually on top of them. Axis text/labels below are untouched.
+    const GRID_ROWS = 3, GRID_COLS = 3;
+    ctx.strokeStyle = ILB_CHART_COLORS.gridline; ctx.lineWidth = 1;
+    for (let i = 1; i < GRID_ROWS; i++) {
+      const gy = rect.y + (rect.h * i) / GRID_ROWS;
+      ctx.beginPath();
+      ctx.moveTo(rect.x, gy);
+      ctx.lineTo(rect.x + rect.w, gy);
+      ctx.stroke();
+    }
+    for (let i = 1; i < GRID_COLS; i++) {
+      const gx = rect.x + (rect.w * i) / GRID_COLS;
+      ctx.beginPath();
+      ctx.moveTo(gx, rect.y);
+      ctx.lineTo(gx, rect.y + rect.h);
+      ctx.stroke();
+    }
+
+    // 8%-opacity area fill under the line (Task 3 visual polish): one filled
+    // polygon per contiguous run of valid samples, mirroring the stroke
+    // loop's own needMove break below, so a formula-failure gap never
+    // produces a misleading fill across it. globalAlpha is restored to 1
+    // immediately after so the frame/line/marker/text drawn afterward are
+    // unaffected.
+    ctx.fillStyle = ILB_CHART_COLORS.line;
+    ctx.globalAlpha = 0.08;
+    let fillSegStart = -1;
+    for (let i = 0; i <= raw.length; i++) {
+      const p = i < raw.length ? raw[i] : null;
+      if (p !== null && fillSegStart === -1) fillSegStart = i;
+      if ((p === null || i === raw.length) && fillSegStart !== -1) {
+        const segEnd = i - 1; // inclusive
+        if (segEnd > fillSegStart) {
+          const [xStart] = raw[fillSegStart] as [number, number];
+          const [xEnd] = raw[segEnd] as [number, number];
+          ctx.beginPath();
+          ctx.moveTo(px(xStart), rect.y + rect.h);
+          for (let j = fillSegStart; j <= segEnd; j++) {
+            const [x, y] = raw[j] as [number, number];
+            ctx.lineTo(px(x), py(y));
+          }
+          ctx.lineTo(px(xEnd), rect.y + rect.h);
+          ctx.closePath();
+          ctx.fill();
+        }
+        fillSegStart = -1;
+      }
+    }
+    ctx.globalAlpha = 1;
+
     ctx.strokeStyle = ILB_CHART_COLORS.frame; ctx.lineWidth = 1;
     ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
     ctx.strokeStyle = ILB_CHART_COLORS.line; ctx.lineWidth = 2;
