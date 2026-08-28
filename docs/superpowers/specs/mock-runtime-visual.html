@@ -21,7 +21,9 @@
 
   /* ---------- scene card ---------- */
   .scene-card{background:#fff;border-radius:var(--radius-card);box-shadow:var(--elev-card);overflow:hidden;border:1px solid var(--rds-light-3)}
-  .scene-img{width:100%;aspect-ratio:16/7;object-fit:cover;display:block;background:linear-gradient(160deg,#3d3a45 0%,#6b5560 55%,#8c1d40 130%)}
+  .brand-band{width:100%;height:96px;background:var(--rds-primary);border-bottom:4px solid var(--rds-secondary)}
+  .img-slot{width:100%;aspect-ratio:16/7;display:grid;place-items:center;background:var(--rds-light-2);border-bottom:1px solid var(--rds-light-4);color:var(--rds-dark-1);font-size:15px;text-align:center}
+  .img-slot .inner{border:2px dashed var(--rds-light-5);border-radius:12px;padding:24px 40px;background:#fff}
   .scene-body{padding:var(--sp-5) var(--sp-6) var(--sp-6)}
   .role-line{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4)}
   .role-line .bar{width:4px;height:28px;background:var(--rds-secondary);border-radius:2px}
@@ -88,9 +90,9 @@
 <body>
 <div class="frame">
 
-  <p class="board-label">State 1 · Scene view (Branching Scenario)</p>
+  <p class="board-label">State 1a · Scene view, no image uploaded: exact ASU maroon band (#8C1D40), never a gradient</p>
   <div class="scene-card">
-    <div class="scene-img" role="img" aria-label="Mockup stand-in for a scene image"></div>
+    <div class="brand-band"></div>
     <div class="scene-body">
       <div class="role-line"><span class="bar"></span><span class="text">You are a juror in a criminal trial</span></div>
       <h2 class="scene-title">The First Vote</h2>
@@ -103,6 +105,14 @@
         <button class="choice"><span class="marker">B</span> Vote with the majority to keep things moving</button>
         <button class="choice"><span class="marker">C</span> Ask to re-examine the evidence list first</button>
       </div>
+    </div>
+  </div>
+
+  <p class="board-label">State 1b · Scene view, with an uploaded image: the designer's image is the header (Google-Forms style)</p>
+  <div class="scene-card">
+    <div class="img-slot"><span class="inner">Your uploaded scene image renders here<br>full-bleed, 16:7 crop, existing upload + alt-text pipeline</span></div>
+    <div class="scene-body" style="padding-bottom:24px">
+      <h2 class="scene-title" style="font-size:24px;margin-bottom:0">The Timeline</h2>
     </div>
   </div>
 

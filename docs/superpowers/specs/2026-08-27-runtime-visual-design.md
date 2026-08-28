@@ -15,7 +15,7 @@ Raise the visual strength of both engine runtimes to the bar Rise sets, **changi
 ## 2. Branching Scenario runtime (the main event)
 
 **Scene view → a staged card:**
-- Scene image (when present) becomes a full-bleed header: 16:9 crop via `object-fit: cover`, max-height cap, rounded top corners. Title and body sit BELOW the image on the card surface — never overlaid on the image (text-over-arbitrary-photo contrast is unverifiable; our doctrine says don't fake it).
+- **Header rule (Tamara's decision, 2026-08-28 — Google-Forms model):** when the scene has an uploaded image, the image IS the header (full-bleed 16:7 crop via `object-fit: cover`, max-height cap, rounded top corners, existing upload + imageRole/imageAlt pipeline). When there is no image, the header is a clean brand band in **exact ASU maroon `#8C1D40`** (`--rds-primary`) with a gold (`--rds-secondary`) rule beneath — solid token colors only, **never a gradient or any non-token color**. Optionally, a scenario-level `headerColor` token choice (from the 16 RDS tokens, token-only per the established rule) lets a designer pick a different approved band color; default is primary. Title and body sit BELOW the header on the card surface — never overlaid on an image (text-over-arbitrary-photo contrast is unverifiable; our doctrine says don't fake it).
 - Role line ("You are a juror…") becomes a distinct opener: small-caps label with a gold accent bar, start scene only.
 - Body typography: measure capped (~70ch), comfortable line-height, Georgia headings as today.
 
