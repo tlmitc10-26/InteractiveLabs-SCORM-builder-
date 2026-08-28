@@ -85,6 +85,29 @@ describe("axe-core accessibility gate", () => {
     const results = await auditBody();
     expect(results.violations).toEqual([]);
   });
+
+  it("has zero violations once the score banner shows the .complete success state (visual pass restyle)", async () => {
+    const config: SandboxConfig = sandboxConfigSchema.parse({
+      title: "Completion banner demo",
+      inputs: [{ id: "mass", label: "Mass", type: "slider", min: 0, max: 10, step: 1, defaultValue: 5, units: "kg" }],
+      outputs: [{ id: "double", label: "Double", formula: "mass * 2", units: "kg", decimals: 0 }],
+      challenges: [
+        { id: "c1", prompt: "Reach a doubled mass of at least 12.", outputId: "double", comparator: "gte", value: 12 },
+      ],
+    });
+    const runtimeConfig = toRuntimeConfig(config, (id) => `assets/${id}.png`);
+    mountSandbox(document.getElementById("root")!, runtimeConfig);
+
+    const slider = document.querySelector('input[type="range"][data-input="mass"]') as HTMLInputElement;
+    slider.value = "7"; // double = 14 >= 12: meets the challenge, triggers the completed banner
+    slider.dispatchEvent(new Event("input", { bubbles: true }));
+
+    const status = document.querySelector(".ilb-score-status")!;
+    expect(status.classList.contains("complete")).toBe(true); // sanity: the state under audit actually rendered
+
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
 });
 
 describe("axe-core accessibility gate: branching scenario", () => {
@@ -165,6 +188,43 @@ describe("axe-core accessibility gate: branching scenario", () => {
   it("has zero violations while the immediate-feedback panel + Continue button are shown", async () => {
     mountBranchingScenario(document.getElementById("root")!, immediateConfig);
     clickChoice("Go");
+
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  // The jury/blank/immediate starters above all render the no-image brand-band
+  // header (spec §2's default), so a config with an uploaded scene image is
+  // needed to audit that header variant (full-bleed <img>, rounded-top card,
+  // image-before-heading reading order) at all.
+  const imageHeaderConfig = toBranchingRuntimeConfig(
+    branchingConfigSchema.parse({
+      title: "Image Header Audit",
+      variables: [],
+      scenes: [
+        {
+          id: "s1",
+          title: "Scene With An Image",
+          body: "<p>This scene has an uploaded header image.</p>",
+          imageAssetId: "courtroom",
+          imageRole: "informative",
+          imageAlt: "A courtroom sketch",
+          choices: [{ id: "go", label: "Continue", quality: "best", effects: [], goTo: "ending:done" }],
+        },
+      ],
+      startSceneId: "s1",
+      endings: [{ id: "done", title: "Done", body: "<p>The end.</p>" }],
+      feedbackMode: "debrief",
+      showPathInDebrief: true,
+    }),
+    (id) => `assets/${id}.png`,
+  );
+
+  it("has zero violations for a scene with an uploaded image header (spec §2 header rule)", async () => {
+    mountBranchingScenario(document.getElementById("root")!, imageHeaderConfig);
+
+    const img = document.querySelector("img.ilb-scene-image");
+    expect(img).not.toBeNull(); // sanity: the state under audit actually rendered
 
     const results = await auditBody();
     expect(results.violations).toEqual([]);

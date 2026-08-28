@@ -622,5 +622,25 @@ describe("mountBranchingScenario", () => {
     it("defines a reduced-motion override", () => {
       expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
     });
+
+    describe("reduced-motion neutralizes the visual pass's new transitions (spec §2 / plan Task 4)", () => {
+      // Isolate the @media block's own body so a match here can only come
+      // from INSIDE the reduced-motion override, never from the unguarded
+      // rules elsewhere in the file that define the animation/transform in
+      // the first place.
+      const reducedMotionBlock = css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/)?.[1];
+
+      it("has a reduced-motion block to inspect", () => {
+        expect(reducedMotionBlock).toBeDefined();
+      });
+
+      it("neutralizes the .ilb-enter scene-transition animation", () => {
+        expect(reducedMotionBlock).toMatch(/\.ilb-enter\s*\{[^}]*animation:\s*none/);
+      });
+
+      it("neutralizes the .ilb-choice-card hover lift transform", () => {
+        expect(reducedMotionBlock).toMatch(/\.ilb-choice-card:hover\s*\{[^}]*transform:\s*none/);
+      });
+    });
   });
 });
