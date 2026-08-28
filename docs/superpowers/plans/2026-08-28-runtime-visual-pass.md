@@ -21,6 +21,7 @@ src/lib/engines/branching-scenario/schema.ts                          # Task 2: 
 src/lib/engines/branching-scenario/runtime-config.ts                  # Task 2: pass-through
 src/engine-runtime/branching-scenario/{main.ts,engine.css}            # Task 2: the main visual event
 src/app/interactives/[id]/branching-editor.tsx                        # Task 2: ONE SelectField (header color)
+src/lib/a11y/transcript.ts                                             # Task 2: text-carrier class registration (the eyebrow)
 src/engine-runtime/param-sandbox/{main.ts,engine.css}                 # Task 3: polish
 tests/{branching-runtime,engine-runtime,sr-transcript*,axe,contrast-pairs(new)}.test.ts  # Tasks 2-4
 docs/a11y/* (regenerated)                                             # Task 4

@@ -15,7 +15,7 @@ Raise the visual strength of both engine runtimes to the bar Rise sets, **changi
 ## 2. Branching Scenario runtime (the main event)
 
 **Scene view → a staged card:**
-- **Header rule (Tamara's decision, 2026-08-28 — Google-Forms model):** when the scene has an uploaded image, the image IS the header (full-bleed 16:7 crop via `object-fit: cover`, max-height cap, rounded top corners, existing upload + imageRole/imageAlt pipeline). When there is no image, the header is a clean brand band in **exact ASU maroon `#8C1D40`** (`--rds-primary`) with a gold (`--rds-secondary`) rule beneath — solid token colors only, **never a gradient or any non-token color**. Optionally, a scenario-level `headerColor` token choice (from the 16 RDS tokens, token-only per the established rule) lets a designer pick a different approved band color; default is primary. Title and body sit BELOW the header on the card surface — never overlaid on an image (text-over-arbitrary-photo contrast is unverifiable; our doctrine says don't fake it).
+- **Header rule (Tamara's decision, 2026-08-28 — Google-Forms model):** when the scene has an uploaded image, the image IS the header (full-bleed 16:7 crop via `object-fit: cover`, max-height cap, rounded top corners, existing upload + imageRole/imageAlt pipeline). When there is no image, the header is a clean brand band in **exact ASU maroon `#8C1D40`** (`--rds-primary`) with a gold (`--rds-secondary`) rule beneath — solid token colors only, **never a gradient or any non-token color**. Optionally, a scenario-level `headerColor` token choice (from the 16 RDS tokens, token-only per the established rule) lets a designer pick a different approved band color; default is primary. Title and body sit BELOW the header on the card surface — never overlaid on an image (text-over-arbitrary-photo contrast is unverifiable; our doctrine says don't fake it). Reading-order consequence: the header image precedes the role line and heading in reading order; focus still lands on the heading after transitions; the NVDA human check evaluates this pattern (pending Tamara's confirmation).
 - Role line ("You are a juror…") becomes a distinct opener: small-caps label with a gold accent bar, start scene only.
 - Body typography: measure capped (~70ch), comfortable line-height, Georgia headings as today.
 
@@ -42,7 +42,7 @@ Raise the visual strength of both engine runtimes to the bar Rise sets, **changi
 
 ## 4. Token additions (consumed, not speculative)
 
-`tokens.json` gains: `space` scale (4/8/12/16/24/32 — reintroduced NOW WITH consumers), `radius.chip`, `elevation.card` (a shadow value), `motion.fast` (150ms). Both emitters updated in lockstep (drift test extends). Any color used by new elements comes from the existing 16 — no new colors.
+`tokens.json` gains: `space` scale (4/8/12/16/24/32 — reintroduced NOW WITH consumers), `radius.chip`, `elevation.card` (a shadow value), `motion.fast` (150ms). Both emitters updated in lockstep (drift test extends). Any color used by new elements comes from the existing 16 — no new colors, with one approved exception: the ending's quality-chip/timeline-node palette from the Tamara-approved normative mock — 5 fixed values (`#7a5a00`, `#f2f7ec`, `#fff8e1`, `#fbeeee`, plus the existing `--rds-success`/`--rds-danger` pair `#446d12`/`#8b1f1f`) shipped as literals rather than the 16-token set, with every pair contrast-asserted in tests (Task 4).
 
 ## 5. Explicitly unchanged
 

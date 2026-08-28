@@ -85,6 +85,36 @@ function oneSceneImageConfig(imageRole: "decorative" | "informative"): RuntimeBr
   };
 }
 
+/** Same shape as `oneSceneImageConfig("informative")`, PLUS a start-scene
+ *  `role` line and an `intro` block -- the combination the review round
+ *  after commit 4cb0827 asked to lock explicitly: a start scene can carry
+ *  an informative header image AND a role line (and an intro) at once, and
+ *  main.ts's renderScene must keep them in this exact order: header image,
+ *  then role line, then intro, then the h2. */
+function startSceneWithRoleAndImageConfig(): RuntimeBranchingConfig {
+  return {
+    title: "Role + image test",
+    role: "You are a new hire.",
+    intro: "<p>Welcome to week one.</p>",
+    variables: [],
+    scenes: [
+      {
+        id: "scene1",
+        title: "Scene One",
+        body: "<p>Body text.</p>",
+        imageUrl: "orientation.png",
+        imageRole: "informative",
+        imageAlt: "An orientation packet on a desk",
+        choices: [{ id: "c1", label: "Choice one", quality: "best", effects: [], goTo: "ending:end1" }],
+      },
+    ],
+    startSceneId: "scene1",
+    endings: [{ id: "end1", title: "The End", body: "<p>Done.</p>" }],
+    feedbackMode: "debrief",
+    showPathInDebrief: true,
+  };
+}
+
 describe("screen-reader announcement contract (jury starter, branching scenario)", () => {
   describe("1. start-scene focus-order transcript (the contract)", () => {
     it("matches the exact expected sequence a screen-reader user tabbing through the start scene hears", () => {
@@ -234,6 +264,25 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
       const img = root.querySelector("img.ilb-scene-image")!;
       expect(img.getAttribute("alt")).toBe(""); // decorative: alt="" per the runtime's image-role contract
       expect(readingOrderTranscript(root)).toEqual([
+        { role: "heading level 2", name: "Scene One" },
+        { role: "button", name: "Choice one" },
+      ]);
+    });
+
+    it("orders the header image ahead of the role line and heading when a start scene carries both an informative image AND a role line (locks the two reading-order diffs together, not just each alone)", () => {
+      document.body.innerHTML = '<div id="root"></div>';
+      const root = document.getElementById("root")!;
+      mountBranchingScenario(root, startSceneWithRoleAndImageConfig());
+      // Full DOM order per main.ts's renderScene: header image, role line,
+      // intro, h2, body, choices. The intro paragraph sits between the role
+      // line and the heading in the DOM but -- like the scene's own body
+      // copy -- is plain prose with no tracked category of its own (see
+      // transcript.ts's TEXT_CARRIER_CLASSES / categoryOf), so it
+      // contributes zero transcript entries; only the img, role-line text,
+      // heading, and button entries are asserted here.
+      expect(readingOrderTranscript(root)).toEqual([
+        { role: "img", name: "An orientation packet on a desk" },
+        { role: "text", name: "You are a new hire." },
         { role: "heading level 2", name: "Scene One" },
         { role: "button", name: "Choice one" },
       ]);

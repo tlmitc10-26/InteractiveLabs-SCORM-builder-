@@ -201,7 +201,7 @@
 .ilb-qchip { border-radius: var(--radius-chip); padding: 5px 14px; font-size: 14px; font-weight: 700; border: 1px solid; }
 .ilb-qchip--best { color: var(--rds-success); border-color: var(--rds-success); background: #f2f7ec; }
 .ilb-qchip--ok { color: #7a5a00; border-color: #b8860b; background: #fff8e1; }
-.ilb-qchip--poor { color: #8b1f1f; border-color: #b72a2a; background: #fbeeee; }
+.ilb-qchip--poor { color: #8b1f1f; border-color: var(--rds-danger); background: #fbeeee; }
 
 /* ---------- debrief timeline (mock's .timeline) ---------- */
 /* .ilb-debrief-list is UNCHANGED — see main.ts's comment on why it must
@@ -234,8 +234,8 @@
   color: #fff;
 }
 .ilb-tnode--best { background: var(--rds-success); }
-.ilb-tnode--poor { background: #b72a2a; }
-.ilb-tnode--ok { background: #b8860b; }
+.ilb-tnode--poor { background: var(--rds-danger); }
+.ilb-tnode--ok { background: #7a5a00; }
 .ilb-tstep-where { display: block; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--rds-dark-1); font-weight: 700; }
 .ilb-tstep-chose { display: block; font-size: 16px; margin: 2px 0 4px; color: var(--rds-dark); }
 .ilb-tstep-qual { display: block; font-size: 13px; font-weight: 700; color: var(--rds-dark-2); }
