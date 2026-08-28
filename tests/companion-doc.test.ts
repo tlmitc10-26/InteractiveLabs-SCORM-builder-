@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import { parseCompanionDoc, serializeCompanionDoc, type ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
 import { validateBranchingConfig, type BranchingConfig } from "@/lib/engines/branching-scenario/schema";
@@ -999,5 +1001,39 @@ describe("serializeCompanionDoc — round-trip", () => {
     const reordered: BranchingConfig = { ...jury, startSceneId: jury.scenes[1].id };
     const reorderedDoc = serializeCompanionDoc(reordered);
     expect(reorderedDoc).toMatch(/^START:/m);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The faculty-facing template (public/companion-doc-template.txt). Read from
+// disk (not inlined) so drift between the actual shipped file and the parser
+// breaks the build.
+// ---------------------------------------------------------------------------
+describe("companion-doc-template.txt (public/, faculty-facing)", () => {
+  const templatePath = join(process.cwd(), "public", "companion-doc-template.txt");
+  const templateText = readFileSync(templatePath, "utf8");
+
+  it("parses with zero ERRORS (warnings allowed, but none are expected of a clean template)", () => {
+    const { report } = parseCompanionDoc(templateText);
+    expect(errors(report), JSON.stringify(report)).toHaveLength(0);
+    expect(warnings(report), JSON.stringify(report)).toHaveLength(0);
+  });
+
+  it("parses to a config that validates via validateBranchingConfig", () => {
+    const { config } = parseCompanionDoc(templateText);
+    const r = validateBranchingConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("has no em dashes or en dashes anywhere (faculty-facing plain punctuation)", () => {
+    expect(templateText).not.toMatch(/[–—]/);
+  });
+
+  it("carries no bare tab/CR artifacts and lives outside public/engines (scanner/manifest untouched)", () => {
+    // The template is a plain top-level public/ asset, not a scanned engine
+    // asset — it must never end up under public/engines or referenced by the
+    // engines manifest.
+    const manifest = readFileSync(join(process.cwd(), "public", "engines", "engines.manifest.json"), "utf8");
+    expect(manifest).not.toMatch(/companion-doc-template/);
   });
 });
