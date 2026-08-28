@@ -41,4 +41,24 @@ describe("design tokens", () => {
     expect(css).toContain("--radius-card: 8px;");
     expect(css).not.toContain("--ilb-min-target");
   });
+  it("engine tokens css emits spacing/radius-chip/elevation/motion tokens consumed by the visual pass", () => {
+    const css = emitEngineTokensCss();
+    expect(css).toContain("--sp-1: 4px;");
+    expect(css).toContain("--sp-2: 8px;");
+    expect(css).toContain("--sp-3: 12px;");
+    expect(css).toContain("--sp-4: 16px;");
+    expect(css).toContain("--sp-5: 24px;");
+    expect(css).toContain("--sp-6: 32px;");
+    expect(css).toContain("--radius-chip: 999px;");
+    expect(css).toContain("--elev-card: 0 1px 3px rgba(25,25,25,.08), 0 4px 14px rgba(25,25,25,.06);");
+    expect(css).toContain("--motion-fast: 150ms;");
+  });
+  it("app theme css emits the same spacing/radius-chip/elevation/motion tokens (harmless for future app use)", () => {
+    const css = emitAppThemeCss();
+    expect(css).toContain("--sp-1: 4px;");
+    expect(css).toContain("--sp-6: 32px;");
+    expect(css).toContain("--radius-chip: 999px;");
+    expect(css).toContain("--elev-card: 0 1px 3px rgba(25,25,25,.08), 0 4px 14px rgba(25,25,25,.06);");
+    expect(css).toContain("--motion-fast: 150ms;");
+  });
 });

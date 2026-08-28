@@ -38,4 +38,13 @@
   --font-app: Arial, Helvetica, sans-serif;
   --radius-pill: 50rem;
   --radius-card: 8px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --radius-chip: 999px;
+  --elev-card: 0 1px 3px rgba(25,25,25,.08), 0 4px 14px rgba(25,25,25,.06);
+  --motion-fast: 150ms;
 }
