@@ -200,7 +200,7 @@
 .ilb-quality-chips { display: flex; gap: var(--sp-2); justify-content: center; margin-top: var(--sp-4); flex-wrap: wrap; }
 .ilb-qchip { border-radius: var(--radius-chip); padding: 5px 14px; font-size: 14px; font-weight: 700; border: 1px solid; }
 .ilb-qchip--best { color: var(--rds-success); border-color: var(--rds-success); background: #f2f7ec; }
-.ilb-qchip--ok { color: #7a5a00; border-color: #b8860b; background: #fff8e1; }
+.ilb-qchip--ok { color: #7a5a00; border-color: #7a5a00; background: #fff8e1; }
 .ilb-qchip--poor { color: #8b1f1f; border-color: var(--rds-danger); background: #fbeeee; }
 
 /* ---------- debrief timeline (mock's .timeline) ---------- */

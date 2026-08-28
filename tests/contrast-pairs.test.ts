@@ -24,12 +24,10 @@ import { colorHex } from "@/lib/design/tokens";
  * existing --rds-success hex value, so it's resolved via colorHex("success")
  * below instead of being re-typed.)
  *
- * SPEC DISCREPANCY (flagged, not silently fixed -- see this suite's final
- * describe block): engine.css's `.ilb-qchip--ok` rule also uses a SIXTH
- * literal, `#b8860b` (its border-color), which spec §4's approved-literal
- * list does not name. It is asserted below like every other introduced pair
- * (it clears its threshold), but its existence outside the approved list is
- * a documentation gap this suite surfaces rather than papers over.
+ * (History: the mock's `.qchip.ok` border was `#b8860b` -- a sixth literal
+ * outside spec §4's approved list, sitting at exactly 3.0:1. The shipped
+ * rule uses the approved `#7a5a00` for the border as well as the text,
+ * keeping the literal set at five and the margin comfortable.)
  *
  * Threshold doctrine applied throughout: WCAG 2.x "large text" (the 3:1
  * SC 1.4.3 allowance) requires >=18pt (24px) regular weight, or >=14pt
@@ -74,9 +72,9 @@ describe("contrast-pairs: branching scenario visual pass", () => {
       expect(ratioLabel(ratio)).toBe("5.4:1");
       expect(meetsNonText(ratio)).toBe(true);
     });
-    it("ok border: #b8860b on #fff8e1 -- the undocumented 6th literal (see file-header discrepancy note); clears 3:1 but only barely", () => {
-      const ratio = contrastRatio("#b8860b", "#fff8e1");
-      expect(ratioLabel(ratio)).toBe("3.0:1");
+    it("ok border: #7a5a00 on #fff8e1 (aligned to the approved chip-text literal; replaces the mock's threshold-edge #b8860b)", () => {
+      const ratio = contrastRatio("#7a5a00", "#fff8e1");
+      expect(ratioLabel(ratio)).toBe("6.0:1");
       expect(meetsNonText(ratio)).toBe(true);
     });
   });
