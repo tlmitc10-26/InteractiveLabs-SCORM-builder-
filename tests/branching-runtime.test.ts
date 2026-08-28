@@ -125,13 +125,24 @@ function createScormMock(initialSuspend: unknown = null) {
   };
 }
 
+/** The visible label text of a choice button, EXCLUDING the aria-hidden A/B/C
+ *  marker span the runtime prepends (visual pass, 2026-08-28) — the marker
+ *  lives in its own `.ilb-choice-label` sibling span specifically so tests
+ *  can select the label text without the marker letter leaking into it (the
+ *  button's raw `.textContent` would include the marker's own text, unlike
+ *  the accessible-name computation the transcript tests use, which
+ *  correctly skips aria-hidden content). */
+function choiceLabelText(btn: Element): string | null {
+  return btn.querySelector(".ilb-choice-label")?.textContent ?? null;
+}
+
 /** Clicks the visible choice button with this exact label text, throwing a
  *  clear error if it's not found — robust to button ordering. */
 function clickChoice(label: string): void {
   const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".ilb-choice-btn"));
-  const btn = buttons.find((b) => b.textContent === label);
+  const btn = buttons.find((b) => choiceLabelText(b) === label);
   if (!btn) {
-    throw new Error(`no visible choice button labeled "${label}" (found: ${buttons.map((b) => b.textContent).join(" | ")})`);
+    throw new Error(`no visible choice button labeled "${label}" (found: ${buttons.map((b) => choiceLabelText(b)).join(" | ")})`);
   }
   btn.click();
 }
@@ -154,11 +165,17 @@ describe("mountBranchingScenario", () => {
       expect(h2().getAttribute("tabindex")).toBe("-1");
       const buttons = document.querySelectorAll(".ilb-choice-btn");
       expect(buttons.length).toBe(3);
-      expect(Array.from(buttons).map((b) => b.textContent)).toEqual([
+      expect(Array.from(buttons).map((b) => choiceLabelText(b))).toEqual([
         "Raise your doubts about the timeline before anyone votes",
         "Vote with the majority to keep things moving",
         "Ask to re-examine the evidence list first",
       ]);
+      // Aria-hidden A/B/C markers, one per choice, in order — decorative
+      // only (see choiceLabelText's doc comment for why the label itself is
+      // read from a separate span).
+      const markers = Array.from(document.querySelectorAll(".ilb-choice-marker"));
+      expect(markers.map((m) => m.textContent)).toEqual(["A", "B", "C"]);
+      expect(markers.every((m) => m.getAttribute("aria-hidden") === "true")).toBe(true);
     });
 
     it("shows the role line and intro only on the start scene", () => {
@@ -264,7 +281,7 @@ describe("mountBranchingScenario", () => {
       clickChoice("Remind the room the standard is reasonable doubt, not convenience"); // restate_duty
       expect(h2().textContent).toBe("The Holdout");
       expect(document.querySelector(".ilb-vars-status")!.textContent).toBe("Jury trust: 50");
-      const labels = Array.from(document.querySelectorAll(".ilb-choice-btn")).map((b) => b.textContent);
+      const labels = Array.from(document.querySelectorAll(".ilb-choice-btn")).map((b) => choiceLabelText(b));
       expect(labels).not.toContain("Call a break, since the room trusts you enough to reset");
       expect(labels).toHaveLength(2);
     });
@@ -276,7 +293,7 @@ describe("mountBranchingScenario", () => {
       clickChoice("Walk the group through the conflict step by step"); // walk_through
       expect(h2().textContent).toBe("The Holdout");
       expect(document.querySelector(".ilb-vars-status")!.textContent).toBe("Jury trust: 75");
-      const labels = Array.from(document.querySelectorAll(".ilb-choice-btn")).map((b) => b.textContent);
+      const labels = Array.from(document.querySelectorAll(".ilb-choice-btn")).map((b) => choiceLabelText(b));
       expect(labels).toContain("Call a break, since the room trusts you enough to reset");
       expect(labels).toHaveLength(3);
     });

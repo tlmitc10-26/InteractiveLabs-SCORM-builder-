@@ -25,6 +25,12 @@ import {
   renameSceneId, renameEndingId, renameVariableId, renameChoiceId, removeVariableReferences,
   type RenameableBranchingConfig,
 } from "@/lib/engines/branching-scenario/rename";
+// Visual pass (2026-08-28, plan Task 2): the scenario-level header-color
+// token select is the ONE approved editor change for this milestone. tokens
+// is data (tokens.json) plus tiny pure helpers — no zod/sanitize-html — so
+// importing it here doesn't compromise this file's otherwise-light bundle
+// any more than runtime-config.ts's own import of it already does.
+import { RDS_COLOR_NAMES, type TokenName } from "@/lib/design/tokens";
 
 /* Editing shape mirrors schema.ts's BranchingConfig (pre-validation). */
 type EComparator = "gte" | "lte" | "between";
@@ -37,10 +43,12 @@ type EVariable = { id: string; label: string; initial: number; min: number; max:
 type EEnding = { id: string; title: string; body: string };
 type EFeedbackMode = "immediate" | "debrief";
 export type EBranchingConfig = {
-  title: string; intro?: string; role?: string;
+  title: string; intro?: string; role?: string; headerColor?: TokenName;
   variables: EVariable[]; scenes: EScene[]; startSceneId: string; endings: EEnding[];
   feedbackMode: EFeedbackMode; showPathInDebrief: boolean;
 };
+
+const HEADER_COLOR_OPTIONS = RDS_COLOR_NAMES.map((name) => ({ value: name, label: name }));
 
 const PREVIEW_SRC = "/engines/branching-scenario/1.0.0/preview.html";
 
@@ -228,6 +236,15 @@ function ScenarioSection({ config, onChange, onImport }: {
           { value: "immediate", label: "Show feedback after every choice" },
         ]}
         onChange={(feedbackMode) => onChange({ feedbackMode: feedbackMode as EFeedbackMode })} />
+      {/* Visual pass (2026-08-28), the sole editor change for this milestone:
+          which brand color paints a scene's header band when that scene has
+          no uploaded image (spec 2's header rule — an image always wins over
+          this). Default "primary" matches main.ts's `?? "primary"` fallback
+          exactly, so leaving this untouched behaves identically to before
+          this control existed. */}
+      <SelectField label="Header color (when no scene image)" value={config.headerColor ?? "primary"}
+        options={HEADER_COLOR_OPTIONS}
+        onChange={(headerColor) => onChange({ headerColor: headerColor as TokenName })} />
       <Field label="Debrief path">
         <label className="mt-0.5 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={config.showPathInDebrief}

@@ -99,7 +99,10 @@ describe("axe-core accessibility gate: branching scenario", () => {
 
   function clickChoice(label: string): void {
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".ilb-choice-btn"));
-    const btn = buttons.find((b) => b.textContent === label);
+    // The runtime prepends an aria-hidden A/B/C marker span before the
+    // visible label span (visual pass, 2026-08-28) — match on the label
+    // span's own text, not the button's raw (marker-inclusive) textContent.
+    const btn = buttons.find((b) => b.querySelector(".ilb-choice-label")?.textContent === label);
     if (!btn) throw new Error(`no visible choice button labeled "${label}"`);
     btn.click();
   }

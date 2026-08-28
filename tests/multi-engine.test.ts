@@ -195,6 +195,11 @@ describe("engine #2 golden path: jury starter (branching-scenario) end-to-end", 
     const zip1 = await zipPackage(a.files);
     const zip2 = await zipPackage((await build()).files);
     expect(zip1.equals(zip2)).toBe(true); // byte-stable
+
+    // Package budget (runtime visual pass, plan Task 2): every engine zip
+    // must stay under 40KB even after the brand-header/decision-card/
+    // result-timeline restyle.
+    expect(zip1.length).toBeLessThan(40 * 1024);
   });
 
   it("blocks a scene body tampered AFTER validation via the sanitizer-stability rule (richTextValues walks every scene.body/ending.body/choice.feedback, not just intro)", async () => {

@@ -218,8 +218,14 @@ type Category = "heading" | "control" | "img" | "status" | "text-carrier";
  *  line, and the debrief's whole ordered path list (tracked as ONE entry
  *  covering the full rendered text of every step, per-item quality glyphs
  *  and all -- the plan's own "keep scope minimal" guidance prefers this
- *  over adding "list"/"listitem" categories and a per-step entry shape). */
-const TEXT_CARRIER_CLASSES = ["ilb-score-status", "ilb-challenge", "ilb-role", "ilb-score-line", "ilb-debrief-list"];
+ *  over adding "list"/"listitem" categories and a per-step entry shape).
+ *  The runtime visual pass (2026-08-28) adds one more: the ending's
+ *  "Scenario complete" eyebrow -- the ONE deliberate new visible/announced
+ *  text that pass introduces (see src/engine-runtime/branching-scenario/
+ *  main.ts's renderEnding). */
+const TEXT_CARRIER_CLASSES = [
+  "ilb-score-status", "ilb-challenge", "ilb-role", "ilb-score-line", "ilb-debrief-list", "ilb-eyebrow",
+];
 
 function categoryOf(el: Element): Category | null {
   const role = el.getAttribute("role");

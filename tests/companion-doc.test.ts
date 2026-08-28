@@ -264,6 +264,22 @@ describe("parseCompanionDoc — a fully-resolving well-formed doc", () => {
     const start = r.config.scenes.find((s) => s.id === r.config.startSceneId);
     expect(start?.title).toBe("Second Scene");
   });
+
+  // Visual pass (2026-08-28, plan Task 2): headerColor is a scenario-level
+  // token choice added to the schema/editor, entirely independent of the
+  // companion-doc grammar — the doc format has no directive for it, and this
+  // module is untouched by that pass (see schema.ts's headerColor doc
+  // comment). A doc-imported config simply has no opinion on it: the parsed
+  // config carries no `headerColor` key at all (not even `undefined`
+  // explicitly set), and validateBranchingConfig's own default is "absent",
+  // not "primary" (main.ts's `config.headerColor ?? "primary"` supplies that
+  // default at render time instead — see branching-schema.test.ts).
+  it("never sets headerColor: the parsed config has no opinion on it, and it survives schema validation as absent", () => {
+    expect(Object.prototype.hasOwnProperty.call(config, "headerColor")).toBe(false);
+    const r = validateBranchingConfig(config);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.config.headerColor).toBeUndefined();
+  });
 });
 
 describe("parseCompanionDoc — comments", () => {

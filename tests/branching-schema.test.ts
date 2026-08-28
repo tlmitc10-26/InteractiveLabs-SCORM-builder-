@@ -88,6 +88,21 @@ describe("validateBranchingConfig — basic shape", () => {
     }
   });
 
+  it("accepts a valid headerColor token and defaults it to absent (not 'primary') when unset", () => {
+    const withColor = validateBranchingConfig({ ...base, headerColor: "info" });
+    expect(withColor.ok).toBe(true);
+    if (withColor.ok) expect(withColor.config.headerColor).toBe("info");
+
+    const withoutColor = validateBranchingConfig(base);
+    expect(withoutColor.ok).toBe(true);
+    if (withoutColor.ok) expect(withoutColor.config.headerColor).toBeUndefined();
+  });
+
+  it("rejects a headerColor outside the 16 RDS token names", () => {
+    const r = validateBranchingConfig({ ...base, headerColor: "maroon" });
+    expect(r.ok).toBe(false);
+  });
+
   it("rejects a startSceneId that does not name a scene", () => {
     const r = validateBranchingConfig({ ...base, startSceneId: "nowhere" });
     expect(r.ok).toBe(false);
