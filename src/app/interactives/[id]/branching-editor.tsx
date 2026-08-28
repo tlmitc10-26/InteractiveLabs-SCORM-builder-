@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   useDraftEditor, Section, Row, Field, TextField, NumField, SelectField, IdAdvanced, useRowKeys, inputCls,
   ExportButton, type AssetRef,
@@ -11,6 +11,12 @@ import {
 // happens server-side in saveInteractiveConfig (via adapterFor), and its
 // errors flow back through useDraftEditor's `errors`.
 import { toBranchingRuntimeConfig, type BranchingConfigLike } from "@/lib/engines/branching-scenario/runtime-config";
+// Light import (companion-doc.ts's own file comment: zero heavy deps, no
+// zod/sanitize-html — same discipline as runtime-config.ts/rename.ts above).
+// The parser's returned config is still just handed to setConfig like any
+// hand-authored draft: validation happens the same server-side way, via
+// saveInteractiveConfig's adapterFor call, on the very next debounced save.
+import { parseCompanionDoc, serializeCompanionDoc, type ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
 import { uniqueSlug } from "./slugify";
 // Light import (no zod/sanitize-html — see rename.ts's own file comment):
 // pure structural reference rewrites for the per-row "Rename to match label"
@@ -69,6 +75,32 @@ export function BranchingEditor({ interactiveId, initialTitle, initialConfig, as
 
   const [activeSceneIndex, setActiveSceneIndex] = useState(0);
   const sceneIndex = config.scenes.length === 0 ? -1 : Math.min(activeSceneIndex, config.scenes.length - 1);
+
+  // Bumped once per companion-doc import (never on ordinary edits). Passed
+  // below as the `key` on VariablesSection/ScenesSection/EndingsSection so
+  // an import forces those three subtrees to fully unmount and remount.
+  // This is the fix for the rowKeys trap: useRowKeys (editor-shared.tsx)
+  // seeds each row's stable React key from the row array's length ONLY in
+  // its useState initializer, which runs once per mount — a setConfig that
+  // replaces the whole array (this import) changes `scenes.length` etc.
+  // without ever re-running that initializer, so the OLD keys would stay
+  // paired with new, unrelated row data (wrong row expands/collapses,
+  // Advanced-panel state and DOM identity smeared across rows that used to
+  // be a different scene/choice/variable/ending). A full remount re-runs
+  // every useRowKeys call from scratch against the freshly imported arrays
+  // — including the ones nested inside ScenesSection (ScenePanel's
+  // choiceRowKeys, EffectsEditor's own rowKeys), since those remount too as
+  // a consequence — so it mirrors exactly how keys are seeded on first
+  // mount, for every nesting level, without hand-plumbing a reset() call
+  // through each intermediate component.
+  const [importGeneration, setImportGeneration] = useState(0);
+
+  const handleImport = useCallback((parsed: EBranchingConfig) => {
+    setConfig(parsed);
+    setActiveSceneIndex(0);
+    setImportGeneration((g) => g + 1);
+    markSaving();
+  }, [setConfig, markSaving]);
 
   // Backs each row's "Rename to match label" Advanced affordance for
   // scenes/endings/variables (the ids goTo/effects/showIf/startSceneId
@@ -137,16 +169,26 @@ export function BranchingEditor({ interactiveId, initialTitle, initialConfig, as
           </div>
         )}
 
-        <ScenarioSection config={config} onChange={patch} />
-        <VariablesSection variables={config.variables} onChange={(variables) => patch({ variables })} onRenameId={renameVariable} onRemove={removeVariable} />
+        <ScenarioSection config={config} onChange={patch} onImport={handleImport} />
+        {/* Distinctly-prefixed keys, not just `importGeneration` on its own:
+            these three are siblings in the same children array, and React
+            requires keys to be unique among siblings regardless of element
+            type — reusing the bare generation number on all three tripped
+            "two children with the same key" (verified in the browser
+            console during E2E), which is exactly what the code comment on
+            `importGeneration` above warns the reset trick depends on NOT
+            happening (duplicate keys make React's reconciliation drop or
+            duplicate children, silently defeating the remount). */}
+        <VariablesSection key={`variables-${importGeneration}`} variables={config.variables} onChange={(variables) => patch({ variables })} onRenameId={renameVariable} onRemove={removeVariable} />
         <ScenesSection
+          key={`scenes-${importGeneration}`}
           scenes={config.scenes} endings={config.endings} variables={config.variables}
           startSceneId={config.startSceneId} assets={assets} errors={errors}
           activeIndex={sceneIndex} onSelectIndex={setActiveSceneIndex}
           onChange={(scenes) => patch({ scenes })}
           onRenameScene={renameScene} onRenameChoice={renameChoice}
         />
-        <EndingsSection endings={config.endings} onChange={(endings) => patch({ endings })} onRenameId={renameEnding} />
+        <EndingsSection key={`endings-${importGeneration}`} endings={config.endings} onChange={(endings) => patch({ endings })} onRenameId={renameEnding} />
 
         <ExportButton interactiveId={interactiveId} disabled={errors.length > 0} />
       </div>
@@ -167,8 +209,9 @@ export function BranchingEditor({ interactiveId, initialTitle, initialConfig, as
 
 /* ---------- Scenario section ---------- */
 
-function ScenarioSection({ config, onChange }: {
+function ScenarioSection({ config, onChange, onImport }: {
   config: EBranchingConfig; onChange: (p: Partial<EBranchingConfig>) => void;
+  onImport: (config: EBranchingConfig) => void;
 }) {
   return (
     <Section title="Scenario">
@@ -197,7 +240,109 @@ function ScenarioSection({ config, onChange }: {
           options={config.scenes.map((s, i) => ({ value: s.id, label: s.title || `Part ${i + 1}` }))}
           onChange={(startSceneId) => onChange({ startSceneId })} />
       )}
+      <ImportPanel config={config} onImport={onImport} />
     </Section>
+  );
+}
+
+/** "Import from companion doc" disclosure (companion-doc import milestone).
+ *  Deterministic paste-in path for the plain-text format `companion-doc.ts`
+ *  parses/serializes — see that file's header comment and
+ *  docs/superpowers/specs/2026-08-27-companion-doc-import-design.md. Import
+ *  is a wholesale replace (confirmed), so this panel owns none of the
+ *  config itself — it only ever calls `onImport` with a freshly parsed
+ *  config and reports what the parser flagged. */
+function ImportPanel({ config, onImport }: {
+  config: EBranchingConfig; onImport: (config: EBranchingConfig) => void;
+}) {
+  const [text, setText] = useState("");
+  const [emptyWarning, setEmptyWarning] = useState(false);
+  const [report, setReport] = useState<ImportIssue[] | null>(null);
+  const [copied, setCopied] = useState(false);
+  const reportHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // Announcement contract: focus moves to the report heading once a report
+  // exists (fresh import OR the zero-issue "Imported cleanly." case, both
+  // set `report` to a non-null array) so a screen-reader user lands
+  // directly on the outcome instead of having to hunt for it.
+  useEffect(() => {
+    if (report !== null) reportHeadingRef.current?.focus();
+  }, [report]);
+
+  const handleImportClick = () => {
+    if (text.trim() === "") {
+      setEmptyWarning(true);
+      return;
+    }
+    setEmptyWarning(false);
+    const parsed = parseCompanionDoc(text);
+    const proceed = window.confirm(
+      "This replaces everything in this interactive. The current draft cannot be recovered. Continue?",
+    );
+    if (!proceed) return;
+    onImport(parsed.config as EBranchingConfig);
+    setReport(parsed.report);
+  };
+
+  const handleCopyClick = async () => {
+    const doc = serializeCompanionDoc(config as unknown as BranchingConfigLike);
+    try {
+      await navigator.clipboard.writeText(doc);
+    } catch {
+      // Fallback for browsers/contexts without a Clipboard API permission
+      // (e.g. no secure context, or the permission prompt was denied): a
+      // hidden textarea + the legacy execCommand path.
+      const ta = document.createElement("textarea");
+      ta.value = doc;
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.setAttribute("aria-hidden", "true");
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { document.execCommand("copy"); } catch { /* best effort only */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <details className="col-span-2 mt-2 rounded border border-gray-200 p-2">
+      <summary className="cursor-pointer text-sm font-medium text-gray-600">Import from companion doc</summary>
+      <div className="mt-2 space-y-2">
+        <Field label="Paste a companion doc">
+          <textarea className={`${inputCls} font-mono`} rows={10}
+            value={text}
+            onChange={(e) => { setText(e.target.value); setEmptyWarning(false); }} />
+        </Field>
+        {emptyWarning && <p className="text-xs" style={{ color: "var(--rds-danger)" }}>Paste a companion doc before importing.</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleImportClick}>Import</button>
+          <button type="button" className="btn btn-light-2 btn-sm" onClick={handleCopyClick}>Copy as companion doc</button>
+          <span role="status" className="text-xs text-gray-500">{copied ? "Copied." : ""}</span>
+          <a href="/companion-doc-template.txt" download className="app-link text-xs">Download the template</a>
+        </div>
+
+        {report !== null && (
+          <div className="rounded border border-gray-200 bg-gray-50 p-2">
+            <h3 tabIndex={-1} ref={reportHeadingRef} className="text-sm font-semibold outline-none">Import report</h3>
+            {report.length === 0 ? (
+              <p className="mt-1 text-sm">Imported cleanly.</p>
+            ) : (
+              <ul className="mt-1 list-disc pl-5 text-sm">
+                {report.map((issue, i) => (
+                  <li key={i} style={{ color: issue.severity === "error" ? "var(--rds-danger)" : "var(--rds-dark-2)" }}>
+                    Line {issue.line}: {issue.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button type="button" className="btn btn-light-2 btn-sm mt-2" onClick={() => setReport(null)}>Dismiss</button>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 
