@@ -33,6 +33,15 @@
  *     fail-visible contract here, not silent corruption — labels are
  *     sanitized plain text already, so this can only happen if an author
  *     literally types "(" or "->" into a choice label.
+ *   - The same edge applies to a SCENE/ENDING TITLE that literally starts
+ *     with "Scene:" or "Ending:" (e.g. a scene titled `Scene: Setup`):
+ *     `DEST_PREFIX_RE` strips what looks like an explicit-namespace prefix
+ *     off any destination text, including the round-tripped destination
+ *     text the serializer writes for choices pointing at such a title. A
+ *     title beginning that way therefore degrades on re-parse to a
+ *     fail-visible "no scene/ending named …" unresolved-destination error
+ *     (routed to the placeholder ending) rather than silently resolving
+ *     wrong — a named limitation, not corruption.
  */
 
 import { uniqueSlug } from "@/lib/engines/slugify";
@@ -49,6 +58,11 @@ export interface ImportIssue {
 // ---------------------------------------------------------------------------
 
 const COMMENT_RE = /^\s*#/;
+// The leading `\s*` here also silently absorbs a leading UTF-8 BOM
+// (U+FEFF is part of ECMAScript's `\s` character class), so a doc saved by
+// an editor that stamps a BOM on the very first line still matches its
+// first TITLE/etc. directive on line 1. This is load-bearing, not
+// incidental — do not "simplify" this regex in a way that drops it.
 const DIRECTIVE_RE = /^\s*(TITLE|ROLE|INTRO|FEEDBACK|START|TRACK|SCENE|ENDING)\s*:\s*(.*)$/i;
 const UNKNOWN_DIRECTIVE_RE = /^\s*[A-Z][A-Z ]{2,20}:\s/i;
 const CHOICE_RE = /^\s*[-*]\s+(.*)$/;
@@ -401,11 +415,21 @@ export function parseCompanionDoc(text: string): { config: unknown; report: Impo
             issues.push({ line: lineNo, severity: "error", message: 'TRACK line must look like "<Name> (<min> to <max>, start at <initial>[, visible])"' });
             break;
           }
+          const label = m[1].trim();
+          // Mirrors the duplicate-scene/ending-title rule: tracks are
+          // targeted by name (effects/conditions resolve via resolveTrack's
+          // case-insensitive label lookup, which binds to the FIRST match),
+          // so a second track with the same name would be silently
+          // unreachable by name. Flag it and skip it outright rather than
+          // emit an unreachable "trust_2" the draft can never target.
+          if (tracks.some((t) => t.label.toLowerCase() === label.toLowerCase())) {
+            issues.push({ line: lineNo, severity: "error", message: `duplicate track name "${label}" — tracks are targeted by name` });
+            break;
+          }
           if (tracks.length >= MAX_TRACKS) {
             issues.push({ line: lineNo, severity: "error", message: `too many tracks (max ${MAX_TRACKS}) — this track was skipped` });
             break;
           }
-          const label = m[1].trim();
           const id = uniqueSlug(label, variableIds, "track");
           variableIds.add(id);
           tracks.push({ id, label, min: parseInt(m[2], 10), max: parseInt(m[3], 10), initial: parseInt(m[4], 10), visible: !!m[5] });

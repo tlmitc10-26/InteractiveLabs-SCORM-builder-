@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parseCompanionDoc, serializeCompanionDoc, type ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
 import { validateBranchingConfig, type BranchingConfig } from "@/lib/engines/branching-scenario/schema";
 import { branchingStarterConfig } from "@/lib/engines/branching-scenario/starters";
+import { initialState, applyChoice, scorePct } from "@/lib/engines/branching-scenario/state";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,18 +30,117 @@ function stripTags(s: string | undefined): string {
 // ---------------------------------------------------------------------------
 // The normative example (spec §2), copied VERBATIM as instructed.
 //
-// IMPORTANT FINDING (see final report): this example references two
-// destinations — "The Timeline" and "The Holdout" — that are never declared
-// as SCENE: (or ENDING:) blocks anywhere in the example. Per the grammar
-// contract those are genuinely unresolved destinations: the parser reports
-// an error for each occurrence and routes the choice to the shared
-// "Unresolved destination" placeholder ending so the draft still loads. This
-// means the example does NOT satisfy a literal "zero report errors" reading
-// of the Task 1 plan — that claim is only achievable if the spec's example
-// itself declared those two scenes. Filed as a spec defect, not a parser
-// bug: this test asserts the actual (correct) fail-visible behavior.
+// UPDATE (commit 30a59d7): the spec's original example referenced two
+// destinations — "The Timeline" and "The Holdout" — that were never
+// declared as SCENE: blocks (see git history / the prior version of this
+// file for that finding). The spec has since been completed to declare
+// both scenes, so this fixture now fully resolves. The original,
+// dangling-reference version of the doc is kept below as a named
+// regression fixture (DANGLING_REFERENCES_FIXTURE) — it's still a good
+// exercise of the unresolved-destination path, just no longer "normative".
 // ---------------------------------------------------------------------------
 const NORMATIVE_EXAMPLE = `TITLE: Jury Deliberation
+ROLE: You are a juror in a criminal trial.
+INTRO: A verdict must be unanimous. The evidence is not as tidy as it first looks.
+TRACK: Jury trust (0 to 100, start at 50, visible)
+FEEDBACK: debrief
+
+SCENE: The First Vote
+The foreperson calls an early vote. The room leans guilty,
+but you have doubts about the timeline evidence.
+
+- Raise your doubts before anyone votes (BEST, Jury trust +10) -> The Timeline
+  Feedback: Speaking up kept the deliberation grounded.
+- Vote with the majority to keep things moving (POOR, Jury trust -10) -> Under Pressure
+  Feedback: Momentum is not deliberation.
+- Ask to re-examine the evidence list first (OK) -> The Timeline
+  Feedback: A reasonable instinct, though it delays the harder conversation.
+
+SCENE: The Timeline
+The group re-reads the timeline. A witness statement conflicts with the security log.
+
+- Walk the group through the conflict step by step (BEST, Jury trust +15) -> The Holdout
+  Feedback: Method beats momentum.
+- Call it a clerical error and move on (POOR, Jury trust -15) -> Under Pressure
+  Feedback: The conflict does not resolve itself by being ignored.
+
+SCENE: Under Pressure
+Two jurors push to finish before the weekend.
+
+- Remind the room the standard is reasonable doubt (BEST, Jury trust +10) -> The Holdout
+  Feedback: You reframed the disagreement around the standard of proof.
+- Call a break (OK, only if Jury trust is at least 60) -> The Holdout
+  Feedback: The room trusted you enough to reset.
+- Suggest a quick second vote (POOR, Jury trust -10) -> ENDING: A verdict, but not deliberation
+  Feedback: The vote closed the case without resolving the doubts.
+
+SCENE: The Holdout
+One juror still refuses to discuss. The room looks to you.
+
+- Ask what evidence would change their mind (BEST, Jury trust +10) -> ENDING: A verdict the room can stand behind
+  Feedback: Inviting reasons kept everyone deliberating.
+- Suggest the group proceed without their input (POOR, Jury trust -15) -> ENDING: A verdict, but not deliberation
+  Feedback: A unanimous verdict cannot exclude a voice.
+
+ENDING: A verdict the room can stand behind
+The deliberation stayed grounded in evidence, and the verdict follows the standard of proof.
+
+ENDING: A verdict, but not deliberation
+The vote ended the case, but the doubts were never resolved.
+`;
+
+describe("parseCompanionDoc — normative example (spec §2, verbatim, post-30a59d7)", () => {
+  const { config, report } = parseCompanionDoc(NORMATIVE_EXAMPLE);
+
+  it("never throws and returns a config that validates with zero errors and zero warnings", () => {
+    expect(errors(report)).toHaveLength(0);
+    expect(warnings(report)).toHaveLength(0);
+    const r = validateBranchingConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("captures TITLE, ROLE, INTRO, TRACK, and FEEDBACK from the top matter", () => {
+    const r = validateBranchingConfig(config) as { ok: true; config: BranchingConfig };
+    expect(r.config.title).toBe("Jury Deliberation");
+    expect(r.config.role).toBe("You are a juror in a criminal trial.");
+    expect(r.config.intro).toContain("A verdict must be unanimous");
+    expect(r.config.feedbackMode).toBe("debrief");
+    expect(r.config.variables).toHaveLength(1);
+    expect(r.config.variables[0]).toMatchObject({ label: "Jury trust", min: 0, max: 100, initial: 50, visible: true });
+    expect(r.config.scenes).toHaveLength(4);
+    expect(r.config.endings).toHaveLength(2); // fully resolved: no placeholder ending needed
+  });
+
+  it("plays the best path (Raise your doubts -> Walk the group through the conflict -> Ask what evidence) to 'A verdict the room can stand behind' at scorePct 100", () => {
+    const r = validateBranchingConfig(config) as { ok: true; config: BranchingConfig };
+    const pickByLabelPrefix = (state: ReturnType<typeof initialState>, prefix: string) => {
+      const scene = r.config.scenes.find((s) => s.id === state.sceneId);
+      if (!scene) throw new Error(`no current scene (state: ${JSON.stringify(state)})`);
+      const choice = scene.choices.find((c) => c.label.startsWith(prefix));
+      if (!choice) throw new Error(`no choice starting with "${prefix}" in scene "${scene.id}" (labels: ${scene.choices.map((c) => c.label).join(" | ")})`);
+      return applyChoice(r.config, state, choice.id);
+    };
+
+    let s = initialState(r.config);
+    s = pickByLabelPrefix(s, "Raise your doubts");
+    s = pickByLabelPrefix(s, "Walk the group through the conflict");
+    s = pickByLabelPrefix(s, "Ask what evidence");
+
+    expect(s.sceneId).toBeNull();
+    const ending = r.config.endings.find((e) => e.id === s.endingId);
+    expect(ending?.title).toBe("A verdict the room can stand behind");
+    expect(scorePct(s)).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression fixture: the spec's ORIGINAL example, before commit 30a59d7
+// completed it. "The Timeline" and "The Holdout" are referenced as
+// destinations but never declared as SCENE:/ENDING: blocks — a real,
+// still-worth-covering exercise of the unresolved-destination path, just no
+// longer labeled normative.
+// ---------------------------------------------------------------------------
+const DANGLING_REFERENCES_FIXTURE = `TITLE: Jury Deliberation
 ROLE: You are a juror in a criminal trial.
 INTRO: A verdict must be unanimous. The evidence is not as tidy as it first looks.
 TRACK: Jury trust (0 to 100, start at 50, visible)
@@ -74,23 +174,13 @@ ENDING: A verdict, but not deliberation
 The vote ended the case, but the doubts were never resolved.
 `;
 
-describe("parseCompanionDoc — normative example (spec §2, verbatim)", () => {
-  const srcLines = NORMATIVE_EXAMPLE.split("\n");
-  const { config, report } = parseCompanionDoc(NORMATIVE_EXAMPLE);
+describe("parseCompanionDoc — regression: doc with dangling destination references (formerly the normative fixture)", () => {
+  const srcLines = DANGLING_REFERENCES_FIXTURE.split("\n");
+  const { config, report } = parseCompanionDoc(DANGLING_REFERENCES_FIXTURE);
 
-  it("never throws and returns a best-effort config that validates", () => {
+  it("still validates (routes unresolved choices to the placeholder ending so the draft loads)", () => {
     const r = validateBranchingConfig(config);
     expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
-  });
-
-  it("captures TITLE, ROLE, INTRO, TRACK, and FEEDBACK from the top matter", () => {
-    const r = validateBranchingConfig(config) as { ok: true; config: BranchingConfig };
-    expect(r.config.title).toBe("Jury Deliberation");
-    expect(r.config.role).toBe("You are a juror in a criminal trial.");
-    expect(r.config.intro).toContain("A verdict must be unanimous");
-    expect(r.config.feedbackMode).toBe("debrief");
-    expect(r.config.variables).toHaveLength(1);
-    expect(r.config.variables[0]).toMatchObject({ label: "Jury trust", min: 0, max: 100, initial: 50, visible: true });
   });
 
   it("has zero warnings (every quality token and arrow is well-formed)", () => {
@@ -100,15 +190,10 @@ describe("parseCompanionDoc — normative example (spec §2, verbatim)", () => {
   it("flags exactly the two undeclared destinations ('The Timeline', 'The Holdout') as unresolved, each occurrence separately, routed to one shared placeholder ending", () => {
     const errs = errors(report);
     expect(errs).toHaveLength(4);
-    const timelineLines = [
-      lineOf(srcLines, "-> The Timeline") && srcLines.findIndex((l) => l.includes("-> The Timeline")) + 1,
-    ];
-    // Find both occurrences explicitly (findIndex only finds the first).
     const timelineOccurrences = srcLines.reduce<number[]>((acc, l, i) => (l.includes("-> The Timeline") ? [...acc, i + 1] : acc), []);
     const holdoutOccurrences = srcLines.reduce<number[]>((acc, l, i) => (l.includes("-> The Holdout") ? [...acc, i + 1] : acc), []);
     expect(timelineOccurrences).toHaveLength(2);
     expect(holdoutOccurrences).toHaveLength(2);
-    void timelineLines;
 
     const errLines = errs.map((e) => e.line).sort((a, b) => a - b);
     expect(errLines).toEqual([...timelineOccurrences, ...holdoutOccurrences].sort((a, b) => a - b));
@@ -264,6 +349,31 @@ describe("parseCompanionDoc — TRACK grammar", () => {
     expect(errs).toHaveLength(1);
     expect(errs[0].line).toBe(lineOf(lines, "TRACK: Broken"));
     expect(errs[0].message).toMatch(/to.*start at/i);
+  });
+
+  it("errors on a case-insensitive duplicate track name, skips the duplicate (no trust_2 variable), and effects still bind to the first track's definition", () => {
+    const lines = [
+      "TITLE: T",
+      "TRACK: Trust (0 to 100, start at 50)",
+      "TRACK: TRUST (0 to 200, start at 40)",
+      "",
+      "SCENE: S",
+      "Body.",
+      "",
+      "- Go (BEST, Trust +10) -> ENDING: E",
+      "",
+      "ENDING: E",
+      "Body.",
+    ];
+    const { config, report } = parseCompanionDoc(lines.join("\n"));
+    const errs = errors(report);
+    expect(errs.some((e) => e.line === lineOf(lines, "TRACK: TRUST") && /duplicate track name/i.test(e.message))).toBe(true);
+
+    const r = validateBranchingConfig(config) as { ok: true; config: BranchingConfig };
+    expect(r.config.variables).toHaveLength(1); // duplicate skipped outright, not suffixed
+    expect(r.config.variables.some((v) => v.id === "trust_2")).toBe(false);
+    expect(r.config.variables[0]).toMatchObject({ label: "Trust", min: 0, max: 100, initial: 50 }); // first definition wins
+    expect(r.config.scenes[0].choices[0].effects).toEqual([{ variableId: r.config.variables[0].id, delta: 10 }]);
   });
 });
 
