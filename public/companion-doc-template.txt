@@ -7,7 +7,8 @@
 # leads, like this: - Speak up right away (BEST) -> The Next Scene
 # The quality is BEST, OK, or POOR, and it tells the learner how
 # strong that choice was. The arrow -> points to the name of the next
-# SCENE or ENDING, spelled exactly as its own SCENE: or ENDING: line.
+# SCENE or ENDING, spelled the same as its own SCENE: or ENDING: line
+# (capitalization does not matter).
 # You can also track a running number through the story, such as a
 # trust score, and let a choice only appear past a threshold (shown
 # here as an example only, not turned on in this template):

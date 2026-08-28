@@ -258,7 +258,7 @@ function ImportPanel({ config, onImport }: {
   const [text, setText] = useState("");
   const [emptyWarning, setEmptyWarning] = useState(false);
   const [report, setReport] = useState<ImportIssue[] | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const reportHeadingRef = useRef<HTMLHeadingElement>(null);
 
   // Announcement contract: focus moves to the report heading once a report
@@ -286,6 +286,7 @@ function ImportPanel({ config, onImport }: {
 
   const handleCopyClick = async () => {
     const doc = serializeCompanionDoc(config as unknown as BranchingConfigLike);
+    let succeeded = true;
     try {
       await navigator.clipboard.writeText(doc);
     } catch {
@@ -300,11 +301,15 @@ function ImportPanel({ config, onImport }: {
       document.body.appendChild(ta);
       ta.focus();
       ta.select();
-      try { document.execCommand("copy"); } catch { /* best effort only */ }
+      try {
+        succeeded = document.execCommand("copy");
+      } catch {
+        succeeded = false;
+      }
       document.body.removeChild(ta);
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopyStatus(succeeded ? "copied" : "failed");
+    setTimeout(() => setCopyStatus("idle"), 2000);
   };
 
   return (
@@ -320,7 +325,9 @@ function ImportPanel({ config, onImport }: {
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" className="btn btn-secondary btn-sm" onClick={handleImportClick}>Import</button>
           <button type="button" className="btn btn-light-2 btn-sm" onClick={handleCopyClick}>Copy as companion doc</button>
-          <span role="status" className="text-xs text-gray-500">{copied ? "Copied." : ""}</span>
+          <span role="status" className="text-xs text-gray-500" style={copyStatus === "failed" ? { color: "var(--rds-danger)" } : undefined}>
+            {copyStatus === "copied" ? "Copied." : copyStatus === "failed" ? "Copy failed." : ""}
+          </span>
           <a href="/companion-doc-template.txt" download className="app-link text-xs">Download the template</a>
         </div>
 
