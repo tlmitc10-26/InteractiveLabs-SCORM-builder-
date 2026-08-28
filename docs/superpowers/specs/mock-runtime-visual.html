@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runtime Visual Design Mockup</title>
+<style>
+  :root{
+    --rds-primary:#8c1d40; --rds-secondary:#ffc627; --rds-success:#446d12; --rds-info:#00a3e0;
+    --rds-light:#f8f9fa; --rds-dark:#212529; --rds-light-1:#fafafa; --rds-light-2:#f1f1f1;
+    --rds-light-3:#e8e8e8; --rds-light-4:#d0d0d0; --rds-light-5:#bfbfbf;
+    --rds-dark-1:#747474; --rds-dark-2:#484848; --rds-dark-3:#191919;
+    --ilb-font-heading:Georgia,'Times New Roman',serif; --ilb-font-body:Arial,Helvetica,sans-serif;
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+    --radius-card:12px; --radius-chip:999px; --elev-card:0 1px 3px rgba(25,25,25,.08),0 4px 14px rgba(25,25,25,.06);
+  }
+  *{box-sizing:border-box;margin:0}
+  body{font-family:var(--ilb-font-body);color:var(--rds-dark);background:#eceae6;padding:var(--sp-6);line-height:1.55}
+  .board-label{font-family:var(--ilb-font-body);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--rds-dark-1);margin:var(--sp-6) 0 var(--sp-3)}
+  .frame{max-width:760px;margin:0 auto}
+
+  /* ---------- scene card ---------- */
+  .scene-card{background:#fff;border-radius:var(--radius-card);box-shadow:var(--elev-card);overflow:hidden;border:1px solid var(--rds-light-3)}
+  .scene-img{width:100%;aspect-ratio:16/7;object-fit:cover;display:block;background:linear-gradient(160deg,#3d3a45 0%,#6b5560 55%,#8c1d40 130%)}
+  .scene-body{padding:var(--sp-5) var(--sp-6) var(--sp-6)}
+  .role-line{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4)}
+  .role-line .bar{width:4px;height:28px;background:var(--rds-secondary);border-radius:2px}
+  .role-line .text{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--rds-dark-2);font-weight:bold}
+  h2.scene-title{font-family:var(--ilb-font-heading);color:var(--rds-primary);font-size:30px;line-height:1.2;margin-bottom:var(--sp-3)}
+  .scene-prose{max-width:70ch;color:var(--rds-dark);font-size:17px;margin-bottom:var(--sp-5)}
+  .meters{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-bottom:var(--sp-5)}
+  .meter-chip{display:flex;align-items:center;gap:var(--sp-2);background:var(--rds-light-1);border:1px solid var(--rds-light-4);border-radius:var(--radius-chip);padding:6px 14px;font-size:14px}
+  .meter-chip .val{font-weight:bold;color:var(--rds-primary)}
+  .meter-chip .track{width:72px;height:6px;background:var(--rds-light-3);border-radius:3px;overflow:hidden}
+  .meter-chip .fill{height:100%;width:60%;background:var(--rds-primary);border-radius:3px}
+  .choices{display:flex;flex-direction:column;gap:var(--sp-3)}
+  .choice{display:flex;align-items:center;gap:var(--sp-4);width:100%;text-align:left;background:#fff;border:2px solid var(--rds-light-4);border-radius:var(--radius-card);padding:var(--sp-4) var(--sp-5);font:inherit;font-size:16px;cursor:pointer;min-height:56px;transition:border-color .15s,transform .15s,box-shadow .15s}
+  .choice:hover{border-color:var(--rds-primary);transform:translateY(-1px);box-shadow:var(--elev-card)}
+  .choice:focus-visible{outline:3px solid var(--rds-primary);outline-offset:2px}
+  .choice .marker{flex:none;width:34px;height:34px;border-radius:50%;background:var(--rds-light-2);color:var(--rds-dark-2);font-weight:bold;display:grid;place-items:center;font-size:15px}
+  .choice:hover .marker{background:var(--rds-primary);color:#fff}
+  @media (prefers-reduced-motion:reduce){.choice{transition:none}.choice:hover{transform:none}}
+
+  /* ---------- feedback ---------- */
+  .feedback{background:#fff8e1;border-left:4px solid var(--rds-secondary);border-radius:0 var(--radius-card) var(--radius-card) 0;padding:var(--sp-4) var(--sp-5);margin-bottom:var(--sp-4);display:flex;gap:var(--sp-3)}
+  .feedback .glyph{flex:none;font-size:20px}
+  .btn-pill{display:inline-flex;align-items:center;justify-content:center;background:var(--rds-primary);color:#fff;border:2px solid var(--rds-primary);border-radius:var(--radius-chip);font-weight:bold;font-size:16px;padding:10px 28px;cursor:pointer}
+  .btn-pill:focus-visible{outline:3px solid var(--rds-primary);outline-offset:2px}
+  .btn-ghost{background:#fff;color:var(--rds-primary)}
+
+  /* ---------- ending / debrief ---------- */
+  .result-head{text-align:center;padding:var(--sp-6) var(--sp-6) var(--sp-5)}
+  .result-head .eyebrow{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--rds-dark-1);font-weight:bold;margin-bottom:var(--sp-2)}
+  h2.result-title{font-family:var(--ilb-font-heading);color:var(--rds-primary);font-size:32px;margin-bottom:var(--sp-4)}
+  .score-num{font-size:56px;font-weight:bold;color:var(--rds-primary);line-height:1}
+  .score-num small{font-size:22px;color:var(--rds-dark-1);font-weight:normal}
+  .quality-chips{display:flex;gap:var(--sp-2);justify-content:center;margin-top:var(--sp-4);flex-wrap:wrap}
+  .qchip{border-radius:var(--radius-chip);padding:5px 14px;font-size:14px;font-weight:bold;border:1px solid}
+  .qchip.best{color:var(--rds-success);border-color:var(--rds-success);background:#f2f7ec}
+  .qchip.ok{color:#7a5a00;border-color:#b8860b;background:#fff8e1}
+  .qchip.poor{color:#8b1f1f;border-color:#b72a2a;background:#fbeeee}
+  .timeline{list-style:none;padding:var(--sp-5) var(--sp-6) var(--sp-6);position:relative}
+  .timeline li{position:relative;padding:0 0 var(--sp-5) 44px}
+  .timeline li::before{content:"";position:absolute;left:15px;top:26px;bottom:-4px;width:2px;background:var(--rds-light-4)}
+  .timeline li:last-child::before{display:none}
+  .tnode{position:absolute;left:0;top:0;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:15px;font-weight:bold;color:#fff}
+  .tnode.best{background:var(--rds-success)} .tnode.poor{background:#b72a2a} .tnode.ok{background:#b8860b}
+  .tstep .where{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--rds-dark-1);font-weight:bold}
+  .tstep .chose{font-size:16px;margin:2px 0 4px}
+  .tstep .qual{font-size:13px;font-weight:bold}
+  .tstep .qual.best{color:var(--rds-success)} .tstep .qual.poor{color:#8b1f1f}
+  .tstep .fb{font-size:14px;color:var(--rds-dark-2);background:var(--rds-light-1);border-radius:8px;padding:var(--sp-2) var(--sp-3);margin-top:var(--sp-2)}
+  .tstep .others{font-size:13px;color:var(--rds-dark-1);margin-top:var(--sp-2)}
+
+  /* ---------- sandbox strip ---------- */
+  .sandbox{display:grid;grid-template-columns:250px 1fr;gap:var(--sp-4);background:#fff;border-radius:var(--radius-card);box-shadow:var(--elev-card);border:1px solid var(--rds-light-3);padding:var(--sp-5)}
+  .panel-label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--rds-dark-1);font-weight:bold;margin-bottom:var(--sp-3)}
+  .ctl{margin-bottom:var(--sp-4)}
+  .ctl label{display:block;font-size:14px;font-weight:bold;margin-bottom:var(--sp-1)}
+  input[type=range]{width:100%;accent-color:var(--rds-primary);height:28px}
+  .outcard{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--rds-light-3);padding:var(--sp-3) 0}
+  .outcard .label{font-size:15px}
+  .outcard .value{font-family:var(--ilb-font-heading);font-size:26px;font-weight:bold;color:var(--rds-primary)}
+  .outcard .unit{font-size:14px;color:var(--rds-dark-1);margin-left:4px}
+  .score-banner{margin-top:var(--sp-4);border-radius:var(--radius-card);padding:var(--sp-3) var(--sp-4);font-size:15px;font-weight:bold;background:#f2f7ec;color:var(--rds-success);border:1px solid var(--rds-success)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <p class="board-label">State 1 · Scene view (Branching Scenario)</p>
+  <div class="scene-card">
+    <div class="scene-img" role="img" aria-label="Mockup stand-in for a scene image"></div>
+    <div class="scene-body">
+      <div class="role-line"><span class="bar"></span><span class="text">You are a juror in a criminal trial</span></div>
+      <h2 class="scene-title">The First Vote</h2>
+      <p class="scene-prose">The foreperson calls an early vote. The room leans guilty, but you have doubts about the timeline evidence.</p>
+      <div class="meters">
+        <span class="meter-chip">Jury trust <span class="track"><span class="fill"></span></span> <span class="val">60</span></span>
+      </div>
+      <div class="choices">
+        <button class="choice"><span class="marker">A</span> Raise your doubts about the timeline before anyone votes</button>
+        <button class="choice"><span class="marker">B</span> Vote with the majority to keep things moving</button>
+        <button class="choice"><span class="marker">C</span> Ask to re-examine the evidence list first</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="board-label">State 2 · Immediate feedback moment</p>
+  <div class="scene-card"><div class="scene-body">
+    <div class="feedback"><span class="glyph">&#9733;</span><p>Speaking up kept the deliberation grounded. The room heard the doubt before momentum decided for them.</p></div>
+    <button class="btn-pill">Continue</button>
+  </div></div>
+
+  <p class="board-label">State 3 · Ending and debrief</p>
+  <div class="scene-card">
+    <div class="result-head">
+      <p class="eyebrow">Scenario complete</p>
+      <h2 class="result-title">A verdict the room can stand behind</h2>
+      <div class="score-num">100<small>%</small></div>
+      <div class="quality-chips">
+        <span class="qchip best">3 best</span>
+      </div>
+    </div>
+    <ol class="timeline">
+      <li><span class="tnode best">&#10003;</span><div class="tstep">
+        <div class="where">The First Vote</div>
+        <div class="chose">Raise your doubts about the timeline before anyone votes</div>
+        <div class="qual best">Best choice</div>
+        <div class="fb">Speaking up kept the deliberation grounded.</div>
+        <div class="others">Other options: Vote with the majority · Ask to re-examine the evidence list</div>
+      </div></li>
+      <li><span class="tnode best">&#10003;</span><div class="tstep">
+        <div class="where">The Timeline</div>
+        <div class="chose">Walk the group through the conflict step by step</div>
+        <div class="qual best">Best choice</div>
+        <div class="fb">Method beats momentum.</div>
+        <div class="others">Other options: Call it a clerical error and move on</div>
+      </div></li>
+      <li><span class="tnode best">&#10003;</span><div class="tstep">
+        <div class="where">The Holdout</div>
+        <div class="chose">Ask what evidence would change their mind</div>
+        <div class="qual best">Best choice</div>
+        <div class="fb">Inviting reasons kept everyone deliberating.</div>
+        <div class="others">Other options: Suggest the group proceed without their input</div>
+      </div></li>
+    </ol>
+    <div style="text-align:center;padding:0 0 32px"><button class="btn-pill btn-ghost">Start over</button></div>
+  </div>
+
+  <p class="board-label">State 4 · Parameter Sandbox polish (panel strip)</p>
+  <div class="sandbox">
+    <div>
+      <p class="panel-label">What learners adjust</p>
+      <div class="ctl"><label>Object mass (kg)</label><input type="range" min="0.5" max="20" step="0.5" value="7"></div>
+      <div class="ctl"><label>Fluid</label><select style="width:100%;padding:8px;border:1px solid var(--rds-light-4);border-radius:8px;font:inherit"><option>Fresh water</option></select></div>
+    </div>
+    <div>
+      <p class="panel-label">What gets calculated</p>
+      <div class="outcard"><span class="label">Displaced volume</span><span><span class="value">7</span><span class="unit">L</span></span></div>
+      <div class="outcard"><span class="label">Weight (gravity)</span><span><span class="value">68.7</span><span class="unit">N</span></span></div>
+      <div class="score-banner">Score: 100% &middot; 1 of 1 challenges met. Lesson complete.</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
