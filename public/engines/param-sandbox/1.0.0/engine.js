@@ -263,7 +263,8 @@
     line: "#8c1d40",
     marker: "#747474",
     axisText: "#484848",
-    frame: "#bfbfbf"
+    frame: "#bfbfbf",
+    gridline: "#e8e8e8"
   };
   function zoneOf(placement) {
     var _a;
@@ -643,11 +644,11 @@
       }
     }
     const challengeNodes = /* @__PURE__ */ new Map();
-    const scoreStatus = el("div", "ilb-score-status");
+    const scoreStatus = el("div", "ilb-score-status ilb-score-banner");
     if (config.challenges.length) {
       const panel = el("div", "ilb-challenges");
       panel.setAttribute("aria-live", "polite");
-      const h = el("h2");
+      const h = el("h2", "ilb-section-label");
       h.textContent = "Challenges";
       panel.appendChild(h);
       panel.appendChild(scoreStatus);
@@ -793,6 +794,48 @@
       const rect = chartLayout(ctx, yMinLabel, yMaxLabel, cssWidth, cssHeight);
       const px = (x) => rect.x + (x - xMin) / (xMax - xMin || 1) * rect.w;
       const py = (y) => rect.y + rect.h - (y - yMin) / (yMax - yMin || 1) * rect.h;
+      const GRID_ROWS = 3, GRID_COLS = 3;
+      ctx.strokeStyle = ILB_CHART_COLORS.gridline;
+      ctx.lineWidth = 1;
+      for (let i = 1; i < GRID_ROWS; i++) {
+        const gy = rect.y + rect.h * i / GRID_ROWS;
+        ctx.beginPath();
+        ctx.moveTo(rect.x, gy);
+        ctx.lineTo(rect.x + rect.w, gy);
+        ctx.stroke();
+      }
+      for (let i = 1; i < GRID_COLS; i++) {
+        const gx = rect.x + rect.w * i / GRID_COLS;
+        ctx.beginPath();
+        ctx.moveTo(gx, rect.y);
+        ctx.lineTo(gx, rect.y + rect.h);
+        ctx.stroke();
+      }
+      ctx.fillStyle = ILB_CHART_COLORS.line;
+      ctx.globalAlpha = 0.08;
+      let fillSegStart = -1;
+      for (let i = 0; i <= raw.length; i++) {
+        const p = i < raw.length ? raw[i] : null;
+        if (p !== null && fillSegStart === -1) fillSegStart = i;
+        if ((p === null || i === raw.length) && fillSegStart !== -1) {
+          const segEnd = i - 1;
+          if (segEnd > fillSegStart) {
+            const [xStart] = raw[fillSegStart];
+            const [xEnd] = raw[segEnd];
+            ctx.beginPath();
+            ctx.moveTo(px(xStart), rect.y + rect.h);
+            for (let j = fillSegStart; j <= segEnd; j++) {
+              const [x, y] = raw[j];
+              ctx.lineTo(px(x), py(y));
+            }
+            ctx.lineTo(px(xEnd), rect.y + rect.h);
+            ctx.closePath();
+            ctx.fill();
+          }
+          fillSegStart = -1;
+        }
+      }
+      ctx.globalAlpha = 1;
       ctx.strokeStyle = ILB_CHART_COLORS.frame;
       ctx.lineWidth = 1;
       ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
