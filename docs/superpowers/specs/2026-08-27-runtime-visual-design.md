@@ -42,7 +42,7 @@ Raise the visual strength of both engine runtimes to the bar Rise sets, **changi
 
 ## 4. Token additions (consumed, not speculative)
 
-`tokens.json` gains: `space` scale (4/8/12/16/24/32 — reintroduced NOW WITH consumers), `radius.chip`, `elevation.card` (a shadow value), `motion.fast` (150ms). Both emitters updated in lockstep (drift test extends). Any color used by new elements comes from the existing 16 — no new colors, with one approved exception: the ending's quality-chip/timeline-node palette from the Tamara-approved normative mock — 5 fixed values (`#7a5a00`, `#f2f7ec`, `#fff8e1`, `#fbeeee`, plus the existing `--rds-success`/`--rds-danger` pair `#446d12`/`#8b1f1f`) shipped as literals rather than the 16-token set, with every pair contrast-asserted in tests (Task 4).
+`tokens.json` gains: `space` scale (4/8/12/16/24/32 — reintroduced NOW WITH consumers), `radius.chip`, `elevation.card` (a shadow value), `motion.fast` (150ms). Both emitters updated in lockstep (drift test extends). Any color used by new elements comes from the existing 16 — no new colors, with one approved exception: the quality-chip/timeline-node/status-banner palette from the Tamara-approved normative mock, shipped as literals rather than the 16-token set — tint backgrounds `#f2f7ec`/`#fff8e1`/`#fbeeee`, border/glyph values `#7a5a00`/`#8b1f1f`, and the AAA text variants `#365409`/`#644a00` (Tamara's 2026-08-28 ruling: TEXT on the tinted status surfaces meets SC 1.4.6 AAA 7:1, not just AA — token success and `#7a5a00` measure 5.6:1/6.0:1 on their tints, so the darkened variants carry the text while the lighter values remain on borders/glyphs where SC 1.4.11's 3:1 applies). Every pair contrast-asserted in tests (Task 4).
 
 ## 5. Explicitly unchanged
 

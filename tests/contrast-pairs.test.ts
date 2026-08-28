@@ -16,18 +16,23 @@ import { colorHex } from "@/lib/design/tokens";
  * in via colorHex(<name>) below, never re-typed as a hex literal, so a token
  * value change re-verifies this suite without an edit here.
  *
- * The ONLY hardcoded (non-token) hex literals in this file are the 5
+ * The ONLY hardcoded (non-token) hex literals in this file are the
  * approved mock-exception values spec §4 names (the ending's quality-chip/
- * timeline-node palette, "shipped as literals rather than the 16-token
- * set"): #7a5a00, #f2f7ec, #fff8e1, #fbeeee, and #8b1f1f. (#446d12, also
- * named in that spec sentence, is NOT a new literal -- it's simply the
- * existing --rds-success hex value, so it's resolved via colorHex("success")
- * below instead of being re-typed.)
+ * timeline-node palette plus the AAA text variants): #365409, #644a00,
+ * #7a5a00, #f2f7ec, #fff8e1, #fbeeee, and #8b1f1f. (#446d12, also named in
+ * that spec sentence, is NOT a new literal -- it's simply the existing
+ * --rds-success hex value, so it's resolved via colorHex("success") below
+ * instead of being re-typed.)
  *
- * (History: the mock's `.qchip.ok` border was `#b8860b` -- a sixth literal
- * outside spec §4's approved list, sitting at exactly 3.0:1. The shipped
- * rule uses the approved `#7a5a00` for the border as well as the text,
- * keeping the literal set at five and the margin comfortable.)
+ * (History: the mock's `.qchip.ok` border was `#b8860b` -- a literal
+ * outside spec §4's approved list, sitting at exactly 3.0:1; the shipped
+ * border uses `#7a5a00` instead. And per Tamara's 2026-08-28 review, TEXT
+ * on the tinted status surfaces -- quality chips, the sandbox score
+ * banner's complete state -- is held to SC 1.4.6 AAA (7:1), not just AA:
+ * token success (5.6:1 on #f2f7ec) and #7a5a00 (6.0:1 on #fff8e1) pass AA
+ * but miss AAA there, so the shipped text colors are the darkened AAA
+ * variants #365409 and #644a00, with the lighter values retained for
+ * borders/glyphs where SC 1.4.11's 3:1 is the applicable bar.)
  *
  * Threshold doctrine applied throughout: WCAG 2.x "large text" (the 3:1
  * SC 1.4.3 allowance) requires >=18pt (24px) regular weight, or >=14pt
@@ -44,21 +49,21 @@ import { colorHex } from "@/lib/design/tokens";
  */
 
 describe("contrast-pairs: branching scenario visual pass", () => {
-  describe("quality chips (.ilb-qchip--best/ok/poor) -- SC 1.4.3, 4.5:1 (14px bold is not large text)", () => {
-    it("best: #446d12 text on #f2f7ec background", () => {
-      const ratio = contrastRatio(colorHex("success"), "#f2f7ec");
-      expect(ratioLabel(ratio)).toBe("5.6:1");
-      expect(meetsBodyText(ratio)).toBe(true);
+  describe("quality chips (.ilb-qchip--best/ok/poor) -- status text held to SC 1.4.6 AAA, 7:1 (Tamara's bar; see header note)", () => {
+    it("best: #365409 text on #f2f7ec background (AAA)", () => {
+      const ratio = contrastRatio("#365409", "#f2f7ec");
+      expect(ratioLabel(ratio)).toBe("7.9:1");
+      expect(ratio).toBeGreaterThanOrEqual(7);
     });
-    it("ok: #7a5a00 text on #fff8e1 background", () => {
-      const ratio = contrastRatio("#7a5a00", "#fff8e1");
-      expect(ratioLabel(ratio)).toBe("6.0:1");
-      expect(meetsBodyText(ratio)).toBe(true);
+    it("ok: #644a00 text on #fff8e1 background (AAA)", () => {
+      const ratio = contrastRatio("#644a00", "#fff8e1");
+      expect(ratioLabel(ratio)).toBe("7.8:1");
+      expect(ratio).toBeGreaterThanOrEqual(7);
     });
-    it("poor: #8b1f1f text on #fbeeee background", () => {
+    it("poor: #8b1f1f text on #fbeeee background (AAA)", () => {
       const ratio = contrastRatio("#8b1f1f", "#fbeeee");
       expect(ratioLabel(ratio)).toBe("8.0:1");
-      expect(meetsBodyText(ratio)).toBe(true);
+      expect(ratio).toBeGreaterThanOrEqual(7);
     });
   });
 
@@ -199,10 +204,10 @@ describe("contrast-pairs: parameter sandbox visual pass", () => {
       expect(ratioLabel(ratio)).toBe("8.0:1");
       expect(meetsBodyText(ratio)).toBe(true);
     });
-    it("complete (.complete): --rds-success on #f2f7ec", () => {
-      const ratio = contrastRatio(colorHex("success"), "#f2f7ec");
-      expect(ratioLabel(ratio)).toBe("5.6:1");
-      expect(meetsBodyText(ratio)).toBe(true);
+    it("complete (.complete): #365409 text on #f2f7ec -- status text held to SC 1.4.6 AAA, 7:1", () => {
+      const ratio = contrastRatio("#365409", "#f2f7ec");
+      expect(ratioLabel(ratio)).toBe("7.9:1");
+      expect(ratio).toBeGreaterThanOrEqual(7);
     });
     it("complete border: --rds-success on #f2f7ec -- SC 1.4.11, 3:1", () => {
       const ratio = contrastRatio(colorHex("success"), "#f2f7ec");
@@ -217,10 +222,14 @@ describe("contrast-pairs: parameter sandbox visual pass", () => {
       // Deliberately not asserting a hard threshold here -- see block doc
       // comment. Recorded for reviewers.
     });
-    it("met state background/border: --rds-success on #f2f7ec (same approved pair as .ilb-qchip--best -- no new pair introduced)", () => {
+    it("met state border: --rds-success on #f2f7ec -- SC 1.4.11, 3:1 (the chip's TEXT is not success-colored; it inherits --rds-dark, asserted next)", () => {
       const ratio = contrastRatio(colorHex("success"), "#f2f7ec");
       expect(meetsNonText(ratio)).toBe(true);
+    });
+    it("met state text: inherited --rds-dark on the #f2f7ec tint -- SC 1.4.3, 4.5:1 (clears AAA too)", () => {
+      const ratio = contrastRatio(colorHex("dark"), "#f2f7ec");
       expect(meetsBodyText(ratio)).toBe(true);
+      expect(ratio).toBeGreaterThanOrEqual(7);
     });
   });
 });

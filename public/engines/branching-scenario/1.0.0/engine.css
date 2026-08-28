@@ -233,8 +233,11 @@
 .ilb-score-line { font-weight: 700; font-size: 14px; color: var(--rds-dark-2); margin: var(--sp-2) 0 0; }
 .ilb-quality-chips { display: flex; gap: var(--sp-2); justify-content: center; margin-top: var(--sp-4); flex-wrap: wrap; }
 .ilb-qchip { border-radius: var(--radius-chip); padding: 5px 14px; font-size: 14px; font-weight: 700; border: 1px solid; }
-.ilb-qchip--best { color: var(--rds-success); border-color: var(--rds-success); background: #f2f7ec; }
-.ilb-qchip--ok { color: #7a5a00; border-color: #7a5a00; background: #fff8e1; }
+/* Chip TEXT colors are AAA literals (>=7:1 on their tints -- Tamara's bar
+   for status text; token success/#7a5a00 measure only 5.6/6.0:1 there,
+   AA-but-not-AAA). Borders keep the lighter values: non-text, 3:1 applies. */
+.ilb-qchip--best { color: #365409; border-color: var(--rds-success); background: #f2f7ec; }
+.ilb-qchip--ok { color: #644a00; border-color: #7a5a00; background: #fff8e1; }
 .ilb-qchip--poor { color: #8b1f1f; border-color: var(--rds-danger); background: #fbeeee; }
 
 /* ---------- debrief timeline (mock's .timeline) ---------- */

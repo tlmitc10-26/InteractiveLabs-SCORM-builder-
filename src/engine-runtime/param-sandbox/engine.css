@@ -217,7 +217,10 @@
    query/announcement hook this class always had; all its VISUAL styling now
    lives on `.ilb-score-banner` instead. */
 .ilb-score-banner {
-  margin-top: var(--sp-4);
+  /* margin-bottom separates the banner from the first challenge chip below
+     it (they share the challenges panel); without it the two rounded boxes
+     touch (Tamara's 2026-08-28 screenshot). */
+  margin: var(--sp-4) 0 var(--sp-3);
   border-radius: var(--radius-card);
   padding: var(--sp-3) var(--sp-4);
   font-size: 15px;
@@ -228,7 +231,10 @@
 }
 .ilb-score-banner.complete {
   background: #f2f7ec;
-  color: var(--rds-success);
+  /* AAA text literal (7.9:1 on #f2f7ec) -- --rds-success measures only
+     5.6:1 on this tint (AA yes, AAA no); Tamara requires the stronger bar
+     for status text. Border stays token success (non-text, 3:1 satisfied). */
+  color: #365409;
   border-color: var(--rds-success);
 }
 
