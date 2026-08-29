@@ -985,7 +985,14 @@ export function serializeSandboxCompanionDoc(config: SandboxConfigLike): string 
   // sanitizeRichText, which also escapes) would otherwise round-trip back
   // out as literal "&amp;" text — and re-import would escape it AGAIN into
   // "&amp;amp;". Decoding here keeps the round trip stable.
-  if (config.intro) lines.push(`INTRO: ${unescapeHtml(stripTags(config.intro))}`);
+  // INTRO is a single directive line, so a multi-paragraph intro
+  // (concatenated <p> blocks) is joined with a single space -- bare
+  // stripTags would butt the paragraphs together ("...end.Next...").
+  if (config.intro) {
+    const paragraphs = [...config.intro.matchAll(/<p>([\s\S]*?)<\/p>/gi)].map((m) => stripTags(m[1]));
+    const introText = (paragraphs.length ? paragraphs : [stripTags(config.intro)]).filter(Boolean).join(" ");
+    lines.push(`INTRO: ${unescapeHtml(introText)}`);
+  }
   lines.push("");
 
   const idToLabel = new Map<string, string>();

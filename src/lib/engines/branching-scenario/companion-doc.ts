@@ -586,7 +586,10 @@ export function serializeCompanionDoc(config: BranchingConfigLike): string {
   // parser (or from schema.ts's sanitizeRichText, which also escapes)
   // round-trips back out as plain text instead of literal "&amp;" (which
   // re-import would otherwise escape AGAIN into "&amp;amp;").
-  if (config.intro) lines.push(`INTRO: ${unescapeHtml(stripTags(config.intro))}`);
+  // INTRO is a single directive line in this format, so a multi-paragraph
+  // intro (concatenated <p> blocks) is joined with a single space -- bare
+  // stripTags would butt the paragraphs together ("...hurts.One thing...").
+  if (config.intro) lines.push(`INTRO: ${unescapeHtml(bodyToParagraphs(config.intro).filter(Boolean).join(" "))}`);
   for (const v of config.variables) {
     const visible = v.visible ? ", visible" : "";
     lines.push(`TRACK: ${v.label} (${v.min} to ${v.max}, start at ${v.initial}${visible})`);
