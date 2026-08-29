@@ -3,15 +3,32 @@ import { STARTERS, starterConfig, DEFAULT_STARTER_ID } from "@/lib/engines/param
 import { validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 
 describe("STARTERS", () => {
-  it("has a blank and a buoyancy starter", () => {
-    expect(Object.keys(STARTERS).sort()).toEqual(["blank", "buoyancy"]);
-  });
-
+  // Invariants over the full starter set, restructured (spec §6) from an
+  // exact-list assertion so adding new starters (exemplar library) doesn't
+  // require touching this test -- only the properties every starter must
+  // hold are asserted here.
   it("every starter's config validates", () => {
     for (const [id, starter] of Object.entries(STARTERS)) {
       const r = validateSandboxConfig(starter.config);
       expect(r.ok, `starter "${id}" should validate: ${!r.ok ? r.errors.join("; ") : ""}`).toBe(true);
     }
+  });
+
+  it("has unique starter ids", () => {
+    const ids = Object.keys(STARTERS);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("every starter has a non-empty description and a valid group", () => {
+    for (const [id, starter] of Object.entries(STARTERS)) {
+      expect(starter.description.length, `starter "${id}" description should be non-empty`).toBeGreaterThan(0);
+      expect(["blank", "exemplar"], `starter "${id}" group should be "blank" or "exemplar"`).toContain(starter.group);
+    }
+  });
+
+  it("has exactly one blank-group starter", () => {
+    const blanks = Object.values(STARTERS).filter((s) => s.group === "blank");
+    expect(blanks).toHaveLength(1);
   });
 
   it("buoyancy has 2 inputs, 2 outputs, 1 chart, 1 challenge", () => {

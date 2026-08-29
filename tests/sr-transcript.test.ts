@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { mountSandbox } from "@/engine-runtime/param-sandbox/main";
-import { starterConfig } from "@/lib/engines/param-sandbox/starter-configs";
+import { starterConfig, STARTERS } from "@/lib/engines/param-sandbox/starter-configs";
 import { toRuntimeConfig } from "@/lib/engines/param-sandbox/runtime-config";
 import type { RuntimeSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import { readingOrderTranscript, focusOrderTranscript, liveRegionsOf } from "@/lib/a11y/transcript";
@@ -216,5 +216,36 @@ describe("screen-reader announcement contract (buoyancy starter)", () => {
         },
       ]);
     });
+  });
+});
+
+/**
+ * Generalized smoke coverage (Task 3, spec §6): the buoyancy-specific
+ * contract above stays locked exactly as it is. This loop instead runs
+ * every param-sandbox starter (present and future -- e.g. the exemplar
+ * library's later additions) through the transcript functions just enough
+ * to catch a thrown "unmapped focusable element" error or a live-region
+ * count that violates the engine's own contract, without pinning exact
+ * transcript text per starter.
+ */
+describe("screen-reader smoke coverage (all param-sandbox starters)", () => {
+  it("readingOrderTranscript/focusOrderTranscript never throw, and liveRegionsOf matches the challenges-panel rule, for every starter", () => {
+    for (const id of Object.keys(STARTERS)) {
+      document.body.innerHTML = '<div id="root"></div>';
+      const config = starterConfig(id, `Starter check: ${id}`);
+      const runtimeConfig = toRuntimeConfig(config, (assetId) => `assets/${assetId}.png`);
+      const root = document.getElementById("root")!;
+      mountSandbox(root, runtimeConfig);
+
+      expect(() => readingOrderTranscript(root), `starter "${id}"`).not.toThrow();
+      expect(() => focusOrderTranscript(root), `starter "${id}"`).not.toThrow();
+
+      // Live-region contract (see main.ts's mountSandbox): the outputs
+      // summary status is always rendered (one region); the challenges
+      // panel adds a second region only when the starter has at least one
+      // challenge.
+      const expectedCount = config.challenges.length > 0 ? 2 : 1;
+      expect(liveRegionsOf(root), `starter "${id}"`).toHaveLength(expectedCount);
+    }
   });
 });

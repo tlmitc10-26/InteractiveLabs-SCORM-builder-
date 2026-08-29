@@ -20,10 +20,11 @@ import { branchingConfigSchema, type BranchingConfig } from "./schema";
  * reading `BRANCHING_STARTERS[id].config` directly, so the title is always
  * the one the designer actually typed.
  */
-export const BRANCHING_STARTERS: Record<string, { label: string; description: string; config: BranchingConfig }> = {
+export const BRANCHING_STARTERS: Record<string, { label: string; description: string; group: "blank" | "exemplar"; config: BranchingConfig }> = {
   blank: {
     label: "Blank",
     description: "Two scenes and a fork to two endings — a minimal skeleton to build your own branching scenario from.",
+    group: "blank",
     config: branchingConfigSchema.parse({
       title: "",
       variables: [
@@ -88,7 +89,8 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
   },
   jury: {
     label: "Jury Deliberation",
-    description: "A juror weighs speaking up against staying quiet across four scenes, with jury trust compounding toward one of two verdicts.",
+    description: "Choices with quality scoring, a tracked variable, and a debrief.",
+    group: "exemplar",
     config: branchingConfigSchema.parse({
       title: "",
       role: "You are a juror in a criminal trial.",

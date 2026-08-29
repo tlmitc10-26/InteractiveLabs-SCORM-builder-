@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { mountBranchingScenario } from "@/engine-runtime/branching-scenario/main";
-import { branchingStarterConfig } from "@/lib/engines/branching-scenario/starters";
+import { branchingStarterConfig, BRANCHING_STARTERS } from "@/lib/engines/branching-scenario/starters";
 import { toBranchingRuntimeConfig, type RuntimeBranchingConfig } from "@/lib/engines/branching-scenario/runtime-config";
 import { readingOrderTranscript, focusOrderTranscript, liveRegionsOf } from "@/lib/a11y/transcript";
 
@@ -302,5 +302,36 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
 
       expect(() => readingOrderTranscript(root)).toThrow(/unmapped focusable element <a> without href/);
     });
+  });
+});
+
+/**
+ * Generalized smoke coverage (Task 3, spec §6): the jury-specific contract
+ * above (and the blank-starter zero-live-region case in section 4) stay
+ * locked exactly as they are. This loop instead runs every branching-
+ * scenario starter (present and future -- e.g. the exemplar library's later
+ * additions) through the transcript functions just enough to catch a thrown
+ * "unmapped focusable element" error or a live-region count that violates
+ * the engine's own contract, without pinning exact transcript text per
+ * starter.
+ */
+describe("screen-reader smoke coverage (all branching-scenario starters)", () => {
+  it("readingOrderTranscript/focusOrderTranscript never throw, and liveRegionsOf matches the visible-variable rule, for every starter's start scene", () => {
+    for (const id of Object.keys(BRANCHING_STARTERS)) {
+      document.body.innerHTML = '<div id="root"></div>';
+      const config = branchingStarterConfig(id, `Starter check: ${id}`);
+      const runtimeConfig = toBranchingRuntimeConfig(config, (assetId) => `assets/${assetId}.png`);
+      const root = document.getElementById("root")!;
+      mountBranchingScenario(root, runtimeConfig);
+
+      expect(() => readingOrderTranscript(root), `starter "${id}"`).not.toThrow();
+      expect(() => focusOrderTranscript(root), `starter "${id}"`).not.toThrow();
+
+      // Live-region contract: exactly one polite/atomic region (the
+      // variable status) when at least one variable is visible; zero when
+      // none are (see the blank-starter case in section 4 above).
+      const hasVisibleVar = config.variables.some((v) => v.visible);
+      expect(liveRegionsOf(root), `starter "${id}"`).toHaveLength(hasVisibleVar ? 1 : 0);
+    }
   });
 });

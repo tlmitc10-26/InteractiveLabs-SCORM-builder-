@@ -13,10 +13,11 @@ import { sandboxConfigSchema, type SandboxConfig } from "./schema";
  * `STARTERS[id].config` directly, so the title is always the one the
  * designer actually typed.
  */
-export const STARTERS: Record<string, { label: string; description: string; config: SandboxConfig }> = {
+export const STARTERS: Record<string, { label: string; description: string; group: "blank" | "exemplar"; config: SandboxConfig }> = {
   blank: {
     label: "Blank",
     description: "A single slider driving a single calculated result — start from scratch.",
+    group: "blank",
     config: sandboxConfigSchema.parse({
       title: "",
       inputs: [
@@ -31,7 +32,8 @@ export const STARTERS: Record<string, { label: string; description: string; conf
   },
   buoyancy: {
     label: "Buoyancy Explorer (Archimedes)",
-    description: "Learners adjust an object's mass and the fluid it's dropped in, and see displaced volume and buoyant force.",
+    description: "Sliders drive formulas, charts, and challenges.",
+    group: "exemplar",
     config: sandboxConfigSchema.parse({
       title: "",
       intro: "<p>Drop an object into a fluid and see how much it displaces, and how hard the fluid pushes back.</p>",
