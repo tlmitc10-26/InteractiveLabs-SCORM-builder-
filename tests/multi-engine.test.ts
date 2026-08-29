@@ -72,13 +72,25 @@ describe("adapterFor", () => {
   });
 
   it("exposes starters metadata (id/label/description) for each engine, for uniform UI dispatch", () => {
-    const psStarters = adapterFor("param-sandbox").starters;
-    expect(psStarters.map((s) => s.id).sort()).toEqual(["blank", "buoyancy"]);
-    for (const s of psStarters) expect(typeof s.label).toBe("string");
-
-    const branchingStarters = adapterFor("branching-scenario").starters;
-    expect(branchingStarters.map((s) => s.id).sort()).toEqual(["blank", "jury"]);
-    for (const s of branchingStarters) expect(typeof s.label).toBe("string");
+    // Invariants over the full starter set rather than an exact id list (the
+    // exemplar library, Tasks 5-7, keeps adding starters to both engines) --
+    // every starter must carry a non-empty id/label/description and a valid
+    // group, ids must be unique, and the "blank" starter must exist so the
+    // picker always has a from-scratch option.
+    for (const engineId of ["param-sandbox", "branching-scenario"] as const) {
+      const starters = adapterFor(engineId).starters;
+      const ids = starters.map((s) => s.id);
+      expect(new Set(ids).size, `${engineId} starter ids should be unique`).toBe(ids.length);
+      expect(ids, `${engineId} should offer a "blank" starter`).toContain("blank");
+      for (const s of starters) {
+        expect(typeof s.id, `${engineId} starter id`).toBe("string");
+        expect(s.id.length, `${engineId} starter id should be non-empty`).toBeGreaterThan(0);
+        expect(typeof s.label).toBe("string");
+        expect(s.label.length, `${engineId} starter "${s.id}" label should be non-empty`).toBeGreaterThan(0);
+        expect(s.description.length, `${engineId} starter "${s.id}" description should be non-empty`).toBeGreaterThan(0);
+        expect(["blank", "exemplar"], `${engineId} starter "${s.id}" group`).toContain(s.group);
+      }
+    }
   });
 
   it("richTextValues walks the branching config's intro + every scene body + ending body + choice feedback (not just intro)", () => {

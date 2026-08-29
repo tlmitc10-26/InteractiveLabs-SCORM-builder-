@@ -101,6 +101,27 @@ function normalize(text: string): string {
     .replace(/[“”]/g, '"');
 }
 
+/** Escapes the three characters that matter for safe `innerHTML` placement
+ *  inside a `<p>...</p>` wrapper. Applied to INTRO before it's ever placed
+ *  in the returned config (opus review, item 6 — mirrors the identical fix
+ *  in param-sandbox/companion-doc.ts): the parser's returned config is
+ *  `unknown`, un-validated, and the editor's live preview
+ *  (toBranchingRuntimeConfig) renders it via innerHTML *before* the next
+ *  debounced save routes it through schema.ts's sanitizeRichText — so an
+ *  INTRO containing raw `<img onerror=...>` would otherwise execute in
+ *  that preview window. `&` must be escaped first so the entities this
+ *  function itself writes don't get double-escaped. */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Reverses `escapeHtml` for the serializer's INTRO line — see
+ *  param-sandbox/companion-doc.ts's `unescapeHtml` doc comment (identical
+ *  rationale and ordering constraint) for why `&` must decode last. */
+function unescapeHtml(s: string): string {
+  return s.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&");
+}
+
 // ---------------------------------------------------------------------------
 // Internal working types (superset of the eventual BranchingConfigLike
 // pieces, plus bookkeeping the two-pass algorithm needs)
@@ -510,7 +531,7 @@ export function parseCompanionDoc(text: string): { config: unknown; report: Impo
   const config: BranchingConfigLike = {
     title,
     ...(role ? { role } : {}),
-    ...(intro ? { intro } : {}),
+    ...(intro ? { intro: `<p>${escapeHtml(intro)}</p>` } : {}),
     variables: tracks.map((t) => ({ id: t.id, label: t.label, initial: t.initial, min: t.min, max: t.max, visible: t.visible })),
     scenes: scenes.map((s) => ({
       id: s.id,
@@ -560,7 +581,15 @@ export function serializeCompanionDoc(config: BranchingConfigLike): string {
   const lines: string[] = [];
   lines.push(`TITLE: ${config.title}`);
   if (config.role) lines.push(`ROLE: ${config.role}`);
-  if (config.intro) lines.push(`INTRO: ${stripTags(config.intro)}`);
+  // unescapeHtml (opus review, item 6): the parser now HTML-escapes INTRO
+  // before storing it, so a config whose intro came from this module's own
+  // parser (or from schema.ts's sanitizeRichText, which also escapes)
+  // round-trips back out as plain text instead of literal "&amp;" (which
+  // re-import would otherwise escape AGAIN into "&amp;amp;").
+  // INTRO is a single directive line in this format, so a multi-paragraph
+  // intro (concatenated <p> blocks) is joined with a single space -- bare
+  // stripTags would butt the paragraphs together ("...hurts.One thing...").
+  if (config.intro) lines.push(`INTRO: ${unescapeHtml(bodyToParagraphs(config.intro).filter(Boolean).join(" "))}`);
   for (const v of config.variables) {
     const visible = v.visible ? ", visible" : "";
     lines.push(`TRACK: ${v.label} (${v.min} to ${v.max}, start at ${v.initial}${visible})`);

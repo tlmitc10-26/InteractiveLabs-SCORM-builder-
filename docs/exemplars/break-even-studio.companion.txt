@@ -1,0 +1,20 @@
+TITLE: Break-Even Studio
+INTRO: A small community ceramics studio sells seats in monthly workshops. Every seat costs something in clay, glaze and firing; the rent, the kiln lease and the insurance cost the same whether one person books or three hundred do. By the end of this activity you will be able to find a price, cost and volume combination that makes the studio viable, and explain why raising the price and raising the volume are not interchangeable ways of getting there. Move the sliders until all four challenges are met at the same time.
+
+INPUT: Price (slider, $ per seat, 20 to 150, step 5, start 45)
+INPUT: Unit cost (slider, $ per seat, 5 to 60, step 1, start 18)
+INPUT: Fixed costs (slider, $ per month, 2000 to 20000, step 250, start 9000)
+INPUT: Volume (slider, seats per month, 0 to 800, step 10, start 250)
+
+OUTPUT: Contribution margin ($ per seat, 2 decimals) = Price - Unit cost
+OUTPUT: Contribution margin ratio (percent, 2 decimals) = Contribution margin / Price * 100
+OUTPUT: Seats to break even (seats, 0 decimals) = Fixed costs / Contribution margin
+OUTPUT: Monthly profit ($ per month, 2 decimals) = Contribution margin * Volume - Fixed costs
+
+CHART: Monthly profit vs Volume (40 samples, titled Monthly profit across seat volume)
+CHART: Seats to break even vs Price (40 samples, titled Seats needed to break even across prices)
+
+CHALLENGE: Get the studio to a profit: monthly profit of at least one dollar. -> Monthly profit at least 1
+CHALLENGE: Comparable studios in this market cannot sustain a contribution margin above 55 percent of the seat price. Keep the ratio at or below 55. -> Contribution margin ratio at most 55
+CHALLENGE: The studio can seat 300 people a month. Get the seats needed to break even down to 300 or fewer. -> Seats to break even at most 300
+CHALLENGE: Find a plan that is comfortably rather than barely profitable: monthly profit from 1500 to 6000 dollars. -> Monthly profit between 1500 and 6000

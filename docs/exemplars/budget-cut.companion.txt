@@ -1,0 +1,55 @@
+TITLE: The Budget Cut
+ROLE: You are the superintendent of Sierra Vista Unified, a public school district of about 6,200 students, in your second year in the job.
+INTRO: Sierra Vista Unified has 6,200 students, four months left in its fiscal year, and $1.9 million less than it had yesterday. You are the superintendent. By the end of this scenario you will be able to choose where a mid-year reduction lands and defend that choice on the record: naming the impact before the recommendation, and then answering for the decision wherever it lands you — in a board packet that has to disclose what the plan costs in future years, or in a room full of the people it hurts. One thing is tracked as you go: Board confidence — how much credibility you carry into the next decision. There is no option here that harms nobody. Choose the one you could explain in public.
+TRACK: Board confidence (0 to 100, start at 50, visible)
+FEEDBACK: debrief
+
+SCENE: The February memo
+The state's second-quarter revision landed this morning: Sierra Vista Unified must absorb a 3 percent reduction, about $1.9 million, in the four months left in the fiscal year. Wendell Cho, your chief business official, says there are three places the money could realistically come from and none of them is painless. Board president Delia Okonjo has already called; the board meets in nine days and she wants to know what you will recommend. It is 8:15 in the morning and you have not seen a number yet.
+
+- Ask Cho for a written impact analysis of each option before you commit to anything (BEST, Board confidence +8) -> Three lines
+  Feedback: Naming the analysis before the answer is what makes the answer defensible later. When the board asks what this costs us, you want Cho's numbers in the packet rather than your recollection of them.
+- Tell Okonjo you will bring a recommendation, and start calling principals to hear what they would protect (ACCEPTABLE, Board confidence +2) -> Three lines
+  Feedback: Talking to principals surfaces things a spreadsheet will not, and you will need their buy-in either way. Without the impact analysis beside it, though, you are weighing strong opinions against each other with no shared set of numbers.
+- Tell Okonjo you already know what has to go, and name it on the phone (POOR, Board confidence -10) -> Three lines
+  Feedback: Announcing the answer in the first hour feels decisive and costs you every option you have not examined yet. If Cho's analysis later contradicts you, the board has to choose between your credibility and the arithmetic.
+
+SCENE: Three lines
+Cho's written analysis comes back in four days and it is honest about the trade-offs. Option one: freeze all non-instructional purchasing and defer the district's technology refresh — $1.9 million, reached without touching staffing, but the deferred replacement cost lands in next year's budget. Option two: hold the four currently vacant positions open through June and add a partial freeze — $1.9 million, though two of those vacancies are special education paraprofessional posts tied to services written into student plans. Option three: end the middle school after-school program in March and add a partial freeze — $1.9 million, and roughly two hundred students lose the only supervised place many of them have until six o'clock.
+
+- Freeze purchasing and defer the technology refresh (BEST, Board confidence +10) -> The board packet
+  Feedback: Deferral protects instruction and student services this year and keeps the decision reversible. It is also a delay rather than a saving, and the board deserves to hear it named that way rather than discover it in July.
+- Hold vacancies, but fill the two paraprofessional posts and hold four others instead (ACCEPTABLE, Board confidence +4) -> The board packet
+  Feedback: Filling the paraprofessional posts respects services the district is obliged to deliver, and vacancy savings avoid layoffs entirely. It also thins supports elsewhere in ways families will start to feel by April, quietly, without anyone having announced a cut.
+- End the after-school program; it is the cleanest single line (POOR, Board confidence -12) -> The room fills up
+  Feedback: A single clean line is the easiest cut to execute and the hardest to defend, because it concentrates the entire reduction on the students with the fewest alternatives. If it is genuinely the right call, it has to be argued in public before it is made rather than after.
+
+SCENE: The board packet
+Simone Alvarez has the draft board packet open and one question: how much of this goes in it. Your plan has a tail, and which tail depends on what you chose. Deferring the technology refresh pushes roughly $2.3 million of replacement cost into a future year that nobody has provided for. Holding vacancies pushes nothing forward and saves nothing twice: the posts are budgeted again in July, so the $1.9 million has to be found somewhere else next year. Board member Roy Vance has asked twice for the clean version, not the encyclopedia. The packet posts publicly at five o'clock tomorrow.
+
+- Publish the full schedule, with the year each deferred cost comes due (BEST, Board confidence +12) -> Credibility intact
+  Feedback: Publishing what the plan costs later is what separates a plan from an accounting maneuver. Boards forgive bad news they hear early; what they rarely forgive is the second version of a number.
+- Publish the total, and brief board members individually on the detail (ACCEPTABLE, Board confidence +3) -> Credibility intact
+  Feedback: Briefing members individually keeps the board informed, which is the substance of the duty. A public total with no detail still leaves the tail there for someone else to find first, and describe first.
+- Report the savings figure and leave the tail out of the packet (POOR, Board confidence -15) -> The cut lands, the credibility does not
+  Feedback: Leaving a known future cost out of the packet does not remove it from the budget; it removes the board's chance to weigh it. When it surfaces in next year's first draft, every other number you have presented gets read a second time.
+
+SCENE: The room fills up
+By six-forty on board night there are sixty people in a room built for forty, most of them families from the middle school. A parent named Iris Ochoa tells the board that the after-school program is the only supervised place her seventh grader has between the last bell and the end of her shift. Delia Okonjo lets public comment run twenty minutes past its limit, then turns to you. The district's own livestream is running.
+
+- Name the harm plainly, and commit to a date when you will report back on restoring it (BEST, Board confidence +10) -> Credibility intact
+  Feedback: Naming the harm without promising a rescue you cannot deliver is the only version of this answer that survives contact with June. A date to report back is a commitment you can actually keep, which is what makes it worth making.
+- Walk the room through the arithmetic that led here, and offer to meet the parent group next week (ACCEPTABLE, Board confidence +2) -> The cut lands, the credibility does not
+  Feedback: The arithmetic is real and these families are entitled to see it. Led with, though, it answers a question about a child with a paragraph about a fund balance, and everyone in the room hears the difference.
+- Say the decision is final and move to the next agenda item (POOR, Board confidence -18) -> The cut lands, the credibility does not
+  Feedback: Closing the item ends the meeting, not the conversation. A public body that declines to answer in the room gets answered elsewhere, by people working with less information than you have.
+
+ENDING: Credibility intact
+The reduction is adopted 5 to 0, and the part that matters comes afterward. When Cho brings the first draft of next year's budget in April, nobody on the board is surprised by what is in it. Roy Vance still thinks you cut in the wrong place; he says so on the record, and then he votes for the plan, because he can see the whole plan.
+
+Sierra Vista absorbed $1.9 million and spent very little of the thing that is hardest to rebuild: the board's assumption that when you present a number, it is the whole number. That assumption is the asset you will need at the community meeting in April, and again the following winter, when something much worse than a budget revision arrives on a Saturday morning.
+
+ENDING: The cut lands, the credibility does not
+The reduction is adopted 3 to 2. Within a month the part you left out has been found — in a budget draft, in a records request, in a parent's spreadsheet — and it is now the story, in place of the reasoning that led you to it. Nothing you did was unlawful and nothing you said was untrue. What is gone is the assumption that a number from your office is a complete number.
+
+You will do this arithmetic again in April, at a community meeting, in front of people who now check it. Every district makes a decision like this one; the ones that survive it are the ones that told the whole thing the first time.

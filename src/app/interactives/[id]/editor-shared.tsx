@@ -9,6 +9,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { saveInteractiveConfig } from "@/app/actions";
+// Type-only import (erased at build time — zero runtime weight either way,
+// but this keeps the "light import" discipline both editors' own file
+// comments describe explicit): ImportPanel below is engine-agnostic and
+// reuses branching's ImportIssue shape rather than redeclaring it, exactly
+// as companion-doc.ts (Task 1) does for the sandbox parser's own report
+// type. Both engines' `parse` functions return this same shape.
+import type { ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
 
 export type AssetRef = { id: string; filename: string };
 
@@ -279,6 +286,132 @@ export function useRowKeys(initialLength: number) {
     return next;
   });
   return { keys, add, remove, move };
+}
+
+/** "Import from companion doc" disclosure (companion-doc import milestone;
+ *  extracted from branching-editor.tsx's original inline component — plan
+ *  Task 2 — to be shared with param-sandbox-editor.tsx's own companion-doc
+ *  format). Deterministic paste-in path for the plain-text formats each
+ *  engine's own companion-doc.ts parses/serializes — see
+ *  docs/superpowers/specs/2026-08-27-companion-doc-import-design.md (the
+ *  original branching design) and 2026-08-28-exemplar-library-design.md §5
+ *  (the sandbox grammar this panel is now reused for). Import is a wholesale
+ *  replace (confirmed via `confirmText`), so this panel owns none of the
+ *  config itself — it only ever calls `onApply` with a freshly parsed config
+ *  and reports what `parse` flagged. Generic over the caller's editing
+ *  config shape `TConfig`: `parse`/`serialize` are the two engine-specific
+ *  companion-doc functions (or a thin wrapper casting to that engine's own
+ *  `*ConfigLike` type, mirroring every other structural cast already used in
+ *  each editor), and `templateHref`/`confirmText` are the two other
+ *  per-engine differences (a static download link, and the replace-warning
+ *  copy — identical text for both engines today, but callers own the exact
+ *  wording rather than this component hard-coding it). */
+export function ImportPanel<TConfig>({ config, parse, serialize, templateHref, confirmText, onApply }: {
+  config: TConfig;
+  parse: (text: string) => { config: unknown; report: ImportIssue[] };
+  serialize: (config: TConfig) => string;
+  templateHref: string;
+  confirmText: string;
+  onApply: (config: TConfig) => void;
+}) {
+  const [text, setText] = useState("");
+  const [emptyWarning, setEmptyWarning] = useState(false);
+  const [report, setReport] = useState<ImportIssue[] | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const reportHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // Announcement contract: focus moves to the report heading once a report
+  // exists (fresh import OR the zero-issue "Imported cleanly." case, both
+  // set `report` to a non-null array) so a screen-reader user lands
+  // directly on the outcome instead of having to hunt for it.
+  useEffect(() => {
+    if (report !== null) reportHeadingRef.current?.focus();
+  }, [report]);
+
+  const handleImportClick = () => {
+    if (text.trim() === "") {
+      setEmptyWarning(true);
+      return;
+    }
+    setEmptyWarning(false);
+    const parsed = parse(text);
+    const proceed = window.confirm(confirmText);
+    if (!proceed) return;
+    onApply(parsed.config as TConfig);
+    setReport(parsed.report);
+  };
+
+  const handleCopyClick = async () => {
+    const doc = serialize(config);
+    let succeeded = true;
+    try {
+      await navigator.clipboard.writeText(doc);
+    } catch {
+      // Fallback for browsers/contexts without a Clipboard API permission
+      // (e.g. no secure context, or the permission prompt was denied): a
+      // hidden textarea + the legacy execCommand path.
+      const ta = document.createElement("textarea");
+      ta.value = doc;
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.setAttribute("aria-hidden", "true");
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        succeeded = document.execCommand("copy");
+      } catch {
+        succeeded = false;
+      }
+      document.body.removeChild(ta);
+    }
+    setCopyStatus(succeeded ? "copied" : "failed");
+    setTimeout(() => setCopyStatus("idle"), 2000);
+  };
+
+  return (
+    // `col-span-2` was inert here (opus review, item 12): neither caller
+    // renders this inside a grid — param-sandbox-editor's Title/intro card
+    // is a plain block, and branching-editor's <Section> wraps children in
+    // a `space-y-3` stack — so the class did nothing in either usage.
+    <details className="mt-2 rounded border border-gray-200 p-2">
+      <summary className="cursor-pointer text-sm font-medium text-gray-600">Import from companion doc</summary>
+      <div className="mt-2 space-y-2">
+        <Field label="Paste a companion doc">
+          <textarea className={`${inputCls} font-mono`} rows={10}
+            value={text}
+            onChange={(e) => { setText(e.target.value); setEmptyWarning(false); }} />
+        </Field>
+        {emptyWarning && <p className="text-xs" style={{ color: "var(--rds-danger)" }}>Paste a companion doc before importing.</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleImportClick}>Import</button>
+          <button type="button" className="btn btn-light-2 btn-sm" onClick={handleCopyClick}>Copy as companion doc</button>
+          <span role="status" className="text-xs text-gray-500" style={copyStatus === "failed" ? { color: "var(--rds-danger)" } : undefined}>
+            {copyStatus === "copied" ? "Copied." : copyStatus === "failed" ? "Copy failed." : ""}
+          </span>
+          <a href={templateHref} download className="app-link text-xs">Download the template</a>
+        </div>
+
+        {report !== null && (
+          <div className="rounded border border-gray-200 bg-gray-50 p-2">
+            <h3 tabIndex={-1} ref={reportHeadingRef} className="text-sm font-semibold outline-none">Import report</h3>
+            {report.length === 0 ? (
+              <p className="mt-1 text-sm">Imported cleanly.</p>
+            ) : (
+              <ul className="mt-1 list-disc pl-5 text-sm">
+                {report.map((issue, i) => (
+                  <li key={i} style={{ color: issue.severity === "error" ? "var(--rds-danger)" : "var(--rds-dark-2)" }}>
+                    Line {issue.line}: {issue.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button type="button" className="btn btn-light-2 btn-sm mt-2" onClick={() => setReport(null)}>Dismiss</button>
+          </div>
+        )}
+      </div>
+    </details>
+  );
 }
 
 /** Identical between both engines' editors: POSTs the export route, saves

@@ -1,0 +1,81 @@
+TITLE: The Community Meeting
+ROLE: You are the superintendent of Sierra Vista Unified. The mid-year reduction you made in February is six weeks old and the questions have not stopped.
+INTRO: In February, Sierra Vista Unified absorbed a $1.9 million mid-year reduction. Six weeks later the questions have not stopped, and before the board can adopt the revised spending plan the state requires a properly noticed public hearing. You are the superintendent, and you have nine days. By the end of this scenario you will be able to design and run a public meeting that satisfies its legal requirements and is genuinely worth attending, and to explain why meeting the requirement is the floor of community engagement rather than the goal. Two things are tracked: Community trust and District compliance. They are not the same thing, and one of the choices later on will only be open to you if the first one is high enough.
+TRACK: Community trust (0 to 100, start at 50, visible)
+TRACK: District compliance (0 to 100, start at 70, visible)
+FEEDBACK: debrief
+
+SCENE: Nine days
+Delia Okonjo wants a community meeting before the board adopts the revised spending plan, which state law says cannot happen without a properly noticed public hearing, materials posted seventy-two hours ahead, and interpretation available on request. Tom Brackett has asked that teachers be able to speak without signing up through their principals. You have nine days, one communications director, and a district where about a third of families speak Spanish at home.
+
+- Hold one meeting that is both the legal hearing and the conversation, and say so in the notice (BEST, Community trust +6, District compliance +6) -> What the notice actually does
+  Feedback: Merging the legal hearing and the community conversation works only if you tell people that is what you are doing. Said out loud in the notice, the requirement reads as a floor you are building on rather than a substitute for the conversation.
+- Run the legal hearing at the board meeting and a separate informal community night the week before (ACCEPTABLE, Community trust +4, District compliance +3) -> What the notice actually does
+  Feedback: Two events give the informal conversation room to breathe, and they double what one communications director has to staff. They also risk families attending the night that has no legal standing, so nothing they say enters the record.
+- Do what the law requires: notice the hearing, take public comment, adopt the plan (POOR, Community trust -10, District compliance +5) -> What the notice actually does
+  Feedback: Meeting the requirement is not the same as answering the question, and a district that answers only what it must teaches families to ask somewhere else. Notice how compliance went up here while trust went down: that is the whole shape of this scenario.
+
+SCENE: What the notice actually does
+Simone Alvarez drafts the notice on Monday. The requirement is seventy-two hours with materials posted; the practical question is whether a family working two jobs can act on a notice that goes out Friday afternoon for a Tuesday meeting. Interpretation is available on request, which in practice means available to people who know to request it. The translated packet is running four days behind the English one.
+
+- Notice ten days out, post both language versions together, and staff interpretation by default (BEST, Community trust +8, District compliance +8) -> Designing the room
+  Feedback: Going past the required notice period is not generosity; it is the difference between a meeting families can attend and a meeting families were technically told about. Interpretation by default removes a request nobody should have to make in the first place.
+- Post at the seventy-two hour mark, then push the meeting through newsletters, the parent text system, and Brackett's members (ACCEPTABLE, Community trust +5, District compliance +5) -> Designing the room
+  Feedback: Amplification does real work and it reaches the families already connected to a school. The families the newsletter never reaches are exactly the ones a longer notice window was there to protect.
+- Post Friday at the mark and let Alvarez handle the rest; you have next year's budget to rebuild (POOR, Community trust -8, District compliance -5) -> Meeting night
+  Feedback: A Friday notice for a Tuesday meeting is compliant the way an unlit exit sign is a sign. The translated packet also still is not posted, which is the difference between an engagement problem and a hearing somebody can challenge.
+
+SCENE: Designing the room
+You have the room for two hours. Alvarez has built a forty-minute slide deck explaining the state revenue revision, the three options Cho analyzed, and why the board chose what it chose. Brackett says his members will not sit through forty minutes of slides. The middle-school parent group has asked whether anyone is going to answer questions or just present.
+
+- Cut the presentation to ten minutes, break to facilitated tables, and take questions on the record (BEST, Community trust +8, District compliance +2) -> Meeting night
+  Feedback: A meeting is a listening instrument or it is a broadcast. Ten minutes of context and ninety of structured listening still puts every fact from the deck on the record and in the handout, where people can read it at their own speed.
+- Trim the deck to twenty minutes and run open question-and-answer from the floor for the rest of the time (ACCEPTABLE, Community trust +5, District compliance +2) -> Meeting night
+  Feedback: Open question-and-answer is honest, and it rewards whoever is loudest and most practiced with a microphone. The families most affected by the cut are frequently not those people.
+- Present the whole deck. If people understand the arithmetic, the anger takes care of itself (POOR, Community trust -12) -> Meeting night
+  Feedback: People rarely arrive angry because they misunderstood the arithmetic. They arrive because something was taken and nobody asked them first, and forty minutes of slides answers a question nobody in the room is asking.
+
+SCENE: Meeting night
+A hundred and forty people, more than the room has chairs for, plus three board members and a reporter from the county weekly. Before you begin, a group from the middle school asks to read a petition with four hundred signatures into the record, which is not on the agenda you posted. Okonjo looks at you; amending the agenda at the top of the meeting is yours to do. Whatever happens next, the room will read it as the answer to whether this meeting is real.
+
+- Amend the agenda to accept the petition, and say aloud why you are amending it (BEST, Community trust +8, District compliance +4) -> The question you cannot answer
+  Feedback: Taking the petition on the record costs six minutes and settles the only question the room had about your intentions. Announcing the amendment aloud is the part that keeps it procedurally clean.
+- Ask them to read the petition during the public comment period already on the agenda (ACCEPTABLE, Community trust +3, District compliance +5) -> The question you cannot answer
+  Feedback: Public comment is the right procedural home for it, and the wait reads as a delay to people who have been waiting since February. Nothing is lost from the record; some goodwill is.
+- Decline; the agenda was posted, and amending it at the top of a hearing is how hearings get challenged (POOR, Community trust -14, District compliance +2) -> Forty-eight hours later
+  Feedback: The instinct to protect the record is right and applied backwards here. Accepting a written submission does not create a notice defect, and refusing one in front of a hundred and forty people puts everything else at risk instead.
+
+SCENE: The question you cannot answer
+Ninety minutes in, at one of the tables, a father named Andre Whitfield asks what the room actually came for: is the after-school program coming back in the fall. Cho's honest answer is that it depends on a state budget nobody will sign until late June. Yours has to be given now, out loud, to a man whose son is currently walking home to an empty apartment.
+
+- Say you do not know, explain what it depends on, and commit to reporting back publicly on July 15 (BEST, Community trust +8, District compliance +2) -> Forty-eight hours later
+  Feedback: I do not know, here is what it depends on, here is when you will hear from me is a complete answer. It is also the only one you can still be standing behind in August.
+- Accept Whitfield's offer to co-chair a family working group that reviews restoration options with Cho before the June budget (BEST, Community trust +10, District compliance +4, only if Community trust is at least 60) -> Forty-eight hours later
+  Feedback: A working group is credible only if the families in it believe the district will use what they produce, which is why this option is open to you tonight and would not have been three weeks ago. Shared authorship changes what the conversation in the fall is about.
+- Tell him you will fight to bring it back; the room needs to hear that somebody is on their side (POOR, Community trust -8) -> Forty-eight hours later
+  Feedback: A promise made to a room is remembered one family at a time. If June does not cooperate, the person who pays for tonight's applause is the father who told his son it was coming back.
+
+SCENE: Forty-eight hours later
+The room empties by nine-forty. Alvarez has eleven pages of table notes, the petition, and forty-two comment cards; the reporter's questions are in your inbox; and the board adopts the revised plan in six days. What happens in the next forty-eight hours decides whether that meeting was a hearing or a performance.
+
+- Publish the notes, the petition, and answers to the open questions, in both languages, before the vote (BEST, Community trust +8, District compliance +6) -> A district families argue with, not about
+  Feedback: The record is the deliverable. Publishing what people said, in their own words, before the vote rather than after it, is what turns a hearing into evidence the board actually used.
+- Give the board a written summary of the themes at the vote, and post the full record afterward (ACCEPTABLE, Community trust +5, District compliance +5) -> Every box checked
+  Feedback: A themes summary is real information, and it is your account of what people said rather than theirs, arriving with no time for anyone to correct it. Posted afterward, the record becomes a receipt instead of an input.
+- The meeting is done and the vote is Tuesday; get back to next year's budget (POOR, Community trust -16, District compliance -12) -> The hearing you may have to hold again
+  Feedback: An unpublished record is indistinguishable from no record, including to whoever later asks whether the hearing met its requirements. The meeting cost a hundred and forty people their evening; the write-up costs you four hours.
+
+ENDING: A district families argue with, not about
+The board adopts the revised plan with the table notes attached to the packet, and Priya Raman quotes two of them from the dais. The restoration working group meets for the first time in May with Cho's spreadsheets open on the table, and when the state budget lands in late June the answer it produces is not the one anyone wanted, but it is the group's answer as much as yours. Andre Whitfield reads the July 15 update at the board meeting himself.
+
+What Sierra Vista has now is not agreement. Roy Vance still votes his way and the middle-school families still want their program back. What it has is a district families argue with rather than argue about, and the difference will matter more than anyone expects the following winter, when the district needs people to believe a very difficult account of something on very little evidence.
+
+ENDING: Every box checked
+The hearing was properly noticed, comment was taken, the summary reached the board before the vote, and the plan was adopted. If anyone audits this process they will find nothing wrong with it, and that is an accurate description of what you built: a process with nothing wrong with it.
+
+Attendance at the next community meeting is thirty-one people. The families who came in April concluded that coming did not change anything, and they were not entirely wrong — the record they created reached the board as your summary of it. Compliance is a floor. You are standing on it.
+
+ENDING: The hearing you may have to hold again
+The board adopts the plan on Tuesday. In the third week of May a complaint arrives asking whether the hearing met its notice and language-access requirements, and the honest answer is that the district cannot fully demonstrate that it did, because nobody wrote down what happened. Counsel's advice is to re-notice and hold the hearing again, which is four more weeks and a second evening of a hundred and forty people's time.
+
+The meeting itself was not the failure. What failed was everything after it: the record that was never published, the questions never answered, the forty-two cards in a folder in Alvarez's office. A hearing that leaves no trace is, to everyone outside the room, a hearing that may as well not have happened.

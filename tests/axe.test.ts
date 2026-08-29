@@ -2,11 +2,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import axe from "axe-core";
 import { mountSandbox } from "@/engine-runtime/param-sandbox/main";
-import { starterConfig } from "@/lib/engines/param-sandbox/starter-configs";
+import { starterConfig, STARTERS as PS_STARTERS } from "@/lib/engines/param-sandbox/starter-configs";
 import { toRuntimeConfig } from "@/lib/engines/param-sandbox/runtime-config";
 import { sandboxConfigSchema, type SandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import { mountBranchingScenario } from "@/engine-runtime/branching-scenario/main";
-import { branchingStarterConfig } from "@/lib/engines/branching-scenario/starters";
+import { branchingStarterConfig, BRANCHING_STARTERS } from "@/lib/engines/branching-scenario/starters";
 import { toBranchingRuntimeConfig } from "@/lib/engines/branching-scenario/runtime-config";
 import { branchingConfigSchema } from "@/lib/engines/branching-scenario/schema";
 
@@ -139,8 +139,8 @@ describe("axe-core accessibility gate: branching scenario", () => {
 
   it("has zero violations at the jury starter's ending + debrief", async () => {
     mountBranchingScenario(document.getElementById("root")!, juryConfig);
-    clickChoice("Raise your doubts about the timeline before anyone votes");
-    clickChoice("Walk the group through the conflict step by step");
+    clickChoice("Raise your doubts before the room votes");
+    clickChoice("Walk the group through the conflict");
     clickChoice("Ask them to explain what evidence would change their mind");
 
     const results = await auditBody();
@@ -228,5 +228,44 @@ describe("axe-core accessibility gate: branching scenario", () => {
 
     const results = await auditBody();
     expect(results.violations).toEqual([]);
+  });
+});
+
+// Generalized starter coverage (Task 3, spec §6): rather than only auditing
+// the buoyancy/jury starters by name (the deep per-state cases above stay as
+// they are), this loop mounts EVERY starter of BOTH engines at its initial
+// state (initial output/challenge values for param-sandbox; the start scene
+// for branching-scenario) so a future exemplar starter is audited for free
+// the moment it's added to STARTERS/BRANCHING_STARTERS, with no test-file
+// edit required. Blank starters are included: both blanks validate and mount
+// meaningfully (a single slider+result; two scenes with real choices), so
+// there's no reason to skip them.
+describe("axe-core accessibility gate: every starter (generalized coverage)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="root"></div>';
+  });
+
+  it("has zero violations for every param-sandbox starter's initial state", async () => {
+    for (const id of Object.keys(PS_STARTERS)) {
+      document.body.innerHTML = '<div id="root"></div>';
+      const config = starterConfig(id, `Starter check: ${id}`);
+      const runtimeConfig = toRuntimeConfig(config, (assetId) => `assets/${assetId}.png`);
+      mountSandbox(document.getElementById("root")!, runtimeConfig);
+
+      const results = await auditBody();
+      expect(results.violations, `starter "${id}": ${describeViolations(results.violations)}`).toEqual([]);
+    }
+  });
+
+  it("has zero violations for every branching-scenario starter's start scene", async () => {
+    for (const id of Object.keys(BRANCHING_STARTERS)) {
+      document.body.innerHTML = '<div id="root"></div>';
+      const config = branchingStarterConfig(id, `Starter check: ${id}`);
+      const runtimeConfig = toBranchingRuntimeConfig(config, (assetId) => `assets/${assetId}.png`);
+      mountBranchingScenario(document.getElementById("root")!, runtimeConfig);
+
+      const results = await auditBody();
+      expect(results.violations, `starter "${id}": ${describeViolations(results.violations)}`).toEqual([]);
+    }
   });
 });

@@ -1,0 +1,87 @@
+TITLE: Plea Bargain
+ROLE: You are an assistant public defender in Vela County, appointed nine days ago to represent Miguel Santos.
+INTRO: You are an assistant public defender in Vela County, appointed nine days ago to represent Miguel Santos, 24, charged with second-degree burglary and receiving stolen property. The prosecutor's offer expires in twelve days. Vela County and everyone in this scenario are fictional, and this is a teaching scenario about defense practice rather than legal advice. By the end of it you will be able to evaluate a plea decision by the quality of the process behind it — investigation, disclosure, advice on collateral consequences, and the client's own informed consent — rather than by how the case happens to turn out. Two things are tracked: Client trust and Case strength. Watch what happens to them; they do not always move together, and one of them is not a measure of how well you are doing your job. (Starter note: add a scene header image in the editor — Image, role, and description on the first scene. Delete this line in your version.)
+TRACK: Client trust (0 to 100, start at 55, visible)
+TRACK: Case strength (0 to 100, start at 40, visible)
+FEEDBACK: debrief
+
+SCENE: Nine days in
+Miguel Santos is charged with second-degree burglary and receiving stolen property after a laptop and two power tools taken from a construction trailer turned up in the trunk of the car he was driving. The offer, open for twelve more days: plead to receiving stolen property, eighteen months of probation, $2,400 in restitution, no jail. If he is convicted at trial on the burglary count, the exposure is two to six years. You have had the file for three days and read the police report twice.
+
+- Meet Santos, walk him through the offer, the exposure and the clock, and ask for no decision today (BEST, Client trust +8) -> What is actually in the file
+  Feedback: The first meeting decides whether a client brings you facts or brings you what he thinks you want to hear. Separating here is the offer from here is your decision is what keeps the decision his.
+- Send a clear written summary of the offer and the exposure, and schedule the meeting for next week (ACCEPTABLE, Client trust +2) -> What is actually in the file
+  Feedback: The written record is genuinely valuable. What it cannot do is hear a question: a client reading two to six years alone at a kitchen table tends to decide something before you ever discuss it.
+- Tell him to take it; probation with no jail on facts like these is a good outcome and he should not gamble (POOR, Client trust -8) -> What is actually in the file
+  Feedback: The recommendation might even turn out to be right, and made before any investigation it is a guess in a suit. Whether to plead is one of the few decisions that belongs to the client alone, and it is only his if he had the information and the room to make it.
+
+SCENE: What is actually in the file
+The state's case is an eyewitness who saw two men near the trailer at 11:40 at night and identified Santos an hour later at the roadside, in the back of a patrol car; a partial fingerprint on the door frame reported as consistent; and the property in the trunk of a car Santos had borrowed from his cousin, Ruben Ortega. Santos says Ortega asked him to move the car. Ortega has not returned your calls. Discovery lists a surveillance recording from a business across the road that has not been produced.
+
+- Send Dana Okafor after Ortega and the store, and file a motion to compel the unproduced recording (BEST, Case strength +20, Client trust +6) -> What would you do
+  Feedback: A plea evaluated against an uninvestigated case is not an evaluation; it is a coin flip with paperwork. The unproduced recording is the one item that could move this case in either direction, which is exactly why he needs it before he decides.
+- Keep calling Ortega yourself and read the report closely; the office investigator is three weeks out (ACCEPTABLE, Case strength +6, Client trust +2) -> What would you do
+  Feedback: Working the case yourself beats not working it. It still leaves the roadside identification and the missing recording untouched. Caseload is a real constraint; it is not an answer to the question of what you knew.
+- The report is detailed and the offer is generous; work from what the state has given you (POOR, Case strength -10, Client trust -5) -> What would you do
+  Feedback: The police report is one party's account of the case, written by the party that has to prove it. Advising on it alone means your client's decision rests entirely on evidence nobody has tested.
+
+SCENE: What would you do
+Santos is 24, works as a warehouse picker, and has a nine-month-old daughter. He asks you the question every client asks: what would you do. He also says twice that he cannot be away from work, and once, quietly, that he does not want Ortega charged.
+
+- Give him your honest read of the risk on both paths, and be clear the choice is his (BEST, Client trust +8) -> A line on the intake form
+  Feedback: Clients are entitled to your judgment and not obliged to adopt it. Saying both of those things in the same conversation is the whole skill.
+- Tell him you cannot make this decision for him, and lay out the two paths without a recommendation (ACCEPTABLE, Client trust -2) -> A line on the intake form
+  Feedback: Neutrality feels respectful. In practice it can leave a client alone with a decision he asked for help with, and withholding your professional judgment is not the same as protecting his autonomy.
+- Tell him you like the case; the identification is weak, the fingerprint is partial, and no jury convicts on this (POOR, Client trust +6) -> A line on the intake form
+  Feedback: Notice that his trust in you went up. Confidence is contagious and unfalsifiable until the verdict, and a prediction offered as a probability educates a client where the same prediction offered as a promise replaces his decision with your optimism.
+
+SCENE: A line on the intake form
+Going through the sentencing intake form you notice that Santos was born in Oaxaca and has been a lawful permanent resident since he was eleven. He has never connected that to this case. A plea to receiving stolen property may carry immigration consequences that a dismissal or a differently structured plea would not. Your office has an immigration consult line with a four-day turnaround. The offer expires in five days.
+
+- Stop the plea discussion, send the consult, and tell Santos you cannot advise him until the answer comes back (BEST, Client trust +8, Case strength +5) -> Forty hours left
+  Feedback: A noncitizen client's plea decision is not complete without the immigration consequence, and the duty to advise on it is constitutional rather than optional. Pausing a running clock is uncomfortable; advising blind is worse.
+- Tell him a plea could affect his status and that he should speak with an immigration attorney, then carry on (ACCEPTABLE) -> Forty hours left
+  Feedback: A general warning beats silence, and it is the version of the advisal that suffices only when the consequence is genuinely unclear. Here it is knowable in four days, which is the difference between a warning and advice.
+- Immigration is a different practice area; focus on the criminal exposure, which is what the office was appointed for (POOR, Client trust -12) -> Monday morning
+  Feedback: The consequence a client cares most about is often not the one on the charging document. Treating deportation risk as somebody else's specialty is precisely the reasoning the duty to advise exists to end.
+
+SCENE: Forty hours left
+The recording surfaces Thursday afternoon, produced on your motion or handed over late in a supplemental disclosure. It shows two figures crossing the road at 11:38 at night; neither is identifiable, one is noticeably taller than Santos, and the timestamp is four minutes off the eyewitness's account. It is not exoneration and it is not nothing. ADA Trujillo, hearing that you have it, says the eighteen-month offer stands until Monday and will not improve.
+
+- Sit down with Santos, show him the recording, and re-explain both paths in light of it (BEST, Client trust +8, Case strength +8) -> Monday morning
+  Feedback: New evidence changes the client's decision, not only yours, and he cannot weigh what he has not seen. Showing him what it fails to prove matters as much as showing him what it does.
+- Take the recording and the identification problems to Trujillo and ask for a disposition without the receiving count (BEST, Case strength +10, Client trust +6, only if Case strength is at least 60) -> Monday morning
+  Feedback: You can only negotiate from what you actually built, which is why this conversation is available to you at all. Even a refused ask tells your client the case was worked rather than processed.
+- The offer is still good and the recording muddies it; do not complicate his decision forty hours out (POOR, Client trust -10, Case strength -5) -> Monday morning
+  Feedback: Withholding evidence from a client to keep his decision tidy inverts the duty you hold. Complication is not the enemy of a good decision; it is usually the content of one.
+
+SCENE: Monday morning
+Santos arrives Monday with his aunt Teresa, who has watched the recording twice on your office computer, and with the immigration consult if you obtained one. Court is at one-thirty. He asks you one more time what happens to him.
+
+- Walk him through the offer, the exposure and the collateral consequences once more, confirm what he understands, memo the file, and do what he decides (BEST, Client trust +6) -> The record you can stand behind
+  Feedback: The colloquy in court tests whether a plea was voluntary; your file memo is the only record of whether it was informed. When somebody asks in two years, that memo is the only witness you have.
+- He has the information; tell him you support whatever he decides, and go to court (ACCEPTABLE, Client trust +4) -> It worked out
+  Feedback: Support is not counsel, and whatever you decide at the last moment can leave a client guessing at what you actually think. It also leaves no record of what he understood when he decided.
+- Tell him the answer is obvious by now, and that you have already told Trujillo he is taking it (POOR, Client trust -20) -> The plea that comes back
+  Feedback: Communicating a client's decision before he has made it is not efficiency; it substitutes your judgment for his in the one decision that was never yours. Everything downstream of it is fragile.
+
+ENDING: The record you can stand behind
+Santos makes his decision. Whether he took the offer or set it for trial matters less to this scenario than what stands behind it: a case that was investigated, evidence he saw with his own eyes, a consequence to his residency that somebody actually researched, and a decision he made in his own words with his aunt sitting beside him.
+
+Two years later a different lawyer pulls the file for an unrelated reason and reads the memo: what he was told, what he understood, what he chose. Nothing in it has to be reconstructed from memory. That is what a defensible file looks like, and it is the only thing that can be built regardless of how the case turns out.
+
+This is the point of the exercise. You cannot control the eyewitness, the prosecutor, the judge, or the verdict. You can control what the client knew when he decided, and that is what the profession actually holds you to.
+
+ENDING: It worked out
+The eyewitness moves out of state in the spring. Trujillo cannot make the burglary count without her, the charge is reduced, and Santos ends up with an outcome better than the offer he was weighing. He shakes your hand in the hallway and means it.
+
+Now change one fact. If the witness had stayed, exactly the same choices you made would have produced a client who pleaded to an offense whose consequences nobody had researched, on evidence nobody had tested, with no record of what he understood. The choices did not become good because the witness moved.
+
+This is the ending students argue with, and it is the one worth arguing about. Outcomes are distributed by luck as much as by skill. The process is the only part that was ever yours, and it is the only part anyone can review.
+
+ENDING: The plea that comes back
+Santos pleads. Six months later, returning from his grandmother's funeral, he is held at the airport and learns from a stranger in a uniform what his conviction means for his residency — which is how he learns that it means anything at all.
+
+The motion to withdraw the plea lands on a different lawyer's desk, and the file it is built on is yours. There is no memo, no consult, no record of what he was told, and a prosecutor who remembers being informed of his decision before he had made it. Whatever the court decides, the year he spends on it is a year nobody gets back.
+
+Nothing here required bad faith. A heavy caseload, an offer with a clock on it, and a client who kept saying he could not miss work are enough. That is why the duties are written as duties rather than as good intentions.

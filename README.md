@@ -95,6 +95,24 @@ round-tripping cleanly, so a designer and a faculty reviewer can hand a
 scenario back and forth across revision cycles without either side touching
 JSON.
 
+**Exemplar library.** Each engine's starter picker separates a blank start
+from six built-in exemplars, grouped as distinct `<optgroup>`s with a visible
+description for whichever starter is selected. Four Branching Scenario
+scenarios escalate from one tracked variable to full complexity — The Budget
+Cut, The Community Meeting, The Crisis, and Plea Bargain (the last ships
+image-less, with a separate Canvas-review copy carrying an authored header
+image whose alt text a human reviewer accepts as author of record before
+delivery) — and two Parameter Sandbox models, Dose-Response
+Explorer and Break-Even Studio, are authored entirely through the sandbox's
+own companion-doc format: the same plain-text round-trip the Branching
+Scenario engine already had, now shared by both engines via a common
+`ImportPanel`. Every exemplar's content — learning objective, scene or model
+text, SME defensibility notes, and (for the sandbox pair) witness-vector
+challenge assignments — is drafted first as a brief under `docs/exemplars/`,
+which the shipped starter config transcribes verbatim, so the brief stays the
+single source of truth; `docs/exemplars/alt-policy.md` records the project's
+decorative/informative image-alt policy those briefs follow.
+
 ## Design system
 
 **Token source.** `src/lib/design/tokens.json` is the single source of truth

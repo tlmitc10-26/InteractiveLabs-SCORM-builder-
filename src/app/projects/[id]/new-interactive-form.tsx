@@ -24,7 +24,7 @@
 import { useId, useState } from "react";
 import { createInteractive } from "@/app/actions";
 
-export type StarterMetaProp = { id: string; label: string; description: string };
+export type StarterMetaProp = { id: string; label: string; description: string; group: "blank" | "exemplar" };
 export type EngineMetaProp = { id: string; label: string; blurb: string; starters: StarterMetaProp[] };
 
 export function NewInteractiveForm({ projectId, engines }: { projectId: string; engines: EngineMetaProp[] }) {
@@ -32,6 +32,8 @@ export function NewInteractiveForm({ projectId, engines }: { projectId: string; 
   const engine = engines.find((e) => e.id === engineId) ?? engines[0];
   const [starterId, setStarterId] = useState(engine?.starters[0]?.id ?? "");
   const starterSelectId = useId();
+  const starterDescriptionId = useId();
+  const selectedStarter = engine?.starters.find((s) => s.id === starterId);
 
   function handleEngineChange(id: string) {
     setEngineId(id);
@@ -81,13 +83,31 @@ export function NewInteractiveForm({ projectId, engines }: { projectId: string; 
           className="flex-1 rounded border border-gray-300 px-3 py-2" />
         <label htmlFor={starterSelectId} className="sr-only">Starter template</label>
         <select id={starterSelectId} name="starter" value={starterId} onChange={(e) => setStarterId(e.target.value)}
+          aria-describedby={starterDescriptionId}
           className="rounded border border-gray-300 px-3 py-2 text-sm">
-          {engine.starters.map((s) => (
-            <option key={s.id} value={s.id} title={s.description}>{s.label}</option>
-          ))}
+          <optgroup label="Start blank">
+            {engine.starters.filter((s) => s.group === "blank").map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Exemplars">
+            {engine.starters.filter((s) => s.group === "exemplar").map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </optgroup>
         </select>
         <button className="btn btn-primary">New {engine.label}</button>
       </div>
+      {/* Visible text (not a hover-only title tooltip -- the WCAG gap this
+          replaces) describing whichever starter is currently selected.
+          aria-describedby above wires it to the select itself, so a screen
+          reader announces it right after the select's name/value, and
+          changing the selection with the keyboard updates this text live
+          since it's plain rendered content, not something needing its own
+          live region. */}
+      {selectedStarter && (
+        <p id={starterDescriptionId} className="text-xs text-gray-600">{selectedStarter.description}</p>
+      )}
     </form>
   );
 }

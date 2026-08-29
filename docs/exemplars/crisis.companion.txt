@@ -1,0 +1,107 @@
+TITLE: The Crisis
+ROLE: You are the superintendent of Sierra Vista Unified. It is 5:40 on a Saturday morning in January and your director of operations is calling.
+INTRO: Last winter Sierra Vista Unified absorbed a mid-year reduction and deferred its technology refresh, including the endpoint maintenance line. In April it held a community meeting about that reduction. This is the following January, and at 5:40 on a Saturday morning the district's systems stop responding. By the end of this scenario you will be able to lead a district through a security incident that has no good options: sequencing containment against continuity, communicating before the facts are complete, meeting a notification duty on its own clock rather than yours, and giving an after-action account that includes your own earlier decisions. Three things are tracked: Community trust, Instructional continuity, and Regulatory standing. Some of the choices ahead will only be available to you if the right one of those is high enough when you get there.
+TRACK: Community trust (0 to 100, start at 55, visible)
+TRACK: Instructional continuity (0 to 100, start at 80, visible)
+TRACK: Regulatory standing (0 to 100, start at 70, visible)
+FEEDBACK: debrief
+
+SCENE: 5:40 a.m., Saturday
+Ray Delgado calls at 5:40 on Saturday morning. Overnight the student information system stopped responding, the building-access controllers are offline, and a message on the district's file server says the data has been encrypted and gives an address to contact. Nobody knows yet what was taken, how long the intruder was inside, or whether the backups are intact — including, Delgado notes, the ones covered by the maintenance line the district deferred last February. You are the only person with the authority to shut anything down.
+
+- Isolate the affected systems now, then call the county office, the district's cyber insurer, and counsel before anything else is touched (BEST, Instructional continuity -8, Regulatory standing +6, Community trust +2) -> Who is in the room
+  Feedback: Isolation buys the one thing you cannot get back later: an intact record of what happened. Counsel and the insurer both have roles that begin in the first hour rather than the first press call, and the call you make now is what determines which options exist on Wednesday.
+- Have Delgado start restoring from whatever backups exist so Monday still works, and call counsel once you know what this is (ACCEPTABLE, Instructional continuity +5, Regulatory standing -8) -> Who is in the room
+  Feedback: The instinct to get schools running is right. What it misses is that restoring before the systems are isolated can overwrite the evidence that decides what you must report and to whom. Continuity and containment genuinely compete here; the order matters more than the speed.
+- It is Saturday. Keep it quiet until the IT vendor can look at it Monday (POOR, Instructional continuity -5, Regulatory standing -18, Community trust -10) -> Who is in the room
+  Feedback: Every hour an intrusion runs unexamined is an hour of further access, and a delay that begins as caution is read afterward as concealment. Notification clocks generally run from discovery, not from when it became convenient to look.
+
+SCENE: Who is in the room
+By seven you have counsel on the phone, the insurer's incident line open, and Delgado in the server room. Counsel asks a question you cannot answer: does the district have a written incident response plan naming who decides, who speaks, and who notifies. Delia Okonjo is calling. Roy Vance has texted twice, and one of the texts asks what you are going to tell the press.
+
+- Stand up one incident command — you decide, counsel advises, Alvarez speaks — and brief Okonjo hourly (BEST, Regulatory standing +4, Instructional continuity +2, Community trust +4) -> Thirty-six hours to Monday
+  Feedback: Incident command is not bureaucracy; it is the mechanism that stops six people giving five versions of the same facts. Hourly briefings to your board president keep governance informed without moving the decision out of the room where the facts are.
+- Keep the circle small — you, Delgado, counsel — and update the full board Monday (ACCEPTABLE, Instructional continuity +2, Community trust -5) -> Thirty-six hours to Monday
+  Feedback: A small circle moves fast. It also means every question in the district lands on the three most overloaded people in it, and by Monday your board will have learned about this from somebody who is not you.
+- Put every cabinet member and both board officers on a running call and decide as a group; nobody should feel shut out (POOR, Regulatory standing -10, Instructional continuity -5, Community trust -5) -> Thirty-six hours to Monday
+  Feedback: Inclusion is not coordination. A twelve-person call with no decision-maker produces twelve partial accounts, and one of them reaches a parent group before the facts are stable enough to correct.
+
+SCENE: Thirty-six hours to Monday
+School opens in thirty-six hours. Without the student information system there is no attendance, no gradebook, no medication list at the health office, and no service log for the roughly six hundred students whose plans entitle them to specific minutes of support. Elena Duarte says the high school can run attendance on paper. Marcus Bell says his office cannot verify who is allowed to pick up a kindergartner. Delgado's estimate for partial restoration is four to nine days.
+
+- Open on time with published paper protocols for attendance, medication, pickup verification, and service logs (BEST, Instructional continuity +8, Regulatory standing +2, Community trust +4) -> The first message
+  Feedback: Continuity is a set of specific written workarounds, not a decision to be brave. Putting the service-log plan in writing is also what later lets the district show that entitled minutes were delivered rather than merely intended.
+- Close Monday and Tuesday as emergency days, restore what you can, and reopen Wednesday on whatever is back (ACCEPTABLE, Instructional continuity -8, Regulatory standing +2, Community trust -2) -> The first message
+  Feedback: Two days buys real technical room. The price is six thousand students' instruction and several thousand families' childcare, neither of which anyone had planned for. It is a defensible call. It is not a free one.
+- Open on time and tell principals to improvise; they know their families (POOR, Instructional continuity -14, Regulatory standing -12, Community trust -8) -> The first message
+  Feedback: Principals will improvise regardless; the question is whether they improvise from a common protocol or invent forty of them. Medication and custody release are the two places where a good-faith improvisation becomes a child in the wrong car.
+
+SCENE: The first message
+Alvarez needs a first message by Sunday noon; a screenshot of the ransom note is already circulating in a parents' group chat. Counsel's advice is that anything you say about what was taken could be wrong within a day. What you know is narrow: systems are down, an investigation is under way, and here is what Monday looks like. What families are asking is whether their children's records are in somebody else's hands.
+
+- Publish now: what happened, what you do not yet know, what Monday looks like, and when the next update comes (BEST, Community trust +10, Regulatory standing +2) -> The demand
+  Feedback: A stated update rhythm is the most valuable thing you can offer while the facts are thin, because it converts an information vacuum into a wait people can tolerate. Publishing your uncertainties is also what makes tomorrow's corrections survivable.
+- Brief principals and staff Sunday so they can answer families Monday, and hold the public statement until you know more (ACCEPTABLE, Community trust -4, Regulatory standing +2, Instructional continuity +4) -> The demand
+  Feedback: Staff who can answer questions are worth a great deal. A message given to four hundred employees, though, is a public message with extra steps and no timestamp — and the screenshot in the group chat is not going to wait for your confidence to catch up.
+- Say nothing until the forensic picture is clear; a wrong statement now is worse than silence (POOR, Community trust -14, Regulatory standing -4) -> What was taken
+  Feedback: Silence is not neutral. It says the district either does not know or will not say, and both readings are worse than here is what we know so far. The correction you are afraid of is far cheaper than the vacuum you are creating.
+
+SCENE: The demand
+The intruders want payment, and promise both a decryption key and the deletion of everything they copied. The insurer says the decision is yours and coverage does not turn on it. Delgado's backups turn out to be nine days stale for the student information system, which is precisely what the deferred maintenance line was going to fix. Paying might shorten the outage by a week. It would also fund the next district's incident, and the promise to delete stolen data is unverifiable by definition.
+
+- Decline the payment, rebuild from the backups that exist, and tell the board why in writing, with the nine-day gap named (BEST, Regulatory standing +4, Community trust +4, Instructional continuity -4) -> What was taken
+  Feedback: The unverifiable half of the offer is the whole offer: nobody can confirm that copied data was deleted. Naming the backup gap yourself, in the same memo, is what keeps it from being discovered later as a second story.
+- Say publicly that Sierra Vista will not pay, publish the restoration timeline, and ask families for patience by a specific date (BEST, Regulatory standing +3, Community trust +10, Instructional continuity -4, only if Community trust is at least 60) -> What was taken
+  Feedback: A public refusal is a commitment you can only make if people will wait through the outage it buys, which is a trust question rather than a technical one — and it is why this option is open to you now and would not have been in a district that had spent its credibility. Publishing the timeline is what makes the ask concrete instead of a slogan.
+- Authorize payment through the insurer's negotiator and keep it out of the public account; Monday matters more than principle (POOR, Regulatory standing -16, Community trust -12, Instructional continuity +8) -> What was taken
+  Feedback: Payment might shorten the outage and it cannot buy the data back, because the only evidence of deletion is the word of the people who took it. Keeping a material expenditure out of the public account is a second decision, and a much harder one to defend than the payment itself.
+
+SCENE: What was taken
+On Wednesday the forensic firm confirms what everyone feared: files were copied out before the encryption, including a directory of names, dates of birth, home addresses and service plans for students going back six years. Counsel says the notification clock runs from the determination that records were acquired, and that the determination is now. Roy Vance argues for waiting until the firm can say precisely which students are affected — we should tell families something useful, he says, not something frightening.
+
+- Notify now: tell every family in the affected years what is known and what is not, and follow with specifics later (BEST, Regulatory standing +5, Community trust +6) -> The people doing the work
+  Feedback: Waiting for a perfect list means families learn this from somebody else first, and the duty does not pause for precision. Two notices, one prompt and honest and one specific, beat a single late and complete one.
+- Send counsel's Saturday draft jointly with the state agency and the county office, and open a family help line the same hour (BEST, Regulatory standing +6, Community trust +8, Instructional continuity +2, only if Regulatory standing is at least 80) -> The people doing the work
+  Feedback: The reason this option exists on Wednesday is that counsel was in the room on Saturday morning: the notice was drafted before anyone needed it. Issuing jointly with the agencies also means families get one consistent account instead of three competing ones.
+- Take Vance's position and wait until the firm can name the affected students, so the notice tells families something useful rather than something frightening (POOR, Regulatory standing -18, Community trust -10) -> The people doing the work
+  Feedback: The argument for waiting is sincere, and it converts a disclosure obligation into a discretionary judgment the district does not get to make. Every day of waiting is a day families could have been protecting their children's records and were not told to.
+
+SCENE: The people doing the work
+Teachers have spent six days reconstructing eleven weeks of grades from paper and memory. Tom Brackett puts it plainly: his members will do it, and they want to know whether it is being counted as work or expected as goodwill. Meanwhile Alvarez's help line is taking two hundred calls a day with three people answering.
+
+- Compensate the reconstruction work at the contractual rate, and pull substitutes and central office staff onto the help line (BEST, Instructional continuity +8, Community trust +6) -> After-action
+  Feedback: Recovery is labor, and labor performed in a crisis is still labor. Paying for it is the contractual answer and the reason those people will still be standing when the next thing happens.
+- Ask April's family working group to run a parent-to-parent help line beside the district's, on a shared script (BEST, Instructional continuity +6, Community trust +12, only if Community trust is at least 60) -> After-action
+  Feedback: Families answering families is faster and warmer than any phone tree you could build in a week, and it is possible only because the working group already existed and already trusted the district's numbers. The shared script is what keeps it accurate.
+- Thank staff publicly and ask them to absorb the work; the budget is already carrying an incident (POOR, Instructional continuity -10, Community trust -12) -> Technically recovered
+  Feedback: Gratitude is not compensation. Asking people to donate labor after a decision they had no part in is how a technical incident becomes a labor dispute, and the budget argument is a reason to go to the board rather than to the staff.
+
+SCENE: After-action
+Six weeks later the systems are back, the notification is complete, and the board has scheduled an after-action review in open session. Cho's estimate is $1.4 million between recovery, credit monitoring for families, and the endpoint renewal that was deferred last February. Every decision you made sits on a timeline in the board packet, including the ones made at 5:40 on a Saturday morning.
+
+- Present the full timeline, own the February deferral as a contributing decision, and bring the multi-year replacement plan (BEST, Community trust +8, Regulatory standing +5, Instructional continuity +4) -> The account that holds
+  Feedback: An after-action review is worth exactly as much as its least comfortable sentence. Naming your own earlier decision as a contributing cause is what converts an incident into a budget the board will actually fund.
+- Present the technical timeline and the vendor's recommendations, and take the budget history up separately with the board in the spring (ACCEPTABLE, Community trust +2, Regulatory standing +2) -> Recovered, not learned
+  Feedback: The technical findings are accurate and incomplete. An intrusion that succeeded partly because of a deferred renewal is not only a technical event, and the separate conversation you are promising tends never to happen.
+- Frame the review around the vendor's failure and the sophistication of the attack, which no district of this size could have stopped (POOR, Community trust -16, Regulatory standing -12) -> The record that answers for you
+  Feedback: Attributing an incident entirely outward ends the inquiry before it reaches anything the district could change. It also does not survive a records request, because last February's board packet is a public document.
+
+ENDING: The account that holds
+The board adopts a four-year replacement plan at the same meeting, 5 to 0, and Roy Vance is the one who moves it. The state agency's review closes with findings on the district's controls and none on its conduct: notification was timely, the record is complete, and the account the district gave of itself on day two matches the account the forensic firm gave on day forty. Andre Whitfield's volunteers answered eleven hundred family calls.
+
+None of this made the incident less expensive. Six thousand students lost instructional time, six years of records are in somebody else's hands, and $1.4 million that was going to do something else is gone. What Sierra Vista has instead is the only asset that survives an event like this one: a district whose account of itself can be checked. That is what you spent three years building, one decision at a time, starting with a $1.9 million problem on a Tuesday in February.
+
+ENDING: Recovered, not learned
+Systems are restored, the notification went out, and the after-action review is filed with the vendor's recommendations attached. Nobody was misled and nothing was concealed. The review simply stopped where the technology stopped, and so the replacement plan goes to the board as a line item in the spring rather than as the answer to a question the board is still asking.
+
+The plan is funded at about half. Two winters from now, the part that was not funded will be the part that matters — which is roughly what happened to the maintenance line last February, and is the reason an after-action review that avoids the budget is an incomplete one.
+
+ENDING: Technically recovered
+The systems come back. Two hundred and forty teachers reconstruct eleven weeks of grades on their own time, the association files a grievance in March, and the fall bargaining opens with an article on emergency duties that will take eleven months to settle. Family calls go unanswered for days because three people cannot answer two hundred calls, and the help line's voicemail box is full for most of a week.
+
+Every technical objective was met. The district recovered its data and lost something it will need next time: the assumption, among the people who actually delivered the recovery, that the district notices what it is asking of them. A crisis is a withdrawal from an account somebody has to have funded first.
+
+ENDING: The record that answers for you
+The state agency's review does not close. Its findings run to the notification timeline, the absence of a written incident response plan, and the district's public statements measured against what it knew when it made them. The county office assigns a technical monitor for eighteen months. In April, a reporter obtains last February's board packet and lays the deferred maintenance line beside your after-action presentation, and the story writes itself without a single unfair sentence in it.
+
+The intrusion was not your fault. The account of it was yours to give, and you gave one the record does not support. That is the difference between an incident a district survives and one it spends years explaining.

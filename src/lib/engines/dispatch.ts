@@ -10,6 +10,11 @@ export interface StarterMeta {
   id: string;
   label: string;
   description: string;
+  /** "blank" starters are empty-ish skeletons to build from scratch; every
+   *  other starter is an "exemplar" demonstrating a worked pattern. The
+   *  "New interactive" picker (new-interactive-form.tsx) groups the
+   *  `<select>` by this field via `<optgroup>`. */
+  group: "blank" | "exemplar";
 }
 
 export interface EngineAdapter {
@@ -54,7 +59,7 @@ export const ENGINE_ADAPTERS: Record<string, EngineAdapter> = {
       return config.intro ? [config.intro] : [];
     },
     starterConfig: (starterId, title) => psStarterConfig(starterId, title),
-    starters: Object.entries(PS_STARTERS).map(([id, s]) => ({ id, label: s.label, description: s.description })),
+    starters: Object.entries(PS_STARTERS).map(([id, s]) => ({ id, label: s.label, description: s.description, group: s.group })),
   },
   "branching-scenario": {
     engineId: "branching-scenario",
@@ -76,7 +81,7 @@ export const ENGINE_ADAPTERS: Record<string, EngineAdapter> = {
       return values;
     },
     starterConfig: (starterId, title) => branchingStarterConfig(starterId, title),
-    starters: Object.entries(BRANCHING_STARTERS).map(([id, s]) => ({ id, label: s.label, description: s.description })),
+    starters: Object.entries(BRANCHING_STARTERS).map(([id, s]) => ({ id, label: s.label, description: s.description, group: s.group })),
   },
 };
 

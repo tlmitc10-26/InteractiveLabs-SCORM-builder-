@@ -4,15 +4,32 @@ import { validateBranchingConfig } from "@/lib/engines/branching-scenario/schema
 import { initialState, applyChoice, scorePct, visibleChoices } from "@/lib/engines/branching-scenario/state";
 
 describe("BRANCHING_STARTERS", () => {
-  it("has a blank and a jury starter", () => {
-    expect(Object.keys(BRANCHING_STARTERS).sort()).toEqual(["blank", "jury"]);
-  });
-
+  // Invariants over the full starter set, restructured (spec §6) from an
+  // exact-list assertion so adding new starters (exemplar library) doesn't
+  // require touching this test -- only the properties every starter must
+  // hold are asserted here.
   it("every starter's config validates (schema + graph checks)", () => {
     for (const [id, starter] of Object.entries(BRANCHING_STARTERS)) {
       const r = validateBranchingConfig(starter.config);
       expect(r.ok, `starter "${id}" should validate: ${!r.ok ? r.errors.join("; ") : ""}`).toBe(true);
     }
+  });
+
+  it("has unique starter ids", () => {
+    const ids = Object.keys(BRANCHING_STARTERS);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("every starter has a non-empty description and a valid group", () => {
+    for (const [id, starter] of Object.entries(BRANCHING_STARTERS)) {
+      expect(starter.description.length, `starter "${id}" description should be non-empty`).toBeGreaterThan(0);
+      expect(["blank", "exemplar"], `starter "${id}" group should be "blank" or "exemplar"`).toContain(starter.group);
+    }
+  });
+
+  it("has exactly one blank-group starter", () => {
+    const blanks = Object.values(BRANCHING_STARTERS).filter((s) => s.group === "blank");
+    expect(blanks).toHaveLength(1);
   });
 });
 

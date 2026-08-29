@@ -166,7 +166,7 @@ describe("mountBranchingScenario", () => {
       const buttons = document.querySelectorAll(".ilb-choice-btn");
       expect(buttons.length).toBe(3);
       expect(Array.from(buttons).map((b) => choiceLabelText(b))).toEqual([
-        "Raise your doubts about the timeline before anyone votes",
+        "Raise your doubts before the room votes",
         "Vote with the majority to keep things moving",
         "Ask to re-examine the evidence list first",
       ]);
@@ -247,14 +247,14 @@ describe("mountBranchingScenario", () => {
   describe("scene transitions", () => {
     it("clicking a choice transitions to the target scene and moves focus to the new h2", () => {
       mountBranchingScenario(document.getElementById("root")!, juryConfig);
-      clickChoice("Raise your doubts about the timeline before anyone votes"); // speak_up
+      clickChoice("Raise your doubts before the room votes"); // speak_up
       expect(h2().textContent).toBe("The Timeline");
       expect(document.activeElement).toBe(h2());
     });
 
     it("updates the vars status text exactly once when the effect changes the visible variable", () => {
       mountBranchingScenario(document.getElementById("root")!, juryConfig);
-      clickChoice("Raise your doubts about the timeline before anyone votes"); // speak_up: +10 -> 60
+      clickChoice("Raise your doubts before the room votes"); // speak_up: +10 -> 60
       expect(document.querySelector(".ilb-vars-status")!.textContent).toBe("Jury trust: 60");
     });
 
@@ -289,8 +289,8 @@ describe("mountBranchingScenario", () => {
     it("shows the showIf choice once trust reaches the threshold", () => {
       mountBranchingScenario(document.getElementById("root")!, juryConfig);
       // speak_up (+10 -> 60) -> walk_through (+15 -> 75) -> holdout at trust 75 (>= 60).
-      clickChoice("Raise your doubts about the timeline before anyone votes"); // speak_up
-      clickChoice("Walk the group through the conflict step by step"); // walk_through
+      clickChoice("Raise your doubts before the room votes"); // speak_up
+      clickChoice("Walk the group through the conflict"); // walk_through
       expect(h2().textContent).toBe("The Holdout");
       expect(document.querySelector(".ilb-vars-status")!.textContent).toBe("Jury trust: 75");
       const labels = Array.from(document.querySelectorAll(".ilb-choice-btn")).map((b) => choiceLabelText(b));
@@ -367,8 +367,8 @@ describe("mountBranchingScenario", () => {
   describe("ending + debrief", () => {
     function playBestPath(): void {
       mountBranchingScenario(document.getElementById("root")!, juryConfig);
-      clickChoice("Raise your doubts about the timeline before anyone votes"); // speak_up, best
-      clickChoice("Walk the group through the conflict step by step"); // walk_through, best
+      clickChoice("Raise your doubts before the room votes"); // speak_up, best
+      clickChoice("Walk the group through the conflict"); // walk_through, best
       clickChoice("Ask them to explain what evidence would change their mind"); // invite_reasons, best
     }
 
@@ -407,7 +407,7 @@ describe("mountBranchingScenario", () => {
       const first = items[0];
       expect(first.querySelector(".ilb-debrief-scene")!.textContent).toContain("The First Vote");
       expect(first.querySelector(".ilb-debrief-choice")!.textContent).toBe(
-        "Raise your doubts about the timeline before anyone votes",
+        "Raise your doubts before the room votes",
       );
       expect(first.querySelector(".ilb-debrief-quality")!.textContent).toContain("Best choice");
       expect(first.querySelector('[aria-hidden="true"]')).toBeTruthy();
@@ -501,11 +501,11 @@ describe("mountBranchingScenario", () => {
       expect(scorm.setScore).not.toHaveBeenCalled();
       expect(scorm.setCompleted).not.toHaveBeenCalled();
 
-      clickChoice("Raise your doubts about the timeline before anyone votes"); // best -> pct 100 so far
+      clickChoice("Raise your doubts before the room votes"); // best -> pct 100 so far
       expect(scorm.setScore).toHaveBeenLastCalledWith(100);
       expect(scorm.setCompleted).not.toHaveBeenCalled();
 
-      clickChoice("Walk the group through the conflict step by step"); // best -> still 100
+      clickChoice("Walk the group through the conflict"); // best -> still 100
       clickChoice("Ask them to explain what evidence would change their mind"); // best -> ending, 100
       expect(scorm.setScore).toHaveBeenLastCalledWith(100);
       expect(scorm.setCompleted).toHaveBeenCalledTimes(1);
@@ -518,8 +518,8 @@ describe("mountBranchingScenario", () => {
       (window as any).ILBScorm = scorm as unknown as ScormSession;
 
       mountBranchingScenario(document.getElementById("root")!, juryConfig);
-      clickChoice("Raise your doubts about the timeline before anyone votes");
-      clickChoice("Walk the group through the conflict step by step");
+      clickChoice("Raise your doubts before the room votes");
+      clickChoice("Walk the group through the conflict");
       clickChoice("Ask them to explain what evidence would change their mind");
       expect(scorm.setScore).toHaveBeenLastCalledWith(100);
       const completedCalls = scorm.setCompleted.mock.calls.length;
@@ -542,7 +542,7 @@ describe("mountBranchingScenario", () => {
       (window as any).ILBScorm = scorm as unknown as ScormSession;
 
       mountBranchingScenario(document.getElementById("root")!, juryConfig);
-      clickChoice("Raise your doubts about the timeline before anyone votes"); // -> timeline, trust 60
+      clickChoice("Raise your doubts before the room votes"); // -> timeline, trust 60
 
       // Remount fresh DOM with a scorm mock preloaded from the captured save.
       const savedPayload = scorm.saveSuspendData.mock.calls.at(-1)![0];
@@ -579,8 +579,8 @@ describe("mountBranchingScenario", () => {
 
     function playBestPath(): void {
       mountBranchingScenario(document.getElementById("root")!, juryConfig);
-      clickChoice("Raise your doubts about the timeline before anyone votes");
-      clickChoice("Walk the group through the conflict step by step");
+      clickChoice("Raise your doubts before the room votes");
+      clickChoice("Walk the group through the conflict");
       clickChoice("Ask them to explain what evidence would change their mind");
     }
 
