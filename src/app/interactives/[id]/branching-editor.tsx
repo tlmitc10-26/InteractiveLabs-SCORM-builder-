@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   useDraftEditor, Section, Row, Field, TextField, NumField, SelectField, IdAdvanced, useRowKeys, inputCls,
-  ExportButton, type AssetRef,
+  ExportButton, ImportPanel, type AssetRef,
 } from "./editor-shared";
 // Light import on purpose (mirrors param-sandbox-editor.tsx's own rationale
 // for runtime-config.ts): no zod/sanitize-html in this client bundle — the
@@ -16,7 +16,7 @@ import { toBranchingRuntimeConfig, type BranchingConfigLike } from "@/lib/engine
 // The parser's returned config is still just handed to setConfig like any
 // hand-authored draft: validation happens the same server-side way, via
 // saveInteractiveConfig's adapterFor call, on the very next debounced save.
-import { parseCompanionDoc, serializeCompanionDoc, type ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
+import { parseCompanionDoc, serializeCompanionDoc } from "@/lib/engines/branching-scenario/companion-doc";
 import { uniqueSlug } from "./slugify";
 // Light import (no zod/sanitize-html — see rename.ts's own file comment):
 // pure structural reference rewrites for the per-row "Rename to match label"
@@ -257,116 +257,15 @@ function ScenarioSection({ config, onChange, onImport }: {
           options={config.scenes.map((s, i) => ({ value: s.id, label: s.title || `Part ${i + 1}` }))}
           onChange={(startSceneId) => onChange({ startSceneId })} />
       )}
-      <ImportPanel config={config} onImport={onImport} />
+      <ImportPanel<EBranchingConfig>
+        config={config}
+        parse={parseCompanionDoc}
+        serialize={(c) => serializeCompanionDoc(c as unknown as BranchingConfigLike)}
+        templateHref="/companion-doc-template.txt"
+        confirmText="This replaces everything in this interactive. The current draft cannot be recovered. Continue?"
+        onApply={onImport}
+      />
     </Section>
-  );
-}
-
-/** "Import from companion doc" disclosure (companion-doc import milestone).
- *  Deterministic paste-in path for the plain-text format `companion-doc.ts`
- *  parses/serializes — see that file's header comment and
- *  docs/superpowers/specs/2026-08-27-companion-doc-import-design.md. Import
- *  is a wholesale replace (confirmed), so this panel owns none of the
- *  config itself — it only ever calls `onImport` with a freshly parsed
- *  config and reports what the parser flagged. */
-function ImportPanel({ config, onImport }: {
-  config: EBranchingConfig; onImport: (config: EBranchingConfig) => void;
-}) {
-  const [text, setText] = useState("");
-  const [emptyWarning, setEmptyWarning] = useState(false);
-  const [report, setReport] = useState<ImportIssue[] | null>(null);
-  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
-  const reportHeadingRef = useRef<HTMLHeadingElement>(null);
-
-  // Announcement contract: focus moves to the report heading once a report
-  // exists (fresh import OR the zero-issue "Imported cleanly." case, both
-  // set `report` to a non-null array) so a screen-reader user lands
-  // directly on the outcome instead of having to hunt for it.
-  useEffect(() => {
-    if (report !== null) reportHeadingRef.current?.focus();
-  }, [report]);
-
-  const handleImportClick = () => {
-    if (text.trim() === "") {
-      setEmptyWarning(true);
-      return;
-    }
-    setEmptyWarning(false);
-    const parsed = parseCompanionDoc(text);
-    const proceed = window.confirm(
-      "This replaces everything in this interactive. The current draft cannot be recovered. Continue?",
-    );
-    if (!proceed) return;
-    onImport(parsed.config as EBranchingConfig);
-    setReport(parsed.report);
-  };
-
-  const handleCopyClick = async () => {
-    const doc = serializeCompanionDoc(config as unknown as BranchingConfigLike);
-    let succeeded = true;
-    try {
-      await navigator.clipboard.writeText(doc);
-    } catch {
-      // Fallback for browsers/contexts without a Clipboard API permission
-      // (e.g. no secure context, or the permission prompt was denied): a
-      // hidden textarea + the legacy execCommand path.
-      const ta = document.createElement("textarea");
-      ta.value = doc;
-      ta.style.position = "fixed";
-      ta.style.top = "-1000px";
-      ta.setAttribute("aria-hidden", "true");
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      try {
-        succeeded = document.execCommand("copy");
-      } catch {
-        succeeded = false;
-      }
-      document.body.removeChild(ta);
-    }
-    setCopyStatus(succeeded ? "copied" : "failed");
-    setTimeout(() => setCopyStatus("idle"), 2000);
-  };
-
-  return (
-    <details className="col-span-2 mt-2 rounded border border-gray-200 p-2">
-      <summary className="cursor-pointer text-sm font-medium text-gray-600">Import from companion doc</summary>
-      <div className="mt-2 space-y-2">
-        <Field label="Paste a companion doc">
-          <textarea className={`${inputCls} font-mono`} rows={10}
-            value={text}
-            onChange={(e) => { setText(e.target.value); setEmptyWarning(false); }} />
-        </Field>
-        {emptyWarning && <p className="text-xs" style={{ color: "var(--rds-danger)" }}>Paste a companion doc before importing.</p>}
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleImportClick}>Import</button>
-          <button type="button" className="btn btn-light-2 btn-sm" onClick={handleCopyClick}>Copy as companion doc</button>
-          <span role="status" className="text-xs text-gray-500" style={copyStatus === "failed" ? { color: "var(--rds-danger)" } : undefined}>
-            {copyStatus === "copied" ? "Copied." : copyStatus === "failed" ? "Copy failed." : ""}
-          </span>
-          <a href="/companion-doc-template.txt" download className="app-link text-xs">Download the template</a>
-        </div>
-
-        {report !== null && (
-          <div className="rounded border border-gray-200 bg-gray-50 p-2">
-            <h3 tabIndex={-1} ref={reportHeadingRef} className="text-sm font-semibold outline-none">Import report</h3>
-            {report.length === 0 ? (
-              <p className="mt-1 text-sm">Imported cleanly.</p>
-            ) : (
-              <ul className="mt-1 list-disc pl-5 text-sm">
-                {report.map((issue, i) => (
-                  <li key={i} style={{ color: issue.severity === "error" ? "var(--rds-danger)" : "var(--rds-dark-2)" }}>
-                    Line {issue.line}: {issue.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button type="button" className="btn btn-light-2 btn-sm mt-2" onClick={() => setReport(null)}>Dismiss</button>
-          </div>
-        )}
-      </div>
-    </details>
   );
 }
 

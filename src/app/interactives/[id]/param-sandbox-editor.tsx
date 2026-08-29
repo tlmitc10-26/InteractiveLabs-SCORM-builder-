@@ -16,9 +16,16 @@ import { uniqueSlug } from "./slugify";
 // pulls in the formula parser to rewrite formula/chart/challenge/overlay
 // references when a designer renames an id via a row's Advanced disclosure.
 import { renameIdentifier, type RenameableConfig } from "@/lib/engines/param-sandbox/rename";
+// Light import (companion-doc.ts's own file comment: zero heavy deps, no
+// zod/sanitize-html — same discipline as runtime-config.ts/rename.ts above).
+// The parser's returned config is still just handed to setConfig like any
+// hand-authored draft: validation happens the same server-side way, via
+// saveInteractiveConfig's adapterFor call, on the very next debounced save.
+// Mirrors branching-editor.tsx's own identical import of its sibling module.
+import { parseSandboxCompanionDoc, serializeSandboxCompanionDoc, type SandboxConfigLike as CompanionSandboxConfigLike } from "@/lib/engines/param-sandbox/companion-doc";
 import {
   useDraftEditor, Section, Row, Field, TextField, NumField, SelectField, IdAdvanced, useRowKeys, inputCls,
-  ExportButton, type AssetRef,
+  ExportButton, ImportPanel, type AssetRef,
 } from "./editor-shared";
 
 /* Editing shape mirrors the Zod input (pre-validation). */
@@ -78,6 +85,23 @@ export function ParamSandboxEditor({ interactiveId, initialTitle, initialConfig,
   // drag/resize/nudge, keyed "overlay:<id>" / "input:<id>" — see `targets`
   // and `handleBoxChange`/`handleSelect` below.
   const [selected, setSelected] = useState<string | null>(null);
+
+  // Bumped once per companion-doc import (never on ordinary edits) — same
+  // rowKeys-trap fix as branching-editor.tsx's own importGeneration (see its
+  // comment for the full mechanism): useRowKeys seeds each row's stable key
+  // from the row array's length only in its useState initializer, so a
+  // setConfig that wholesale-replaces inputs/outputs/charts/challenges
+  // arrays (this import) would otherwise leave stale keys paired with
+  // unrelated new row data. Passed as the `key` on those four sections below
+  // to force a full remount on import, exactly like branching's three.
+  const [importGeneration, setImportGeneration] = useState(0);
+
+  const handleImport = useCallback((parsed: EConfig) => {
+    setConfig(parsed);
+    setSelected(null);
+    setImportGeneration((g) => g + 1);
+    markSaving();
+  }, [setConfig, markSaving]);
 
   // Backs each row's "Rename to match label" Advanced affordance for inputs
   // and outputs (the only ids formulas/charts/challenges/overlays actually
@@ -168,6 +192,14 @@ export function ParamSandboxEditor({ interactiveId, initialTitle, initialConfig,
           <label htmlFor="ilb-intro-field" className="mt-3 block text-sm font-semibold">Intro (basic formatting allowed)</label>
           <textarea id="ilb-intro-field" value={config.intro ?? ""} onChange={(e) => patch({ intro: e.target.value })} rows={3}
             className="mt-1 w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm" />
+          <ImportPanel<EConfig>
+            config={config}
+            parse={parseSandboxCompanionDoc}
+            serialize={(c) => serializeSandboxCompanionDoc(c as unknown as CompanionSandboxConfigLike)}
+            templateHref="/companion-doc-sandbox-template.txt"
+            confirmText="This replaces everything in this interactive. The current draft cannot be recovered. Continue?"
+            onApply={handleImport}
+          />
         </div>
 
         {errors.length > 0 && (
@@ -180,15 +212,20 @@ export function ParamSandboxEditor({ interactiveId, initialTitle, initialConfig,
           </div>
         )}
 
-        <InputsSection inputs={config.inputs} otherIds={new Set(config.outputs.map((o) => o.id))} selected={selected}
+        {/* Distinctly-prefixed keys (not just the bare generation number),
+            same rationale as branching-editor.tsx's own comment on
+            importGeneration: these are siblings in the same children array,
+            and React requires keys unique among siblings regardless of
+            element type. */}
+        <InputsSection key={`inputs-${importGeneration}`} inputs={config.inputs} otherIds={new Set(config.outputs.map((o) => o.id))} selected={selected}
           hasVisual={!!config.visual} onChange={(inputs) => patch({ inputs })} onRenameId={renameId} />
-        <OutputsSection outputs={config.outputs} inputs={config.inputs} otherIds={new Set(config.inputs.map((i) => i.id))}
+        <OutputsSection key={`outputs-${importGeneration}`} outputs={config.outputs} inputs={config.inputs} otherIds={new Set(config.inputs.map((i) => i.id))}
           selected={selected} hasVisual={!!config.visual} onChange={(outputs) => patch({ outputs })} onRenameId={renameId} />
-        <ChartsSection charts={config.charts} inputs={config.inputs} outputs={config.outputs} onChange={(charts) => patch({ charts })} />
-        <VisualSection visual={config.visual} outputs={config.outputs} assets={assets} selected={selected}
+        <ChartsSection key={`charts-${importGeneration}`} charts={config.charts} inputs={config.inputs} outputs={config.outputs} onChange={(charts) => patch({ charts })} />
+        <VisualSection key={`visual-${importGeneration}`} visual={config.visual} outputs={config.outputs} assets={assets} selected={selected}
           layout={config.layout ?? "side"} onLayoutChange={(layout) => patch({ layout })}
           onChange={(visual) => patch({ visual })} />
-        <ChallengesSection challenges={config.challenges} outputs={config.outputs} onChange={(challenges) => patch({ challenges })} />
+        <ChallengesSection key={`challenges-${importGeneration}`} challenges={config.challenges} outputs={config.outputs} onChange={(challenges) => patch({ challenges })} />
 
         <ExportButton interactiveId={interactiveId} disabled={errors.length > 0} />
       </div>
