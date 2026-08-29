@@ -90,12 +90,25 @@ const CHALLENGE_CONDITION_RE = new RegExp(
 const STRAY_COMPARATOR_RE = /[<>]/;
 
 const RESERVED_CONSTANTS = new Set(["pi", "e"]);
-const RISKY_LABEL_RE = /[(=]|->| vs /;
+// Extended (opus review, item 7) beyond the original "(", "=", "->", " vs "
+// set to also catch: "$" and arithmetic-operator characters (a label like
+// "A+B" or "Break-even" reads as an expression fragment once substituted
+// into a formula), and a label with a leading/trailing non-word character
+// (the \b-anchored substitution in substituteLabelsToIds/idsToLabelsInFormula
+// can't even establish a word boundary at that edge).
+const RISKY_LABEL_RE = /[(=$+\-*/^,]|->| vs |^[^\w]|[^\w]$/;
 
 const MAX_INPUTS = 20;
 const MAX_OUTPUTS = 20;
 const MAX_CHARTS = 6;
 const MAX_CHALLENGES = 12;
+// Mirror schema.ts's own caps (units: plain(20), decimals: 0-8,
+// options: max 20) so a violation is caught here, line-numbered and
+// salvaged where possible, rather than surfacing only as an opaque
+// schema-validation failure with no line number at all (opus review, item 5).
+const MAX_UNITS_LENGTH = 20;
+const MAX_SELECT_OPTIONS = 20;
+const MAX_DECIMALS = 8;
 
 function normalize(text: string): string {
   return text
@@ -107,6 +120,31 @@ function normalize(text: string): string {
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Escapes the three characters that matter for safe `innerHTML` placement
+ *  inside a `<p>...</p>` wrapper. Applied to INTRO before it's ever placed
+ *  in the returned config (opus review, item 6): the parser's returned
+ *  config is `unknown`, un-validated, and the editor's live preview
+ *  (toRuntimeConfig) renders it via innerHTML *before* the next debounced
+ *  save routes it through schema.ts's sanitizeRichText — so an INTRO
+ *  containing raw `<img onerror=...>` would otherwise execute in that
+ *  preview window. `&` must be escaped first so the entities this function
+ *  itself writes don't get double-escaped. */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Reverses `escapeHtml` for the serializer's INTRO line, so a config whose
+ *  intro was produced by this module's own parser (or by the schema's
+ *  sanitizeRichText, which also escapes) round-trips back to its original
+ *  plain-text form instead of leaking literal "&amp;" into the emitted doc
+ *  (which would then be re-escaped to "&amp;amp;" on the next import).
+ *  Order matters only for `&`, which must decode LAST: escapeHtml never
+ *  produces nested entities, so decoding "&gt;"/"&lt;" first can't create a
+ *  spurious "&amp;...;" sequence for the final `&` replace to mis-fire on. */
+function unescapeHtml(s: string): string {
+  return s.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&");
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +175,7 @@ type WorkingChallenge = {
   max?: number;
 };
 
-type LabelEntry = { id: string; label: string; line: number };
+type LabelEntry = { id: string; label: string; line: number; skip?: boolean };
 
 /** Pass 1: walk every INPUT:/OUTPUT: line once to assign each one's final
  *  id up front (so formula/CHART/CHALLENGE resolution can find any label
@@ -148,7 +186,22 @@ type LabelEntry = { id: string; label: string; line: number };
  *  BOTH inputs and outputs together (the schema's own duplicate-id check
  *  spans both collections), so a single shared `usedIds` set is threaded
  *  through both loops below and returned so pass 2 can keep allocating from
- *  it (chart/challenge ids, and the floor placeholders). */
+ *  it (chart/challenge ids, and the floor placeholders).
+ *
+ *  Duplicate detection (opus review, item 1): unlike branching's
+ *  duplicate-title rule (which still imports every duplicate scene/ending,
+ *  just unreachable by name), a duplicate INPUT/OUTPUT label here is
+ *  skipped ENTIRELY — no id is assigned, and the entry is marked `skip` so
+ *  pass 2 can drop it completely (see processInput/processOutput). This is
+ *  stricter because param-sandbox labels are the *only* way formulas/
+ *  CHART/CHALLENGE reference an input or output (there's no id-based
+ *  fallback the way a hand-authored config could use), so leaving a
+ *  same-named second declaration half-alive (present in the config, but
+ *  unreachable by name, and thus unrenamable/unremovable via the doc) would
+ *  be a worse outcome than dropping it outright. Duplicates are checked
+ *  per-kind (an INPUT and an OUTPUT may share a label; the resolution maps
+ *  are separate) — see substituteLabelsToIds/item 2 for the cross-kind
+ *  collision this doesn't (and can't) catch. */
 function collectLabels(
   lines: string[],
   issues: ImportIssue[],
@@ -156,6 +209,8 @@ function collectLabels(
   const usedIds = new Set<string>();
   const inputs: LabelEntry[] = [];
   const outputs: LabelEntry[] = [];
+  const seenInputLabels = new Map<string, number>(); // lowercased label -> line of first occurrence
+  const seenOutputLabels = new Map<string, number>();
 
   const assign = (rawLabel: string, lineNo: number, fallback: string): string => {
     const isReserved = RESERVED_CONSTANTS.has(rawLabel.trim().toLowerCase());
@@ -190,17 +245,35 @@ function collectLabels(
     // neither regex matches at all (pass 2 reports the real error for that
     // line; this label is only used for forward-reference resolution).
     const structured = kind === "INPUT" ? value.match(INPUT_LINE_RE) : value.match(OUTPUT_LINE_RE);
-    const rawLabel = structured ? structured[1].trim() : (value.indexOf("(") === -1 ? value : value.slice(0, value.indexOf("("))).trim();
-    const id = assign(rawLabel || (kind === "INPUT" ? "input" : "output"), lineNo, kind === "INPUT" ? "input" : "output");
-    if (kind === "INPUT") inputs.push({ id, label: rawLabel, line: lineNo });
-    else outputs.push({ id, label: rawLabel, line: lineNo });
+    const rawLabel = (structured ? structured[1].trim() : (value.indexOf("(") === -1 ? value : value.slice(0, value.indexOf("("))).trim());
+    const fallback = kind === "INPUT" ? "input" : "output";
+    const effectiveLabel = rawLabel || fallback;
+    const key = effectiveLabel.toLowerCase();
+    const seenMap = kind === "INPUT" ? seenInputLabels : seenOutputLabels;
+    const list = kind === "INPUT" ? inputs : outputs;
+
+    const firstLine = seenMap.get(key);
+    if (firstLine !== undefined) {
+      issues.push({
+        line: lineNo,
+        severity: "error",
+        message: `duplicate ${kind.toLowerCase()} label "${effectiveLabel}" — already declared on line ${firstLine}; this second declaration (line ${lineNo}) is skipped and will not resolve by name`,
+      });
+      list.push({ id: "", label: rawLabel, line: lineNo, skip: true });
+      return;
+    }
+    seenMap.set(key, lineNo);
+    const id = assign(effectiveLabel, lineNo, fallback);
+    list.push({ id, label: rawLabel, line: lineNo });
   });
 
   return { inputs, outputs, usedIds };
 }
 
 /** First-occurrence-wins, case-insensitive label lookup (mirrors branching's
- *  sceneByTitle/endingByTitle maps). */
+ *  sceneByTitle/endingByTitle maps). Entries marked `skip` (duplicates, see
+ *  collectLabels) are never the first occurrence for their key by
+ *  construction, so they're harmless here even when included in `entries`. */
 function toLabelMap(entries: LabelEntry[]): Map<string, LabelEntry> {
   const map = new Map<string, LabelEntry>();
   for (const e of entries) {
@@ -219,16 +292,40 @@ function toLabelMap(entries: LabelEntry[]): Map<string, LabelEntry> {
  *  against the order-sensitive known-id set afterward, so a forward
  *  reference still surfaces as an "unresolved identifier" error (mirroring
  *  the schema's own progressive known-id rule) even though the label text
- *  matched. */
+ *  matched.
+ *
+ *  Single-pass rewrite (opus review, item 2): the original implementation
+ *  replaced one candidate label at a time, longest-first, chaining each
+ *  `.replace()` onto the previous pass's output. That's unsound whenever
+ *  two candidates share the same lowercased label text across kinds (an
+ *  INPUT and an OUTPUT can both be named "Rate", say, since duplicate
+ *  detection — item 1 — only checks within a kind): the first candidate's
+ *  case-insensitive regex matches BOTH spellings and inserts its id, and
+ *  the second candidate's regex (also case-insensitive) can then re-match
+ *  that just-inserted id — if it happens to equal the second candidate's
+ *  own lowercased label — and rewrite it AGAIN. The fix builds one
+ *  combined alternation over every distinct label (longest first, so a
+ *  longer label wins over a shorter one it contains) and replaces every
+ *  match in a single `.replace()` pass over the ORIGINAL string, so an
+ *  inserted id is never visible to a later part of the same substitution.
+ *  Ties for the same lowercased label resolve to whichever candidate is
+ *  first in `candidates` (inputs before outputs, in file order — the same
+ *  "first occurrence wins" convention as toLabelMap). */
 function substituteLabelsToIds(formula: string, candidates: LabelEntry[]): string {
-  const sorted = [...candidates].sort((a, b) => b.label.length - a.label.length);
-  let working = formula;
+  const withLabels = candidates.filter((c) => c.label);
+  if (withLabels.length === 0) return formula;
+  const sorted = [...withLabels].sort((a, b) => b.label.length - a.label.length);
+  const idByLowerLabel = new Map<string, string>();
   for (const c of sorted) {
-    if (!c.label) continue;
-    const re = new RegExp(`\\b${escapeRegExp(c.label)}\\b`, "gi");
-    working = working.replace(re, c.id);
+    const key = c.label.toLowerCase();
+    if (!idByLowerLabel.has(key)) idByLowerLabel.set(key, c.id);
   }
-  return working;
+  const pattern = [...idByLowerLabel.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((k) => escapeRegExp(k))
+    .join("|");
+  const re = new RegExp(`\\b(?:${pattern})\\b`, "gi");
+  return formula.replace(re, (matched) => idByLowerLabel.get(matched.toLowerCase()) ?? matched);
 }
 
 // ---------------------------------------------------------------------------
@@ -240,9 +337,10 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
   const lines = normalize(text).split("\n");
 
   const { inputs: inputLabelList, outputs: outputLabelList, usedIds } = collectLabels(lines, issues);
-  const inputByLabel = toLabelMap(inputLabelList);
-  const outputByLabel = toLabelMap(outputLabelList);
-  const allLabelCandidates: LabelEntry[] = [...inputLabelList, ...outputLabelList];
+  // Candidates for formula-label substitution exclude `skip`ped (duplicate,
+  // item 1) entries — a formula referencing a duplicate label resolves via
+  // the FIRST (surviving) entry for that label, which stays in this list.
+  const allLabelCandidates: LabelEntry[] = [...inputLabelList, ...outputLabelList].filter((e) => !e.skip);
 
   let title: string | undefined;
   let intro: string | undefined;
@@ -255,36 +353,24 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
   let inputIndex = 0;
   let outputIndex = 0;
 
-  // Order-sensitive known-id set for formula validation: all inputs are
-  // available immediately (they never depend on anything else), and
-  // outputs are added one at a time as they're successfully processed —
-  // mirroring validateSandboxConfig's own progressive `known` set, so a
-  // formula referencing a not-yet-declared output is caught here as an
-  // "unresolved identifier", not deferred to a confusing schema-only error.
-  const knownIdsForFormulas = new Set<string>(inputLabelList.map((e) => e.id));
+  // Entries that actually landed in `inputs`/`outputs` below (i.e. survived
+  // every pass-2 rejection: duplicate/toggle/malformed/empty-select/cap-
+  // overflow/min>=max/step<=0 for inputs; duplicate/malformed/cap-overflow
+  // for outputs). `inputByLabel`/`outputByLabel` — and the seed of
+  // `knownIdsForFormulas` — are built ONLY from these (opus review, item 3):
+  // a rejected declaration's label must not resolve to anything, so a
+  // later formula/CHART/CHALLENGE reference to it surfaces as a normal
+  // "unresolved"/"no input named" error instead of silently binding to a
+  // dangling id that never made it into the returned config.
+  const acceptedInputEntries: LabelEntry[] = [];
+  const acceptedOutputEntries: LabelEntry[] = [];
 
   const usedChartIds = new Set<string>();
   const usedChallengeIds = new Set<string>();
 
-  function resolveOutputLabel(rawLabel: string, lineNo: number, context: string): LabelEntry | undefined {
-    const hit = outputByLabel.get(rawLabel.trim().toLowerCase());
-    if (!hit) {
-      issues.push({ line: lineNo, severity: "error", message: `${context}: no output named "${rawLabel.trim()}"` });
-      return undefined;
-    }
-    return hit;
-  }
-  function resolveInputLabel(rawLabel: string, lineNo: number, context: string): LabelEntry | undefined {
-    const hit = inputByLabel.get(rawLabel.trim().toLowerCase());
-    if (!hit) {
-      issues.push({ line: lineNo, severity: "error", message: `${context}: no input named "${rawLabel.trim()}"` });
-      return undefined;
-    }
-    return hit;
-  }
-
   function processInput(rawValue: string, lineNo: number): void {
     const entry = inputLabelList[inputIndex++];
+    if (entry.skip) return; // duplicate label (item 1) — already reported, fully pruned
     const m = rawValue.match(INPUT_LINE_RE);
     if (!m) {
       issues.push({
@@ -315,7 +401,7 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
         return;
       }
       const header = meta.slice(0, colonIdx).split(",").map((t) => t.trim());
-      const units = header[1] || undefined;
+      let units = header[1] || undefined;
       const optsRaw = meta
         .slice(colonIdx + 1)
         .split(",")
@@ -334,15 +420,25 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
         issues.push({ line: lineNo, severity: "error", message: `input "${label}": select has no valid options — input skipped` });
         return;
       }
-      const defaultOpt = options.find((o) => o.isDefault) ?? options[0];
+      let finalOptions = options;
+      if (finalOptions.length > MAX_SELECT_OPTIONS) {
+        issues.push({ line: lineNo, severity: "warning", message: `input "${label}": select has more than ${MAX_SELECT_OPTIONS} options — extra options were dropped` });
+        finalOptions = finalOptions.slice(0, MAX_SELECT_OPTIONS);
+      }
+      if (units && units.length > MAX_UNITS_LENGTH) {
+        issues.push({ line: lineNo, severity: "warning", message: `input "${label}": units "${units}" is longer than ${MAX_UNITS_LENGTH} characters — truncated` });
+        units = units.slice(0, MAX_UNITS_LENGTH);
+      }
+      const defaultOpt = finalOptions.find((o) => o.isDefault) ?? finalOptions[0];
       inputs.push({
         id: entry.id,
         label,
         type: "select",
         defaultValue: defaultOpt.value,
         ...(units ? { units } : {}),
-        options: options.map((o) => ({ label: o.label, value: o.value })),
+        options: finalOptions.map((o) => ({ label: o.label, value: o.value })),
       });
+      acceptedInputEntries.push(entry);
       return;
     }
 
@@ -367,21 +463,74 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
       });
       return;
     }
-    const units = tokens[1];
+    const min = Number(rangeM[1]);
+    const max = Number(rangeM[2]);
+    const step = Number(stepM[1]);
+    let defaultValue = Number(startM[1]);
+    let units = tokens[1] || undefined;
+
+    // Numeric/cap checks (opus review, item 5) — mirror schema.ts's own
+    // rules so a violation is line-numbered here instead of surfacing only
+    // as an opaque post-hoc schema error. min>=max and step<=0 have no
+    // sensible salvage, so the input is skipped outright (pruned, item 3);
+    // an out-of-range start is salvageable by clamping, with a warning.
+    if (!(min < max)) {
+      issues.push({ line: lineNo, severity: "error", message: `input "${label}": min (${min}) must be less than max (${max}) — this input was skipped` });
+      return;
+    }
+    if (!(step > 0)) {
+      issues.push({ line: lineNo, severity: "error", message: `input "${label}": step must be greater than 0 (got ${step}) — this input was skipped` });
+      return;
+    }
+    if (defaultValue < min) {
+      issues.push({ line: lineNo, severity: "warning", message: `input "${label}": start ${defaultValue} is below min ${min} — clamped to ${min}` });
+      defaultValue = min;
+    } else if (defaultValue > max) {
+      issues.push({ line: lineNo, severity: "warning", message: `input "${label}": start ${defaultValue} is above max ${max} — clamped to ${max}` });
+      defaultValue = max;
+    }
+    if (units && units.length > MAX_UNITS_LENGTH) {
+      issues.push({ line: lineNo, severity: "warning", message: `input "${label}": units "${units}" is longer than ${MAX_UNITS_LENGTH} characters — truncated` });
+      units = units.slice(0, MAX_UNITS_LENGTH);
+    }
+
     inputs.push({
       id: entry.id,
       label,
       type: typeToken,
-      min: Number(rangeM[1]),
-      max: Number(rangeM[2]),
-      step: Number(stepM[1]),
-      defaultValue: Number(startM[1]),
+      min,
+      max,
+      step,
+      defaultValue,
       ...(units ? { units } : {}),
     });
+    acceptedInputEntries.push(entry);
   }
+
+  // Pass 2a: all inputs, in file order (independent of CHART/CHALLENGE
+  // position — see the module doc comment for why this is now a dedicated
+  // pass rather than interleaved with everything else).
+  lines.forEach((line, i) => {
+    if (COMMENT_RE.test(line)) return;
+    const m = line.match(DIRECTIVE_RE);
+    if (!m || m[1].toUpperCase() !== "INPUT") return;
+    processInput(m[2].trim(), i + 1);
+  });
+
+  const inputByLabel = toLabelMap(acceptedInputEntries);
+
+  // Order-sensitive known-id set for formula validation: all ACCEPTED
+  // inputs are available immediately (they never depend on anything else),
+  // and outputs are added one at a time as they're successfully processed —
+  // mirroring validateSandboxConfig's own progressive `known` set, so a
+  // formula referencing a not-yet-declared output (or a since-pruned input,
+  // item 3) is caught here as an "unresolved identifier", not deferred to a
+  // confusing schema-only error.
+  const knownIdsForFormulas = new Set<string>(acceptedInputEntries.map((e) => e.id));
 
   function processOutput(rawValue: string, lineNo: number): void {
     const entry = outputLabelList[outputIndex++];
+    if (entry.skip) return; // duplicate label (item 1) — already reported, fully pruned
     const m = rawValue.match(OUTPUT_LINE_RE);
     if (!m) {
       issues.push({
@@ -400,7 +549,7 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
       .split(",")
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
-    const units = metaTokens[0] || undefined;
+    let units = metaTokens[0] || undefined;
     let decimals: number | undefined;
     if (metaTokens.length >= 2) {
       const dm = metaTokens[1].match(DECIMALS_RE);
@@ -409,6 +558,16 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
       } else {
         decimals = Number(dm[1]);
       }
+    }
+    // Numeric/cap checks (opus review, item 5): both salvageable by
+    // clamping/truncating with a warning, so the declaration still lands.
+    if (decimals !== undefined && decimals > MAX_DECIMALS) {
+      issues.push({ line: lineNo, severity: "warning", message: `output "${label}": decimals capped at ${MAX_DECIMALS} (was ${decimals})` });
+      decimals = MAX_DECIMALS;
+    }
+    if (units && units.length > MAX_UNITS_LENGTH) {
+      issues.push({ line: lineNo, severity: "warning", message: `output "${label}": units "${units}" is longer than ${MAX_UNITS_LENGTH} characters — truncated` });
+      units = units.slice(0, MAX_UNITS_LENGTH);
     }
 
     const rawFormula = m[3].trim();
@@ -439,7 +598,38 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
       ...(units ? { units } : {}),
       ...(decimals !== undefined ? { decimals } : {}),
     });
+    acceptedOutputEntries.push(entry);
     knownIdsForFormulas.add(entry.id);
+  }
+
+  // Pass 2b: all outputs, in file order (formula resolution is genuinely
+  // order-sensitive — an output may only reference EARLIER outputs — so
+  // this stays a dedicated top-to-bottom pass, now running to completion
+  // before CHART/CHALLENGE are resolved against the result).
+  lines.forEach((line, i) => {
+    if (COMMENT_RE.test(line)) return;
+    const m = line.match(DIRECTIVE_RE);
+    if (!m || m[1].toUpperCase() !== "OUTPUT") return;
+    processOutput(m[2].trim(), i + 1);
+  });
+
+  const outputByLabel = toLabelMap(acceptedOutputEntries);
+
+  function resolveOutputLabel(rawLabel: string, lineNo: number, context: string): LabelEntry | undefined {
+    const hit = outputByLabel.get(rawLabel.trim().toLowerCase());
+    if (!hit) {
+      issues.push({ line: lineNo, severity: "error", message: `${context}: no output named "${rawLabel.trim()}"` });
+      return undefined;
+    }
+    return hit;
+  }
+  function resolveInputLabel(rawLabel: string, lineNo: number, context: string): LabelEntry | undefined {
+    const hit = inputByLabel.get(rawLabel.trim().toLowerCase());
+    if (!hit) {
+      issues.push({ line: lineNo, severity: "error", message: `${context}: no input named "${rawLabel.trim()}"` });
+      return undefined;
+    }
+    return hit;
   }
 
   function processChart(rawValue: string, lineNo: number): void {
@@ -479,8 +669,25 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
     const inputEntry = resolveInputLabel(vsM[2], lineNo, "CHART");
     if (!outputEntry || !inputEntry) return;
 
+    // The x-axis must be a slider/number input — a select's values aren't a
+    // continuous domain to plot against (mirrors schema.ts's own chart
+    // xInputId check; opus review, item 5). `inputs` is fully populated by
+    // this point (pass 2a already ran to completion).
+    const xInput = inputs.find((i) => i.id === inputEntry.id);
+    if (xInput && xInput.type !== "slider" && xInput.type !== "number") {
+      issues.push({
+        line: lineNo,
+        severity: "error",
+        message: `CHART: input "${inputEntry.label}" must be a slider or number input to use as the x-axis (got "${xInput.type}") — this chart was skipped`,
+      });
+      return;
+    }
+
     if (samples === undefined) {
       samples = DEFAULT_SAMPLES;
+      // spec §5 calls this an "info-level" note; ImportIssue has no "info"
+      // severity (only "error"/"warning"), so it's reported as a warning —
+      // this is the one place that mapping matters (opus review, item 11).
       issues.push({ line: lineNo, severity: "warning", message: `samples defaulted to ${DEFAULT_SAMPLES}` });
     }
     const title = explicitTitle || `${outputEntry.label} vs ${inputEntry.label}`;
@@ -543,12 +750,23 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
       }
       min = Number(condM[3]);
       max = Number(condM[4]);
+      // opus review, item 5: no sensible salvage for an inverted range, so
+      // (like input min>=max) the whole declaration is skipped.
+      if (!(min < max)) {
+        issues.push({ line: lineNo, severity: "error", message: `challenge condition: "between" requires min < max (got ${min} and ${max}) — this challenge was skipped` });
+        return;
+      }
     }
     const id = uniqueSlug(prompt || "challenge", usedChallengeIds, "challenge");
     usedChallengeIds.add(id);
     challenges.push({ id, prompt: prompt || "Challenge", outputId: outputEntry.id, comparator, ...(value !== undefined ? { value } : {}), ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) });
   }
 
+  // Pass 2c: everything else (TITLE/INTRO/CHART/CHALLENGE/unknown
+  // directives). INPUT/OUTPUT lines are already fully handled above (passes
+  // 2a/2b) and are explicitly no-ops here — CHART/CHALLENGE now resolve
+  // against the complete, pruned inputByLabel/outputByLabel regardless of
+  // where they sit relative to the declarations they reference.
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const lineNo = i + 1;
@@ -567,11 +785,8 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
           intro = value;
           break;
         case "INPUT":
-          processInput(value, lineNo);
-          break;
         case "OUTPUT":
-          processOutput(value, lineNo);
-          break;
+          break; // handled in passes 2a/2b above
         case "CHART":
           processChart(value, lineNo);
           break;
@@ -623,7 +838,10 @@ export function parseSandboxCompanionDoc(text: string): { config: unknown; repor
 
   const config = {
     title,
-    ...(intro ? { intro: `<p>${intro}</p>` } : {}),
+    // HTML-escaped before the <p> wrap (opus review, item 6) — see
+    // escapeHtml's doc comment for the unsanitized-draft -> preview
+    // innerHTML path this closes.
+    ...(intro ? { intro: `<p>${escapeHtml(intro)}</p>` } : {}),
     inputs: inputs.map((i) => ({
       id: i.id,
       label: i.label,
@@ -698,19 +916,34 @@ export interface SandboxConfigLike {
   layout?: "side" | "stacked" | "stage-focus";
 }
 
-/** Longest-id-first, word-bounded substitution of ids back into their
- *  labels, the reverse of `substituteLabelsToIds`. Ids are simple
- *  identifier strings (letters/digits/underscore), so a plain `\b`-bounded
- *  match is exact and safe (no partial matches inside a longer id, since
- *  underscore is itself a word character). */
+/** Word-bounded substitution of ids back into their labels, the reverse of
+ *  `substituteLabelsToIds`. Ids are simple identifier strings (letters/
+ *  digits/underscore).
+ *
+ *  Single-pass rewrite (opus review, item 4): the original chained one
+ *  `.replace()` per id, longest-first. That's unsound whenever one id's
+ *  own text can be produced by inserting ANOTHER id's label — e.g. id
+ *  `rate` (label "Speed") and id `rate_of_change` (label "rate of change"):
+ *  substituting `rate_of_change` first inserts the literal text
+ *  "rate of change" into the formula, and the LATER pass for id `rate`
+ *  then re-matches the word "rate" *inside that just-inserted label text*
+ *  and corrupts it into "Speed of change". Building one combined
+ *  alternation over every id (longest first) and replacing in a single
+ *  `.replace()` over the ORIGINAL formula means an inserted label is never
+ *  visible to a later part of the same substitution — mirrors
+ *  substituteLabelsToIds's own fix (item 2) in the reverse direction. The
+ *  comment this replaces previously (incorrectly) described the hazard as
+ *  one id matching inside another id's spelling, which the shared
+ *  underscore-as-word-character property already ruled out; the real
+ *  hazard is an inserted LABEL text (which can contain arbitrary words)
+ *  being re-matched. */
 function idsToLabelsInFormula(formula: string, idToLabel: Map<string, string>): string {
-  const entries = [...idToLabel.entries()].sort((a, b) => b[0].length - a[0].length);
-  let working = formula;
-  for (const [id, label] of entries) {
-    const re = new RegExp(`\\b${escapeRegExp(id)}\\b`, "g");
-    working = working.replace(re, label);
-  }
-  return working;
+  const entries = [...idToLabel.entries()];
+  if (entries.length === 0) return formula;
+  const sorted = [...entries].sort((a, b) => b[0].length - a[0].length);
+  const pattern = sorted.map(([id]) => escapeRegExp(id)).join("|");
+  const re = new RegExp(`\\b(?:${pattern})\\b`, "g");
+  return formula.replace(re, (matched) => idToLabel.get(matched) ?? matched);
 }
 
 export function serializeSandboxCompanionDoc(config: SandboxConfigLike): string {
@@ -739,14 +972,20 @@ export function serializeSandboxCompanionDoc(config: SandboxConfigLike): string 
   const riskyLabels = [...config.inputs, ...config.outputs].map((f) => f.label).filter((l) => RISKY_LABEL_RE.test(l));
   if (riskyLabels.length) {
     lines.push(
-      `# Warning: these labels contain characters this format's grammar treats specially ("(", "=", "->", or " vs "), and may not re-import correctly if edited by hand: ${riskyLabels.map((l) => `"${l}"`).join(", ")}.`,
+      `# Warning: these labels contain characters this format's grammar treats specially ("(", "=", "->", " vs ", "$", an arithmetic operator, or a leading/trailing symbol), and may not re-import correctly if edited by hand: ${riskyLabels.map((l) => `"${l}"`).join(", ")}.`,
     );
   }
   if (lossyFeatures.length || riskyLabels.length) lines.push("");
 
   // -- Top matter -----------------------------------------------------------
   lines.push(`TITLE: ${config.title}`);
-  if (config.intro) lines.push(`INTRO: ${stripTags(config.intro)}`);
+  // unescapeHtml (opus review, item 6): the parser now HTML-escapes INTRO
+  // before storing it (`&`/`<`/`>` -> entities), so a config whose intro
+  // came from this module's own parser (or from schema.ts's
+  // sanitizeRichText, which also escapes) would otherwise round-trip back
+  // out as literal "&amp;" text — and re-import would escape it AGAIN into
+  // "&amp;amp;". Decoding here keeps the round trip stable.
+  if (config.intro) lines.push(`INTRO: ${unescapeHtml(stripTags(config.intro))}`);
   lines.push("");
 
   const idToLabel = new Map<string, string>();
@@ -758,8 +997,15 @@ export function serializeSandboxCompanionDoc(config: SandboxConfigLike): string 
     if (inp.type === "toggle") continue;
     if (inp.type === "select") {
       const unitsPart = inp.units ? `, ${inp.units}` : "";
+      // Mark only the FIRST matching option (opus review, item 8): if two
+      // options happen to share the same value as defaultValue, marking
+      // every match with "*" would re-import ambiguously (OPTION_RE's `*`
+      // sets isDefault per-option, and the parser takes whichever comes
+      // first anyway — so the serializer's output should already agree
+      // with that, rather than emitting a doc with two "*"s).
+      const defaultIdx = (inp.options ?? []).findIndex((o) => o.value === inp.defaultValue);
       const optsPart = (inp.options ?? [])
-        .map((o) => `${o.label}=${o.value}${o.value === inp.defaultValue ? "*" : ""}`)
+        .map((o, idx) => `${o.label}=${o.value}${idx === defaultIdx ? "*" : ""}`)
         .join(", ");
       lines.push(`INPUT: ${inp.label} (select${unitsPart}: ${optsPart})`);
     } else {

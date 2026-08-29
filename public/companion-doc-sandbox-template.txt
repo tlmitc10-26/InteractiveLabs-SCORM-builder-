@@ -1,18 +1,27 @@
 # Welcome! This is a companion doc for building a parameter sandbox.
 # Fill in your own inputs, outputs, and challenges and send this file
 # back. No special software or training is needed to use it.
+# Lines starting with # (like these) are comments and are ignored.
 # A sandbox has INPUTs the learner adjusts and OUTPUTs calculated from
 # them with a formula, like this:
 #   INPUT: Bill amount (slider, $, 10 to 200, step 5, start 50)
 #   OUTPUT: Tip amount ($, 2 decimals) = Bill amount * Tip percent / 100
 # Formulas can use +, -, *, /, ^, parentheses, and earlier inputs and
 # outputs by name (spelled the same as their own INPUT:/OUTPUT: line,
-# capitalization does not matter). A SELECT input offers a dropdown
-# of named options instead of a range, for example:
+# capitalization does not matter). Formulas can also use these
+# functions: min, max, abs, round, floor, ceil, sqrt, pow, exp, ln,
+# log10, sin, cos, tan, and the constants pi and e (so do not name an
+# input or output "pi" or "e"). A SELECT input offers a dropdown of
+# named options instead of a range, for example:
 #   INPUT: Fluid (select, kg/m3: Fresh water=1000, Seawater=1025*)
-# where the * marks which option is selected by default. A CHART plots
-# one output against one input, and a CHALLENGE gives the learner a
-# target to reach, phrased as "at least", "at most", or "between ... and ...".
+# where the * marks which option is selected by default. Toggle
+# (on/off) inputs are not supported by this text format; build those
+# directly in the app instead. A CHART plots one output against one
+# input, and a CHALLENGE gives the learner a target to reach, phrased
+# as "at least", "at most", or "between ... and ...". Keep input and
+# output names plain (letters, numbers, spaces): a name containing
+# "(", "=", "->", " vs ", or a math symbol like $ + - * / ^ , can
+# confuse this format when it is read back in.
 # When you are done, save and share this file with whoever is building
 # the lesson.
 

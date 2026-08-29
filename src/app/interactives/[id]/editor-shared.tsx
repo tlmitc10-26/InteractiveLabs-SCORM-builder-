@@ -370,7 +370,11 @@ export function ImportPanel<TConfig>({ config, parse, serialize, templateHref, c
   };
 
   return (
-    <details className="col-span-2 mt-2 rounded border border-gray-200 p-2">
+    // `col-span-2` was inert here (opus review, item 12): neither caller
+    // renders this inside a grid — param-sandbox-editor's Title/intro card
+    // is a plain block, and branching-editor's <Section> wraps children in
+    // a `space-y-3` stack — so the class did nothing in either usage.
+    <details className="mt-2 rounded border border-gray-200 p-2">
       <summary className="cursor-pointer text-sm font-medium text-gray-600">Import from companion doc</summary>
       <div className="mt-2 space-y-2">
         <Field label="Paste a companion doc">

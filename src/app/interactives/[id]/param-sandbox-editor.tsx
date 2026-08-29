@@ -183,7 +183,17 @@ export function ParamSandboxEditor({ interactiveId, initialTitle, initialConfig,
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="max-h-[85vh] space-y-4 overflow-y-auto pr-2">
         <div className="rounded border border-gray-200 bg-white p-4">
-          <div className="flex items-center justify-between">
+          {/* Explicit <h2> (opus review, item 12): this card is the only
+              top-level editor section that isn't built from the shared
+              `Section` component (it needs the "Saving…/Saved" status text
+              inline with its own heading, which Section's title+addLabel
+              header doesn't support), so it previously had no heading at
+              all — leaving ImportPanel's own "Import report" <h3> (below,
+              once a report exists) skipping straight from the page's <h1>
+              with nothing in between. Styled identically to Section's own
+              <h2 className="font-semibold"> for visual consistency. */}
+          <h2 className="font-semibold">Title &amp; intro</h2>
+          <div className="mt-2 flex items-center justify-between">
             <label htmlFor="ilb-title-field" className="block text-sm font-semibold">Title</label>
             <span className="text-xs text-gray-400">{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}</span>
           </div>

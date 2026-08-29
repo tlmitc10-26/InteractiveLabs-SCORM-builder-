@@ -814,6 +814,43 @@ describe("parseCompanionDoc — duplicate scene/ending titles", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// INTRO is HTML-escaped before the <p> wrap (item 6, opus review fix round —
+// mirrors the identical fix in param-sandbox/companion-doc.ts)
+// ---------------------------------------------------------------------------
+
+describe("parseCompanionDoc / serializeCompanionDoc — INTRO HTML-escaping (item 6)", () => {
+  it("escapes &, <, > in INTRO and wraps it in <p>", () => {
+    const doc = [
+      "TITLE: T",
+      "INTRO: <img src=x onerror=x> a & b",
+      "",
+      "SCENE: Only",
+      "Body.",
+      "",
+      "- Go (BEST) -> ENDING: Done",
+      "",
+      "ENDING: Done",
+      "The end.",
+    ].join("\n");
+    const { config } = parseCompanionDoc(doc);
+    expect((config as { intro?: string }).intro).toBe("<p>&lt;img src=x onerror=x&gt; a &amp; b</p>");
+  });
+
+  it("round-trips an intro containing '&' without double-escaping, and is idempotent across a second round trip", () => {
+    const base = branchingStarterConfig("blank", "Blank Test");
+    const original: BranchingConfig = { ...base, intro: "<p>Salt & pepper, to taste.</p>" };
+    const doc = serializeCompanionDoc(original);
+    const { config } = parseCompanionDoc(doc);
+    const intro1 = (config as { intro?: string }).intro;
+    expect(intro1).toBe("<p>Salt &amp; pepper, to taste.</p>");
+
+    const doc2 = serializeCompanionDoc({ ...original, intro: intro1 });
+    const { config: config2 } = parseCompanionDoc(doc2);
+    expect((config2 as { intro?: string }).intro).toBe(intro1);
+  });
+});
+
 describe("parseCompanionDoc — CRLF and smart quotes", () => {
   it("tolerates CRLF line endings and normalizes smart quotes without shifting reported line numbers", () => {
     const rawLines = [
