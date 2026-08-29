@@ -19,6 +19,14 @@
 # if you are not sure what goes there yet; a colleague can fill it in
 # later. When you are done, save and share this file with whoever is
 # building the lesson.
+#
+# Designing arcs: a few scenarios can share one world. Keep character
+# names and past events consistent across them, and give each later
+# scenario one more tracked variable than the one before it. A scene
+# can reference what the learner decided earlier by naming it directly
+# in the text; there is no automatic variable carryover between
+# separate interactives. Grade each scenario as its own item rather
+# than averaging them into one score.
 
 TITLE: [Give your scenario a title]
 ROLE: [Describe the role the learner plays, for example: You are a new advisor meeting your first student.]
