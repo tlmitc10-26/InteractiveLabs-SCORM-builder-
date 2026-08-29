@@ -6,6 +6,11 @@ import { validateBranchingConfig, type BranchingConfig } from "@/lib/engines/bra
 import { parseCompanionDoc, type ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
 import { adapterFor } from "@/lib/engines/dispatch";
 import { assemblePackage, zipPackage } from "@/lib/export/package";
+import { parseSandboxCompanionDoc } from "@/lib/engines/param-sandbox/companion-doc";
+import { validateSandboxConfig, type SandboxConfig } from "@/lib/engines/param-sandbox/schema";
+import { STARTERS as PS_STARTERS, starterConfig as psStarterConfig } from "@/lib/engines/param-sandbox/starter-configs";
+import { parseFormula } from "@/lib/formula/parser";
+import { evaluateFormula, FormulaError } from "@/lib/formula/evaluate";
 
 /**
  * Content-quality gates for the Sierra Vista arc (Task 5 of the exemplar
@@ -369,5 +374,317 @@ describe("Plea Bargain — authored header image + brief provenance", () => {
     // Sanity budget for an authored header image (not the <40KB starter-zip
     // budget, which does not apply to a standalone asset file).
     expect(buf.length).toBeLessThan(400 * 1024);
+  });
+});
+
+/**
+ * Dose-Response + Break-Even Studio (Task 7 of the exemplar library plan):
+ * the two param-sandbox exemplars, authored THROUGH the sandbox companion-doc
+ * format from docs/exemplars/brief-dose-response.md and
+ * brief-break-even-studio.md. Unlike the branching exemplars (T5/T6), where
+ * the starter is authored first and the doc is generated from it via the
+ * serializer, here the DOC is the source of truth: the committed doc is
+ * hand-written from the brief's fenced block, and the starter in
+ * starter-configs.ts is a verbatim transcription of
+ * parseSandboxCompanionDoc(doc).config. The parity test below is the stress
+ * test that keeps that promise honest — drift between the doc and the
+ * starter fails the build.
+ */
+
+type SandboxWitness = { challengeIndex: number; inputs: Record<string, number> };
+
+function evaluateOutputsInOrder(config: SandboxConfig, inputValues: Record<string, number>): Record<string, number> {
+  const vars: Record<string, number> = { ...inputValues };
+  for (const out of config.outputs) {
+    const parsed = parseFormula(out.formula);
+    if (!parsed.ok) throw new Error(`output "${out.id}" formula failed to parse: ${parsed.error}`);
+    vars[out.id] = evaluateFormula(parsed.ast, vars);
+  }
+  return vars;
+}
+
+function challengeSatisfied(challenge: SandboxConfig["challenges"][number], value: number): boolean {
+  if (challenge.comparator === "gte") return value >= challenge.value!;
+  if (challenge.comparator === "lte") return value <= challenge.value!;
+  return value >= challenge.min! && value <= challenge.max!;
+}
+
+function assertWithinInputRanges(config: SandboxConfig, inputValues: Record<string, number>): void {
+  for (const inp of config.inputs) {
+    const v = inputValues[inp.id];
+    expect(v, `witness is missing a value for input "${inp.id}"`).not.toBeUndefined();
+    if (inp.min !== undefined) expect(v, `input "${inp.id}" witness value ${v} is below min ${inp.min}`).toBeGreaterThanOrEqual(inp.min);
+    if (inp.max !== undefined) expect(v, `input "${inp.id}" witness value ${v} is above max ${inp.max}`).toBeLessThanOrEqual(inp.max);
+  }
+}
+
+describe("Dose-Response Explorer — companion doc is the source of truth (stress test)", () => {
+  const docPath = join(process.cwd(), "docs", "exemplars", "dose-response.companion.txt");
+  const docText = readFileSync(docPath, "utf8");
+  const { config: starterConfig } = PS_STARTERS["dose-response"];
+
+  it("parses with zero error-severity issues", () => {
+    const { report } = parseSandboxCompanionDoc(docText);
+    expect(errors(report), JSON.stringify(errors(report))).toHaveLength(0);
+  });
+
+  it("has zero issues at all (no warnings either — none were anticipated by the brief)", () => {
+    const { report } = parseSandboxCompanionDoc(docText);
+    expect(report, JSON.stringify(report)).toHaveLength(0);
+  });
+
+  it("validates via validateSandboxConfig", () => {
+    const { config } = parseSandboxCompanionDoc(docText);
+    const r = validateSandboxConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("the starter config is structurally equal to parse(doc) (labels/types/ranges/defaults/units/formulas/decimals/charts/challenges)", () => {
+    const { config } = parseSandboxCompanionDoc(docText);
+    const validated = validateSandboxConfig(config);
+    expect(validated.ok, !validated.ok ? validated.errors.join("; ") : "").toBe(true);
+    if (!validated.ok) return;
+    expect(validated.config).toEqual(starterConfig);
+  });
+
+  it("is grouped as an exemplar with a description naming the pattern", () => {
+    expect(PS_STARTERS["dose-response"].group).toBe("exemplar");
+    expect(PS_STARTERS["dose-response"].description).toContain("Pharmacokinetic model");
+    expect(PS_STARTERS["dose-response"].description).toContain("half-life");
+    expect(PS_STARTERS["dose-response"].description).toContain("therapeutic window");
+  });
+
+  it("intro's first sentence is the exact educational-not-clinical statement from the brief", () => {
+    const statement =
+      "This is an educational model, not clinical guidance: it uses simplified one compartment pharmacokinetics to show how dose and dosing interval shape peak and trough concentrations, and it must never be used to select, adjust, or check a dose for a real patient.";
+    expect(starterConfig.intro).toBeTruthy();
+    const introText = (starterConfig.intro ?? "").replace(/^<p>/, "");
+    expect(introText.startsWith(statement)).toBe(true);
+  });
+
+  it("has 5 inputs, 5 outputs, 2 charts, 4 challenges", () => {
+    expect(starterConfig.inputs).toHaveLength(5);
+    expect(starterConfig.outputs).toHaveLength(5);
+    expect(starterConfig.charts).toHaveLength(2);
+    expect(starterConfig.challenges).toHaveLength(4);
+  });
+
+  it("dimensional sanity: every input and every output carries a non-empty units string", () => {
+    for (const inp of starterConfig.inputs) {
+      expect(inp.units, `input "${inp.id}" should carry units`).toBeTruthy();
+      expect((inp.units ?? "").length).toBeGreaterThan(0);
+    }
+    for (const out of starterConfig.outputs) {
+      expect(out.units, `output "${out.id}" should carry units`).toBeTruthy();
+      expect((out.units ?? "").length).toBeGreaterThan(0);
+    }
+  });
+
+  const witnesses: SandboxWitness[] = [
+    { challengeIndex: 0, inputs: { dose: 500, dosing_interval: 8, patient_weight: 70, half_life: 4, volume_per_kilogram: 0.3 } },
+    { challengeIndex: 1, inputs: { dose: 300, dosing_interval: 8, patient_weight: 70, half_life: 4, volume_per_kilogram: 0.3 } },
+    { challengeIndex: 2, inputs: { dose: 225, dosing_interval: 6, patient_weight: 60, half_life: 5, volume_per_kilogram: 0.35 } },
+    { challengeIndex: 3, inputs: { dose: 500, dosing_interval: 8, patient_weight: 70, half_life: 8, volume_per_kilogram: 0.3 } },
+  ];
+  const allFourWitness = { dose: 200, dosing_interval: 8, patient_weight: 70, half_life: 6, volume_per_kilogram: 0.3 };
+
+  describe("witness vectors (evaluated through the real interpreter, declaration order)", () => {
+    for (const w of witnesses) {
+      const challenge = starterConfig.challenges[w.challengeIndex];
+      it(`challenge ${w.challengeIndex + 1} ("${challenge.prompt.slice(0, 40)}...") is satisfied at its witness, and the witness is on-range`, () => {
+        assertWithinInputRanges(starterConfig, w.inputs);
+        const values = evaluateOutputsInOrder(starterConfig, w.inputs);
+        const outputValue = values[challenge.outputId];
+        expect(outputValue).not.toBeUndefined();
+        expect(
+          challengeSatisfied(challenge, outputValue),
+          `challenge "${challenge.id}" not satisfied: output "${challenge.outputId}" = ${outputValue}`,
+        ).toBe(true);
+      });
+    }
+
+    it("the all-four witness satisfies every challenge at once, and dimensional sanity holds (peak > trough > 0)", () => {
+      assertWithinInputRanges(starterConfig, allFourWitness);
+      const values = evaluateOutputsInOrder(starterConfig, allFourWitness);
+      for (const challenge of starterConfig.challenges) {
+        const outputValue = values[challenge.outputId];
+        expect(
+          challengeSatisfied(challenge, outputValue),
+          `challenge "${challenge.id}" not satisfied at the all-four witness: "${challenge.outputId}" = ${outputValue}`,
+        ).toBe(true);
+      }
+      const peak = values["peak_concentration"];
+      const trough = values["trough_concentration"];
+      expect(peak).toBeGreaterThan(trough);
+      expect(trough).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe("Dose-Response Explorer — export package budget", () => {
+  it('starter "dose-response" exports a zip under 40KB', async () => {
+    const adapter = adapterFor("param-sandbox");
+    const config = psStarterConfig("dose-response", "Exemplar Test: dose-response");
+
+    const assembled = await assemblePackage({
+      identifier: "ILB-exemplar-dose-response",
+      title: config.title,
+      engineId: "param-sandbox",
+      config,
+      runtime: { toRuntimeConfig: adapter.toRuntimeConfig, collectAssetIds: adapter.collectAssetIds },
+      resolveAsset: async () => { throw new Error('starter "dose-response" has no assets'); },
+    });
+
+    const zip = await zipPackage(assembled.files);
+    expect(zip.length).toBeLessThan(40 * 1024);
+  });
+});
+
+describe("Break-Even Studio — companion doc is the source of truth (stress test)", () => {
+  const docPath = join(process.cwd(), "docs", "exemplars", "break-even-studio.companion.txt");
+  const docText = readFileSync(docPath, "utf8");
+  const { config: starterConfig } = PS_STARTERS["break-even-studio"];
+
+  it("parses with zero error-severity issues", () => {
+    const { report } = parseSandboxCompanionDoc(docText);
+    expect(errors(report), JSON.stringify(errors(report))).toHaveLength(0);
+  });
+
+  it("has zero issues at all (no warnings either — none were anticipated by the brief)", () => {
+    const { report } = parseSandboxCompanionDoc(docText);
+    expect(report, JSON.stringify(report)).toHaveLength(0);
+  });
+
+  it("validates via validateSandboxConfig", () => {
+    const { config } = parseSandboxCompanionDoc(docText);
+    const r = validateSandboxConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("the starter config is structurally equal to parse(doc) (labels/types/ranges/defaults/units/formulas/decimals/charts/challenges)", () => {
+    const { config } = parseSandboxCompanionDoc(docText);
+    const validated = validateSandboxConfig(config);
+    expect(validated.ok, !validated.ok ? validated.errors.join("; ") : "").toBe(true);
+    if (!validated.ok) return;
+    expect(validated.config).toEqual(starterConfig);
+  });
+
+  it("is grouped as an exemplar with a description naming the pattern", () => {
+    expect(PS_STARTERS["break-even-studio"].group).toBe("exemplar");
+    expect(PS_STARTERS["break-even-studio"].description).toContain("Cost-volume-profit");
+    expect(PS_STARTERS["break-even-studio"].description).toContain("contribution margin");
+    expect(PS_STARTERS["break-even-studio"].description).toContain("break-even");
+  });
+
+  it("has 4 inputs, 4 outputs, 2 charts, 4 challenges", () => {
+    expect(starterConfig.inputs).toHaveLength(4);
+    expect(starterConfig.outputs).toHaveLength(4);
+    expect(starterConfig.charts).toHaveLength(2);
+    expect(starterConfig.challenges).toHaveLength(4);
+  });
+
+  it("every input and every output carries a non-empty units string", () => {
+    for (const inp of starterConfig.inputs) expect((inp.units ?? "").length).toBeGreaterThan(0);
+    for (const out of starterConfig.outputs) expect((out.units ?? "").length).toBeGreaterThan(0);
+  });
+
+  it("'Contribution margin ratio' resolves to itself and not to 'Contribution margin' (longest-label-first resolution)", () => {
+    const ratioOutput = starterConfig.outputs.find((o) => o.id === "contribution_margin_ratio")!;
+    expect(ratioOutput).toBeTruthy();
+    const occurrences = ratioOutput.formula.match(/\bcontribution_margin\b/g) ?? [];
+    expect(occurrences).toHaveLength(1);
+    expect(ratioOutput.formula).not.toContain("contribution_margin_ratio");
+  });
+
+  const witnesses: SandboxWitness[] = [
+    { challengeIndex: 0, inputs: { price: 45, unit_cost: 18, fixed_costs: 9000, volume: 400 } },
+    { challengeIndex: 1, inputs: { price: 45, unit_cost: 21, fixed_costs: 9000, volume: 250 } },
+    { challengeIndex: 2, inputs: { price: 60, unit_cost: 28, fixed_costs: 9000, volume: 250 } },
+    { challengeIndex: 3, inputs: { price: 60, unit_cost: 28, fixed_costs: 9000, volume: 350 } },
+  ];
+  const allFourWitness = { price: 60, unit_cost: 28, fixed_costs: 9000, volume: 350 };
+
+  describe("witness vectors (evaluated through the real interpreter, declaration order)", () => {
+    for (const w of witnesses) {
+      const challenge = starterConfig.challenges[w.challengeIndex];
+      it(`challenge ${w.challengeIndex + 1} ("${challenge.prompt.slice(0, 40)}...") is satisfied at its witness, and the witness is on-range`, () => {
+        assertWithinInputRanges(starterConfig, w.inputs);
+        const values = evaluateOutputsInOrder(starterConfig, w.inputs);
+        const outputValue = values[challenge.outputId];
+        expect(outputValue).not.toBeUndefined();
+        expect(
+          challengeSatisfied(challenge, outputValue),
+          `challenge "${challenge.id}" not satisfied: output "${challenge.outputId}" = ${outputValue}`,
+        ).toBe(true);
+      });
+    }
+
+    it("the all-four witness (same point as challenge 4) satisfies every challenge at once", () => {
+      assertWithinInputRanges(starterConfig, allFourWitness);
+      const values = evaluateOutputsInOrder(starterConfig, allFourWitness);
+      for (const challenge of starterConfig.challenges) {
+        const outputValue = values[challenge.outputId];
+        expect(
+          challengeSatisfied(challenge, outputValue),
+          `challenge "${challenge.id}" not satisfied at the all-four witness: "${challenge.outputId}" = ${outputValue}`,
+        ).toBe(true);
+      }
+    });
+
+    it("the comparator uses the raw computed value, not the rounded display value (challenge 3 at 281.25, displayed 281)", () => {
+      const values = evaluateOutputsInOrder(starterConfig, { price: 60, unit_cost: 28, fixed_costs: 9000, volume: 250 });
+      expect(values["seats_to_break_even"]).toBeCloseTo(281.25, 5);
+    });
+  });
+
+  describe("the deliberate Price = Unit cost singularity (caught per-point, not designed away)", () => {
+    it("the model is meaningful only for Price > Unit cost: at Price = Unit cost, Seats to break even raises FormulaError rather than returning Infinity", () => {
+      const inputsAtSingularity = { price: 40, unit_cost: 40, fixed_costs: 9000, volume: 250 };
+      expect(() => evaluateOutputsInOrder(starterConfig, inputsAtSingularity)).toThrow(FormulaError);
+    });
+
+    it("sweeping the 'Seats to break even vs Price' chart's 40 samples hits the singularity at exactly one grid point (Unit cost = 40) and every other point evaluates cleanly", () => {
+      const chart = starterConfig.charts.find((c) => c.id === "seats_to_break_even_vs_price")!;
+      expect(chart).toBeTruthy();
+      const xInput = starterConfig.inputs.find((i) => i.id === chart.xInputId)!;
+      const min = xInput.min!;
+      const max = xInput.max!;
+      const unitCostOnGrid = 40;
+
+      let errorCount = 0;
+      let okCount = 0;
+      for (let i = 0; i < chart.samples; i++) {
+        const price = min + (i * (max - min)) / (chart.samples - 1);
+        try {
+          const values = evaluateOutputsInOrder(starterConfig, { price, unit_cost: unitCostOnGrid, fixed_costs: 9000, volume: 250 });
+          expect(Number.isFinite(values[chart.yOutputId])).toBe(true);
+          okCount++;
+        } catch (e) {
+          expect(e).toBeInstanceOf(FormulaError);
+          errorCount++;
+        }
+      }
+      expect(errorCount).toBe(1);
+      expect(okCount).toBe(chart.samples - 1);
+    });
+  });
+});
+
+describe("Break-Even Studio — export package budget", () => {
+  it('starter "break-even-studio" exports a zip under 40KB', async () => {
+    const adapter = adapterFor("param-sandbox");
+    const config = psStarterConfig("break-even-studio", "Exemplar Test: break-even-studio");
+
+    const assembled = await assemblePackage({
+      identifier: "ILB-exemplar-break-even-studio",
+      title: config.title,
+      engineId: "param-sandbox",
+      config,
+      runtime: { toRuntimeConfig: adapter.toRuntimeConfig, collectAssetIds: adapter.collectAssetIds },
+      resolveAsset: async () => { throw new Error('starter "break-even-studio" has no assets'); },
+    });
+
+    const zip = await zipPackage(assembled.files);
+    expect(zip.length).toBeLessThan(40 * 1024);
   });
 });
