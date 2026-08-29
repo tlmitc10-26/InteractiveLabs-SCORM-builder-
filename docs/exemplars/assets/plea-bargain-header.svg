@@ -1,0 +1,29 @@
+<svg viewBox="0 0 1600 700" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+  <!--
+    Plea Bargain exemplar header image (docs/exemplars/brief-plea-bargain.md §8).
+    Abstract flat-geometry composition: a balance scale, beam tilted a few
+    degrees off level, its two pans resting at visibly unequal heights. Two
+    RDS brand colors only (maroon field, gold geometry). No gradients, no
+    strokes/outlines, no text, no third-party elements, no depiction of any
+    person. Authored for this project — see the brief for provenance.
+  -->
+  <rect x="0" y="0" width="1600" height="700" fill="#8C1D40" />
+
+  <!-- fulcrum stand: apex at the fixed pivot point the beam rotates around -->
+  <polygon points="800,300 750,480 850,480" fill="#FFC627" />
+  <rect x="740" y="480" width="120" height="20" fill="#FFC627" />
+
+  <!-- beam: a thin quadrilateral tilted ~8 degrees off level around the pivot -->
+  <polygon points="452.1,339.8 1145.3,242.4 1147.9,260.2 454.7,357.6" fill="#FFC627" />
+
+  <!-- hangers: hang straight down from each beam end (gravity), independent
+       of the beam's tilt, which is why the two pans end up at different
+       heights -->
+  <rect x="451.4" y="348.7" width="4" height="130" fill="#FFC627" />
+  <rect x="1144.6" y="251.3" width="4" height="130" fill="#FFC627" />
+
+  <!-- pans: shallow flattened dishes, resting lower on the side the beam
+       tilted down toward -->
+  <ellipse cx="453.4" cy="498.7" rx="90" ry="20" fill="#FFC627" />
+  <ellipse cx="1146.6" cy="401.3" rx="90" ry="20" fill="#FFC627" />
+</svg>

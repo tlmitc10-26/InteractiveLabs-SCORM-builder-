@@ -1104,6 +1104,278 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
       showPathInDebrief: true,
     }),
   },
+  "plea-bargain": {
+    label: "Plea Bargain",
+    description: "Two variables, a conditional renegotiation, and an ending where the client wins on luck alone — process integrity over outcome luck.",
+    group: "exemplar",
+    config: branchingConfigSchema.parse({
+      title: "",
+      role: "You are an assistant public defender in Vela County, appointed nine days ago to represent Miguel Santos.",
+      intro:
+        "<p>You are an assistant public defender in Vela County, appointed nine days ago to represent Miguel Santos, 24, charged with second-degree burglary and receiving stolen property. The prosecutor's offer expires in twelve days. Vela County and everyone in this scenario are fictional, and this is a teaching scenario about defense practice rather than legal advice.</p><p>By the end of it you will be able to evaluate a plea decision by the quality of the process behind it — investigation, disclosure, advice on collateral consequences, and the client's own informed consent — rather than by how the case happens to turn out. Two things are tracked: <b>Client trust</b> and <b>Case strength</b>. Watch what happens to them; they do not always move together, and one of them is not a measure of how well you are doing your job.</p><p><i>(Authoring note, starter only — delete this line in your own version: this is where a scene header image goes. Upload one in the editor and set its role and alt text; see docs/exemplars/alt-policy.md.)</i></p>",
+      variables: [
+        { id: "client_trust", label: "Client trust", initial: 55, min: 0, max: 100, visible: true },
+        { id: "case_strength", label: "Case strength", initial: 40, min: 0, max: 100, visible: true },
+      ],
+      scenes: [
+        {
+          id: "the_offer",
+          title: "Nine days in",
+          body:
+            "<p>Miguel Santos is charged with second-degree burglary and receiving stolen property after a laptop and two power tools taken from a construction trailer turned up in the trunk of the car he was driving. The offer, open for twelve more days: plead to receiving stolen property, eighteen months of probation, $2,400 in restitution, no jail. If he is convicted at trial on the burglary count, the exposure is two to six years. You have had the file for three days and read the police report twice.</p>",
+          choices: [
+            {
+              id: "explain_and_wait",
+              label: "Meet Santos, walk him through the offer, the exposure and the clock, and tell him you are not asking for a decision today",
+              quality: "best",
+              effects: [{ variableId: "client_trust", delta: 8 }],
+              feedback:
+                "<p>The first meeting decides whether a client brings you facts or brings you what he thinks you want to hear. Separating here is the offer from here is your decision is what keeps the decision his.</p>",
+              goTo: "scene:the_file",
+            },
+            {
+              id: "summary_letter",
+              label: "Send a clear written summary of the offer and the exposure, and schedule the meeting for next week",
+              quality: "acceptable",
+              effects: [{ variableId: "client_trust", delta: 2 }],
+              feedback:
+                "<p>The written record is genuinely valuable, and a letter cannot hear a question. A client reading two to six years alone at a kitchen table tends to decide something before you ever discuss it.</p>",
+              goTo: "scene:the_file",
+            },
+            {
+              id: "recommend_immediately",
+              label: "Tell him to take it; probation with no jail on facts like these is a good outcome and he should not gamble",
+              quality: "poor",
+              effects: [{ variableId: "client_trust", delta: -8 }],
+              feedback:
+                "<p>The recommendation might even turn out to be right, and made before any investigation it is a guess in a suit. Whether to plead is one of the few decisions that belongs to the client alone, and it is only his if he had the information and the room to make it.</p>",
+              goTo: "scene:the_file",
+            },
+          ],
+        },
+        {
+          id: "the_file",
+          title: "What is actually in the file",
+          body:
+            "<p>The state's case is an eyewitness who saw two men near the trailer at 11:40 at night and identified Santos an hour later at the roadside, in the back of a patrol car; a partial fingerprint on the door frame reported as consistent; and the property in the trunk of a car Santos had borrowed from his cousin, Ruben Ortega. Santos says Ortega asked him to move the car. Ortega has not returned your calls. Discovery lists a surveillance recording from a business across the road that has not been produced.</p>",
+          choices: [
+            {
+              id: "investigate_and_compel",
+              label: "Send Dana Whitmore after Ortega and the store, and file a motion to compel the unproduced recording",
+              quality: "best",
+              effects: [
+                { variableId: "case_strength", delta: 20 },
+                { variableId: "client_trust", delta: 6 },
+              ],
+              feedback:
+                "<p>A plea evaluated against an uninvestigated case is not an evaluation; it is a coin flip with paperwork. The unproduced recording is the one item that could move this case in either direction, which is exactly why he needs it before he decides.</p>",
+              goTo: "scene:the_kitchen_table",
+            },
+            {
+              id: "work_it_yourself",
+              label: "Keep calling Ortega yourself and read the report closely; the office investigator is three weeks out",
+              quality: "acceptable",
+              effects: [
+                { variableId: "case_strength", delta: 6 },
+                { variableId: "client_trust", delta: 2 },
+              ],
+              feedback:
+                "<p>Working the case yourself beats not working it, and it leaves the roadside identification and the missing recording untouched. Caseload is a real constraint and it is not an answer to the question of what you knew.</p>",
+              goTo: "scene:the_kitchen_table",
+            },
+            {
+              id: "rely_on_the_report",
+              label: "The report is detailed and the offer is generous; work from what the state has given you",
+              quality: "poor",
+              effects: [
+                { variableId: "case_strength", delta: -10 },
+                { variableId: "client_trust", delta: -5 },
+              ],
+              feedback:
+                "<p>The police report is one party's account of the case, written by the party that has to prove it. Advising on it alone means your client's decision rests entirely on evidence nobody has tested.</p>",
+              goTo: "scene:the_kitchen_table",
+            },
+          ],
+        },
+        {
+          id: "the_kitchen_table",
+          title: "What would you do",
+          body:
+            "<p>Santos is 24, works as a warehouse picker, and has a nine-month-old daughter. He asks you the question every client asks: what would you do. He also says twice that he cannot be away from work, and once, quietly, that he does not want Ortega charged.</p>",
+          choices: [
+            {
+              id: "advise_and_reserve",
+              label: "Give him your honest read of the risk on both paths, tell him what you would want to know in his position, and be clear the choice is his",
+              quality: "best",
+              effects: [{ variableId: "client_trust", delta: 8 }],
+              feedback:
+                "<p>Clients are entitled to your judgment and not obliged to adopt it. Saying both of those things in the same conversation is the whole skill.</p>",
+              goTo: "scene:the_advisal",
+            },
+            {
+              id: "decline_to_advise",
+              label: "Tell him you cannot make this decision for him, and lay out the two paths without a recommendation",
+              quality: "acceptable",
+              effects: [{ variableId: "client_trust", delta: -2 }],
+              feedback:
+                "<p>Neutrality feels respectful, and it can leave a client alone with a decision he asked for help with. Withholding your professional judgment is not the same as protecting his autonomy.</p>",
+              goTo: "scene:the_advisal",
+            },
+            {
+              id: "predict_acquittal",
+              label: "Tell him you like the case; the identification is weak and no jury convicts on this",
+              quality: "poor",
+              effects: [{ variableId: "client_trust", delta: 6 }],
+              feedback:
+                "<p>Notice that his trust in you went up. Confidence is contagious and unfalsifiable until the verdict, and a prediction offered as a probability educates a client where the same prediction offered as a promise replaces his decision with your optimism.</p>",
+              goTo: "scene:the_advisal",
+            },
+          ],
+        },
+        {
+          id: "the_advisal",
+          title: "A line on the intake form",
+          body:
+            "<p>Going through the sentencing intake form you notice that Santos was born in Oaxaca and has been a lawful permanent resident since he was eleven. He has never connected that to this case. A plea to receiving stolen property may carry immigration consequences that a dismissal or a differently structured plea would not. Your office has an immigration consult line with a four-day turnaround. The offer expires in five days.</p>",
+          choices: [
+            {
+              id: "consult_before_advising",
+              label: "Stop the plea discussion, send the consult, and tell Santos plainly that you will not advise him further on this offer until you know the immigration consequence",
+              quality: "best",
+              effects: [
+                { variableId: "client_trust", delta: 8 },
+                { variableId: "case_strength", delta: 5 },
+              ],
+              feedback:
+                "<p>A noncitizen client's plea decision is not complete without the immigration consequence, and the duty to advise on it is constitutional rather than optional. Pausing a running clock is uncomfortable; advising blind is worse.</p>",
+              goTo: "scene:the_recording",
+            },
+            {
+              id: "general_warning",
+              label: "Tell him a plea could affect his status and that he should speak with an immigration attorney, then carry on",
+              quality: "acceptable",
+              effects: [],
+              feedback:
+                "<p>A general warning beats silence, and it is the version of the advisal that suffices only when the consequence is genuinely unclear. Here it is knowable in four days, which is the difference between a warning and advice.</p>",
+              goTo: "scene:the_recording",
+            },
+            {
+              id: "not_my_area",
+              label: "Immigration is a different practice area; focus on the criminal exposure, which is what the office was appointed for",
+              quality: "poor",
+              effects: [{ variableId: "client_trust", delta: -12 }],
+              feedback:
+                "<p>The consequence a client cares most about is often not the one on the charging document. Treating deportation risk as somebody else's specialty is precisely the reasoning the duty to advise exists to end.</p>",
+              goTo: "scene:the_decision",
+            },
+          ],
+        },
+        {
+          id: "the_recording",
+          title: "Forty hours left",
+          body:
+            "<p>The recording surfaces Thursday afternoon, produced on your motion or handed over late in a supplemental disclosure. It shows two figures crossing the road at 11:38 at night; neither is identifiable, one is noticeably taller than Santos, and the timestamp is four minutes off the eyewitness's account. It is not exoneration and it is not nothing. ADA Lindqvist, hearing that you have it, says the eighteen-month offer stands until Monday and will not improve.</p>",
+          choices: [
+            {
+              id: "show_client_reassess",
+              label: "Sit down with Santos, show him the recording, and re-explain both paths in light of what it does and does not prove",
+              quality: "best",
+              effects: [
+                { variableId: "client_trust", delta: 8 },
+                { variableId: "case_strength", delta: 8 },
+              ],
+              feedback:
+                "<p>New evidence changes the client's decision, not only yours, and he cannot weigh what he has not seen. Showing him what it fails to prove matters as much as showing him what it does.</p>",
+              goTo: "scene:the_decision",
+            },
+            {
+              id: "push_for_better_offer",
+              label: "Take the recording and the identification problems to Lindqvist and ask for a disposition without the receiving count",
+              quality: "best",
+              showIf: { variableId: "case_strength", comparator: "gte", value: 60 },
+              effects: [
+                { variableId: "case_strength", delta: 10 },
+                { variableId: "client_trust", delta: 6 },
+              ],
+              feedback:
+                "<p>You can only negotiate from what you actually built, which is why this conversation is available to you at all. Even a refused ask tells your client the case was worked rather than processed.</p>",
+              goTo: "scene:the_decision",
+            },
+            {
+              id: "keep_it_simple",
+              label: "The offer is still good and the recording muddies it; do not complicate his decision forty hours out",
+              quality: "poor",
+              effects: [
+                { variableId: "client_trust", delta: -10 },
+                { variableId: "case_strength", delta: -5 },
+              ],
+              feedback:
+                "<p>Withholding evidence from a client to keep his decision tidy inverts the duty you hold. Complication is not the enemy of a good decision; it is usually the content of one.</p>",
+              goTo: "scene:the_decision",
+            },
+          ],
+        },
+        {
+          id: "the_decision",
+          title: "Monday morning",
+          body:
+            "<p>Santos arrives Monday with his aunt Teresa, who has watched the recording twice on your office computer, and with the immigration consult if you obtained one. Court is at one-thirty. He asks you one more time what happens to him.</p>",
+          choices: [
+            {
+              id: "confirm_and_document",
+              label: "Walk through the offer, the exposure and the collateral consequences one last time, confirm in his own words what he understands, put the advice and his decision in a memo to the file, and then do what he decides",
+              quality: "best",
+              effects: [{ variableId: "client_trust", delta: 6 }],
+              feedback:
+                "<p>The colloquy in court tests whether a plea was voluntary; your file memo is the only record of whether it was informed. When somebody asks in two years, that memo is the only witness you have.</p>",
+              goTo: "ending:informed_choice",
+            },
+            {
+              id: "support_whatever",
+              label: "He has the information; tell him you support whatever he decides, and go to court",
+              quality: "acceptable",
+              effects: [{ variableId: "client_trust", delta: 4 }],
+              feedback:
+                "<p>Support is not counsel, and whatever you decide at the last moment can leave a client guessing at what you actually think. It also leaves no record of what he understood when he decided.</p>",
+              goTo: "ending:outcome_luck",
+            },
+            {
+              id: "decide_for_him",
+              label: "Tell him the answer is obvious by now, and that you have already told Lindqvist he is taking it",
+              quality: "poor",
+              effects: [{ variableId: "client_trust", delta: -20 }],
+              feedback:
+                "<p>Communicating a client's decision before he has made it is not efficiency; it substitutes your judgment for his in the one decision that was never yours. Everything downstream of it is fragile.</p>",
+              goTo: "ending:plea_unravels",
+            },
+          ],
+        },
+      ],
+      startSceneId: "the_offer",
+      endings: [
+        {
+          id: "informed_choice",
+          title: "The record you can stand behind",
+          body:
+            "<p>Santos makes his decision. Whether he took the offer or set it for trial matters less to this scenario than what stands behind it: a case that was investigated, evidence he saw with his own eyes, a consequence to his residency that somebody actually researched, and a decision he made in his own words with his aunt sitting beside him.</p><p>Two years later a different lawyer pulls the file for an unrelated reason and reads the memo: what he was told, what he understood, what he chose. Nothing in it has to be reconstructed from memory. That is what a defensible file looks like, and it is the only thing that can be built regardless of how the case turns out.</p><p>This is the point of the exercise. You cannot control the eyewitness, the prosecutor, the judge, or the verdict. You can control what the client knew when he decided, and that is what the profession actually holds you to.</p>",
+        },
+        {
+          id: "outcome_luck",
+          title: "It worked out",
+          body:
+            "<p>The eyewitness moves out of state in the spring. Lindqvist cannot make the burglary count without her, the charge is reduced, and Santos ends up with an outcome better than the offer he was weighing. He shakes your hand in the hallway and means it.</p><p>Now change one fact. If the witness had stayed, exactly the same choices you made would have produced a client who pleaded to an offense whose consequences nobody had researched, on evidence nobody had tested, with no record of what he understood. The choices did not become good because the witness moved.</p><p>This is the ending students argue with, and it is the one worth arguing about. Outcomes are distributed by luck as much as by skill. The process is the only part that was ever yours, and it is the only part anyone can review.</p>",
+        },
+        {
+          id: "plea_unravels",
+          title: "The plea that comes back",
+          body:
+            "<p>Santos pleads. Six months later, returning from his grandmother's funeral, he is held at the airport and learns from a stranger in a uniform what his conviction means for his residency — which is how he learns that it means anything at all.</p><p>The motion to withdraw the plea lands on a different lawyer's desk, and the file it is built on is yours. There is no memo, no consult, no record of what he was told, and a prosecutor who remembers being informed of his decision before he had made it. Whatever the court decides, the year he spends on it is a year nobody gets back.</p><p>Nothing here required bad faith. A heavy caseload, an offer with a clock on it, and a client who kept saying he could not miss work are enough. That is why the duties are written as duties rather than as good intentions.</p>",
+        },
+      ],
+      feedbackMode: "debrief",
+      showPathInDebrief: true,
+    }),
+  },
 };
 
 export const DEFAULT_BRANCHING_STARTER_ID = "blank";
