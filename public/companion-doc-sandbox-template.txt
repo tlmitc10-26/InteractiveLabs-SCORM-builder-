@@ -1,0 +1,30 @@
+# Welcome! This is a companion doc for building a parameter sandbox.
+# Fill in your own inputs, outputs, and challenges and send this file
+# back. No special software or training is needed to use it.
+# A sandbox has INPUTs the learner adjusts and OUTPUTs calculated from
+# them with a formula, like this:
+#   INPUT: Bill amount (slider, $, 10 to 200, step 5, start 50)
+#   OUTPUT: Tip amount ($, 2 decimals) = Bill amount * Tip percent / 100
+# Formulas can use +, -, *, /, ^, parentheses, and earlier inputs and
+# outputs by name (spelled the same as their own INPUT:/OUTPUT: line,
+# capitalization does not matter). A SELECT input offers a dropdown
+# of named options instead of a range, for example:
+#   INPUT: Fluid (select, kg/m3: Fresh water=1000, Seawater=1025*)
+# where the * marks which option is selected by default. A CHART plots
+# one output against one input, and a CHALLENGE gives the learner a
+# target to reach, phrased as "at least", "at most", or "between ... and ...".
+# When you are done, save and share this file with whoever is building
+# the lesson.
+
+TITLE: Tip Calculator
+INTRO: Set a bill amount and a tip percentage, and see the tip and total.
+
+INPUT: Bill amount (slider, $, 10 to 200, step 5, start 50)
+INPUT: Tip percent (slider, %, 0 to 30, step 1, start 15)
+
+OUTPUT: Tip amount ($, 2 decimals) = Bill amount * Tip percent / 100
+OUTPUT: Total ($, 2 decimals) = Bill amount + Tip amount
+
+CHART: Tip amount vs Bill amount (40 samples)
+
+CHALLENGE: Leave a tip of at least $10. -> Tip amount at least 10
