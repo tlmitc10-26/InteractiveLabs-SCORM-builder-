@@ -66,9 +66,9 @@ Pharmacology is taught with formulas and assessed with arithmetic, and the thing
 
 | # | learner text | output | comparator | value(s) |
 | --- | --- | --- | --- | --- |
-| 1 | Keep the trough at or above 2 mg per litre so the drug stays in its therapeutic range across the whole interval. | `trough_concentration` | `gte` | 2 |
+| 1 | Keep the trough at or above 2 mg per litre, the floor below which this model treats the drug as too dilute to act. | `trough_concentration` | `gte` | 2 |
 | 2 | Keep the peak at or below 20 mg per litre, the toxicity ceiling in this model. | `peak_concentration` | `lte` | 20 |
-| 3 | Land the peak inside the therapeutic window of 12 to 20 mg per litre. | `peak_concentration` | `between` | 12, 20 |
+| 3 | Land the peak inside the target band, 12 to 20 mg per litre in this model. | `peak_concentration` | `between` | 12, 20 |
 | 4 | Accumulation is set by the interval and the half life, not by the size of the dose. Find an interval that keeps the accumulation factor in a moderate range. | `accumulation_factor` | `between` | 1.5, 3 |
 
 **State at the default input values:** peak 31.75 mg/L, trough 7.94 mg/L, accumulation 1.333, elimination rate 0.1733 /h, distribution volume 21.00 L. Exactly one of the four challenges (the trough floor) is satisfied at load, so the activity opens with real work to do and is not trivially complete.
@@ -79,7 +79,7 @@ This is the exact text of `docs/exemplars/dose-response.companion.txt`. `INTRO:`
 
 ```
 TITLE: Dose-Response Explorer
-INTRO: This is an educational model, not clinical guidance: it uses simplified one compartment pharmacokinetics to show how dose and dosing interval shape peak and trough concentrations, and it must never be used to select, adjust, or check a dose for a real patient. By the end of this activity you will be able to predict how a change in dose, dosing interval, or patient weight moves the peak and trough concentrations of a drug at steady state, and explain why accumulation is set by the interval and the half life rather than by the size of the dose.
+INTRO: This is an educational model, not clinical guidance: it uses simplified one compartment pharmacokinetics to show how dose and dosing interval shape peak and trough concentrations, and it must never be used to select, adjust, or check a dose for a real patient. The agent, its half life, and every threshold in the challenges below are invented for teaching; no real drug behaves exactly this way. Two of those thresholds are easy to confuse, so keep them apart: a trough floor of 2 mg per litre, below which this model treats the drug as too dilute to act, and a peak target band of 12 to 20 mg per litre, above which it treats the drug as toxic. By the end of this activity you will be able to predict how a change in dose, dosing interval, or patient weight moves the peak and trough concentrations of a drug at steady state, and explain why accumulation is set by the interval and the half life rather than by the size of the dose.
 
 INPUT: Dose (slider, mg, 100 to 1500, step 25, start 500)
 INPUT: Dosing interval (slider, hours, 4 to 24, step 1, start 8)
@@ -96,9 +96,9 @@ OUTPUT: Trough concentration (mg/L, 2 decimals) = Peak concentration * exp(-Elim
 CHART: Trough concentration vs Dosing interval (40 samples, titled Trough concentration across dosing intervals)
 CHART: Peak concentration vs Dose (40 samples, titled Peak concentration across doses)
 
-CHALLENGE: Keep the trough at or above 2 mg per litre so the drug stays in its therapeutic range across the whole interval. -> Trough concentration at least 2
+CHALLENGE: Keep the trough at or above 2 mg per litre, the floor below which this model treats the drug as too dilute to act. -> Trough concentration at least 2
 CHALLENGE: Keep the peak at or below 20 mg per litre, the toxicity ceiling in this model. -> Peak concentration at most 20
-CHALLENGE: Land the peak inside the therapeutic window of 12 to 20 mg per litre. -> Peak concentration between 12 and 20
+CHALLENGE: Land the peak inside the target band, 12 to 20 mg per litre in this model. -> Peak concentration between 12 and 20
 CHALLENGE: Accumulation is set by the interval and the half life, not by the size of the dose. Find an interval that keeps the accumulation factor in a moderate range. -> Accumulation factor between 1.5 and 3
 ```
 
@@ -126,7 +126,7 @@ One-compartment, intravenous-bolus, multiple-dose model at steady state:
 4. Steady state with identical doses at a fixed interval — reached after roughly four to five half-lives. The model does not show the approach to steady state, and single-dose peaks are lower than the ones shown here.
 5. Constant t½ and V_d over the interval: no change in renal or hepatic function, fluid shifts, or protein binding.
 6. Total (not free) drug concentration; no tissue or effect-site compartment, and therefore no pharmacodynamics — the "response" here is concentration, not effect.
-7. The therapeutic floor (2 mg/L), the ceiling (20 mg/L) and the window (12 to 20 mg/L) are **model parameters chosen to make the challenges teach**, not the reference range of any real agent.
+7. The trough floor (2 mg/L), the toxicity ceiling (20 mg/L) and the peak target band (12 to 20 mg/L) are **model parameters chosen to make the challenges teach**, not the reference range of any real agent. They are three distinct thresholds and no two of them may be described as "the therapeutic window"; the trough floor governs the whole interval, the peak band governs the peak alone.
 
 The simplest defensible model was chosen deliberately: an IV-bolus steady-state one-compartment model is the standard first model in every pharmacokinetics text, its five relations are all dimensionally checkable by hand, and every added realism (absorption, two compartments, infusion time) would add parameters without adding insight into the relationship the objective names.
 
@@ -192,7 +192,7 @@ Reachability of challenge 4 in closed form, for the reviewer: R lies in [1.5, 3]
 - Leon Shargel and Andrew B. C. Yu, *Applied Biopharmaceutics and Pharmacokinetics*, 7th ed. — multiple-dosage regimens, C_max,ss and C_min,ss for intravenous bolus dosing.
 - Michael E. Winter, *Basic Clinical Pharmacokinetics*, 5th ed. — volume of distribution expressed per kilogram of body weight, and the practical peak/trough framing used here.
 
-These are textbook-standard relations, identical across the three references; no proprietary or institution-specific parameters are used. The therapeutic thresholds in the challenges are invented for the exercise, which the intro's statement makes explicit.
+These are textbook-standard relations, identical across the three references; no proprietary or institution-specific parameters are used. The agent and every threshold in the challenges are invented for the exercise, which the intro states in learner-visible text.
 
 ## 8. Images
 

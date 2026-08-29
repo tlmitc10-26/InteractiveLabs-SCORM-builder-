@@ -24,13 +24,14 @@ The second thing every leadership program has to teach is that two legitimate ob
 - **SME line** on each choice is a review rationale — **brief-only**, never in the config or shown to the learner.
 - **Conditional choice:** `showIf: { variableId: "community_trust", comparator: "gte", value: 60 }`. Only one choice in the whole module carries a `showIf`, and its scene has two unconditional choices beside it.
 - `feedbackMode: "debrief"`, `showPathInDebrief: true`.
+- **Label length is not a quality cue** (final review, item 1): across this module's multi-choice scenes, the single longest label (by word count) may be the `best` choice in **at most 40%** of them. Best labels are trimmed to their decision essence; acceptable and poor labels carry equally substantive phrasing, never filler. A tie for longest does not count as a cue. `tests/exemplar-content.test.ts` enforces this per starter.
 
 ## 4. Configuration summary
 
 | Field | Value |
 | --- | --- |
 | `title` | The Community Meeting |
-| `role` | You are the superintendent of Sierra Vista Unified. The mid-year reduction you made in February is three weeks old and the questions have not stopped. |
+| `role` | You are the superintendent of Sierra Vista Unified. The mid-year reduction you made in February is six weeks old and the questions have not stopped. |
 | `startSceneId` | `the_ask` |
 | scenes | 6 (`the_ask`, `the_notice`, `the_agenda`, `the_room`, `the_hard_question`, `the_follow_through`) |
 | endings | 3 (`partnership`, `compliant_but_cold`, `procedurally_exposed`) |
@@ -48,7 +49,7 @@ Both are oriented the same way — higher is better — so the tension is in the
 
 **Intro (learner-visible, carries the objective):**
 
-> In February, Sierra Vista Unified absorbed a $1.9 million mid-year reduction. Three weeks later the questions have not stopped, and before the board can adopt the revised spending plan the state requires a properly noticed public hearing. You are the superintendent, and you have nine days.
+> In February, Sierra Vista Unified absorbed a $1.9 million mid-year reduction. Six weeks later the questions have not stopped, and before the board can adopt the revised spending plan the state requires a properly noticed public hearing. You are the superintendent, and you have nine days.
 >
 > By the end of this scenario you will be able to design and run a public meeting that satisfies its legal requirements and is genuinely worth attending, and to explain why meeting the requirement is the floor of community engagement rather than the goal. Two things are tracked: **Community trust** and **District compliance**. They are not the same thing, and one of the choices later on will only be open to you if the first one is high enough.
 
@@ -63,7 +64,7 @@ Both are oriented the same way — higher is better — so the tension is in the
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `one_meeting_both` | Hold one meeting that satisfies the hearing requirements and is built for listening, and say in the notice that it is both | `best` | `community_trust` +6, `district_compliance` +6 | `scene:the_notice` |
+| `one_meeting_both` | Hold one meeting that is both the legal hearing and the conversation, and say so in the notice | `best` | `community_trust` +6, `district_compliance` +6 | `scene:the_notice` |
 | `two_events` | Run the legal hearing at the board meeting and a separate informal community night the week before | `acceptable` | `community_trust` +4, `district_compliance` +3 | `scene:the_notice` |
 | `hearing_only` | Do what the law requires: notice the hearing, take public comment, adopt the plan | `poor` | `community_trust` -10, `district_compliance` +5 | `scene:the_notice` |
 
@@ -113,8 +114,8 @@ Both are oriented the same way — higher is better — so the tension is in the
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `ten_minutes_then_tables` | Cut the presentation to ten minutes, break to facilitated tables with staff at each, and hold the last half hour for questions on the record | `best` | `community_trust` +8, `district_compliance` +2 | `scene:the_room` |
-| `twenty_and_qa` | Trim the deck to twenty minutes and run open question-and-answer for the rest | `acceptable` | `community_trust` +5, `district_compliance` +2 | `scene:the_room` |
+| `ten_minutes_then_tables` | Cut the presentation to ten minutes, break to facilitated tables, and take questions on the record | `best` | `community_trust` +8, `district_compliance` +2 | `scene:the_room` |
+| `twenty_and_qa` | Trim the deck to twenty minutes and run open question-and-answer from the floor for the rest of the time | `acceptable` | `community_trust` +5, `district_compliance` +2 | `scene:the_room` |
 | `full_deck` | Present the whole deck. If people understand the arithmetic, the anger takes care of itself | `poor` | `community_trust` -12 | `scene:the_room` |
 
 **Feedback — `ten_minutes_then_tables`:**
@@ -138,9 +139,9 @@ Both are oriented the same way — higher is better — so the tension is in the
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `accept_petition` | Amend the agenda to accept the petition into the record, and say aloud why the amendment is being made | `best` | `community_trust` +8, `district_compliance` +4 | `scene:the_hard_question` |
-| `petition_in_comment` | Ask them to read it during the public comment period already on the agenda | `acceptable` | `community_trust` +3, `district_compliance` +5 | `scene:the_hard_question` |
-| `decline_not_on_agenda` | Decline; the agenda was posted, and changing it now is how hearings get challenged | `poor` | `community_trust` -14, `district_compliance` +2 | `scene:the_follow_through` |
+| `accept_petition` | Amend the agenda to accept the petition, and say aloud why you are amending it | `best` | `community_trust` +8, `district_compliance` +4 | `scene:the_hard_question` |
+| `petition_in_comment` | Ask them to read the petition during the public comment period already on the agenda | `acceptable` | `community_trust` +3, `district_compliance` +5 | `scene:the_hard_question` |
+| `decline_not_on_agenda` | Decline; the agenda was posted, and amending it at the top of a hearing is how hearings get challenged | `poor` | `community_trust` -14, `district_compliance` +2 | `scene:the_follow_through` |
 
 **Feedback — `accept_petition`:**
 > Taking the petition on the record costs six minutes and settles the only question the room had about your intentions. Announcing the amendment aloud is the part that keeps it procedurally clean.
@@ -163,7 +164,7 @@ Both are oriented the same way — higher is better — so the tension is in the
 
 | Choice `id` | Label | Quality | `showIf` | Effects | Goes to |
 | --- | --- | --- | --- | --- | --- |
-| `uncertainty_with_date` | Say you do not know, explain exactly what the answer depends on, and commit to reporting back publicly on July 15 either way | `best` | none | `community_trust` +8, `district_compliance` +2 | `scene:the_follow_through` |
+| `uncertainty_with_date` | Say you do not know, explain what it depends on, and commit to reporting back publicly on July 15 | `best` | none | `community_trust` +8, `district_compliance` +2 | `scene:the_follow_through` |
 | `working_group` | Accept Whitfield's offer to co-chair a family working group that reviews restoration options with Cho before the June budget | `best` | `community_trust` `gte` **60** | `community_trust` +10, `district_compliance` +4 | `scene:the_follow_through` |
 | `reassure` | Tell him you will fight to bring it back; the room needs to hear that somebody is on their side | `poor` | none | `community_trust` -8 | `scene:the_follow_through` |
 
@@ -188,8 +189,8 @@ Both are oriented the same way — higher is better — so the tension is in the
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `publish_the_record` | Publish the table notes, the petition, and written answers to every question you could not answer in the room, in both languages, before the board votes | `best` | `community_trust` +8, `district_compliance` +6 | `ending:partnership` |
-| `summary_to_board` | Give the board a written summary of the themes at the vote and post it afterward | `acceptable` | `community_trust` +5, `district_compliance` +5 | `ending:compliant_but_cold` |
+| `publish_the_record` | Publish the notes, the petition, and answers to the open questions, in both languages, before the vote | `best` | `community_trust` +8, `district_compliance` +6 | `ending:partnership` |
+| `summary_to_board` | Give the board a written summary of the themes at the vote, and post the full record afterward | `acceptable` | `community_trust` +5, `district_compliance` +5 | `ending:compliant_but_cold` |
 | `move_on` | The meeting is done and the vote is Tuesday; get back to next year's budget | `poor` | `community_trust` -16, `district_compliance` -12 | `ending:procedurally_exposed` |
 
 **Feedback — `publish_the_record`:**

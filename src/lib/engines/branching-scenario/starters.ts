@@ -105,7 +105,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "speak_up",
-              label: "Raise your doubts about the timeline before anyone votes",
+              label: "Raise your doubts before the room votes",
               quality: "best",
               effects: [{ variableId: "jury_trust", delta: 10 }],
               feedback: "<p>Speaking up before the vote keeps the deliberation grounded in the evidence instead of the room's momentum.</p>",
@@ -136,7 +136,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "walk_through",
-              label: "Walk the group through the conflict step by step",
+              label: "Walk the group through the conflict",
               quality: "best",
               effects: [{ variableId: "jury_trust", delta: 15 }],
               feedback: "<p>Walking the room through the conflict turns a vague unease into a concrete point the jury can actually weigh.</p>",
@@ -225,7 +225,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
       title: "",
       role: "You are the superintendent of Sierra Vista Unified, a public school district of about 6,200 students, in your second year in the job.",
       intro:
-        "<p>Sierra Vista Unified has 6,200 students, four months left in its fiscal year, and $1.9 million less than it had yesterday. You are the superintendent. By the end of this scenario you will be able to choose where a mid-year reduction lands and defend that choice on the record: naming the impact before the recommendation, disclosing what the plan costs in future years, and answering the people it hurts in the room where the decision is made.</p><p>One thing is tracked as you go: <b>Board confidence</b> — how much credibility you carry into the next decision. There is no option here that harms nobody. Choose the one you could explain in public.</p>",
+        "<p>Sierra Vista Unified has 6,200 students, four months left in its fiscal year, and $1.9 million less than it had yesterday. You are the superintendent. By the end of this scenario you will be able to choose where a mid-year reduction lands and defend that choice on the record: naming the impact before the recommendation, and then answering for the decision wherever it lands you — in a board packet that has to disclose what the plan costs in future years, or in a room full of the people it hurts.</p><p>One thing is tracked as you go: <b>Board confidence</b> — how much credibility you carry into the next decision. There is no option here that harms nobody. Choose the one you could explain in public.</p>",
       variables: [
         { id: "board_confidence", label: "Board confidence", initial: 50, min: 0, max: 100, visible: true },
       ],
@@ -304,7 +304,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           id: "the_board_packet",
           title: "The board packet",
           body:
-            "<p>Simone Alvarez has the draft board packet open and one question: how much of this goes in it. Your plan has a tail — deferred replacements or posts left unfilled — that lands in next year's budget at roughly $2.3 million, and nobody has budgeted for it. Board member Roy Vance has asked twice for the clean version, not the encyclopedia. The packet posts publicly at five o'clock tomorrow.</p>",
+            "<p>Simone Alvarez has the draft board packet open and one question: how much of this goes in it. Your plan has a tail, and which tail depends on what you chose. Deferring the technology refresh pushes roughly $2.3 million of replacement cost into a future year that nobody has provided for. Holding vacancies pushes nothing forward and saves nothing twice: the posts are budgeted again in July, so the $1.9 million has to be found somewhere else next year. Board member Roy Vance has asked twice for the clean version, not the encyclopedia. The packet posts publicly at five o'clock tomorrow.</p>",
           choices: [
             {
               id: "publish_full_schedule",
@@ -396,9 +396,9 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
     group: "exemplar",
     config: branchingConfigSchema.parse({
       title: "",
-      role: "You are the superintendent of Sierra Vista Unified. The mid-year reduction you made in February is three weeks old and the questions have not stopped.",
+      role: "You are the superintendent of Sierra Vista Unified. The mid-year reduction you made in February is six weeks old and the questions have not stopped.",
       intro:
-        "<p>In February, Sierra Vista Unified absorbed a $1.9 million mid-year reduction. Three weeks later the questions have not stopped, and before the board can adopt the revised spending plan the state requires a properly noticed public hearing. You are the superintendent, and you have nine days.</p><p>By the end of this scenario you will be able to design and run a public meeting that satisfies its legal requirements and is genuinely worth attending, and to explain why meeting the requirement is the floor of community engagement rather than the goal. Two things are tracked: <b>Community trust</b> and <b>District compliance</b>. They are not the same thing, and one of the choices later on will only be open to you if the first one is high enough.</p>",
+        "<p>In February, Sierra Vista Unified absorbed a $1.9 million mid-year reduction. Six weeks later the questions have not stopped, and before the board can adopt the revised spending plan the state requires a properly noticed public hearing. You are the superintendent, and you have nine days.</p><p>By the end of this scenario you will be able to design and run a public meeting that satisfies its legal requirements and is genuinely worth attending, and to explain why meeting the requirement is the floor of community engagement rather than the goal. Two things are tracked: <b>Community trust</b> and <b>District compliance</b>. They are not the same thing, and one of the choices later on will only be open to you if the first one is high enough.</p>",
       variables: [
         { id: "community_trust", label: "Community trust", initial: 50, min: 0, max: 100, visible: true },
         { id: "district_compliance", label: "District compliance", initial: 70, min: 0, max: 100, visible: true },
@@ -412,7 +412,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "one_meeting_both",
-              label: "Hold one meeting that satisfies the hearing requirements and is built for listening, and say in the notice that it is both",
+              label: "Hold one meeting that is both the legal hearing and the conversation, and say so in the notice",
               quality: "best",
               effects: [
                 { variableId: "community_trust", delta: 6 },
@@ -500,7 +500,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "ten_minutes_then_tables",
-              label: "Cut the presentation to ten minutes, break to facilitated tables with staff at each, and hold the last half hour for questions on the record",
+              label: "Cut the presentation to ten minutes, break to facilitated tables, and take questions on the record",
               quality: "best",
               effects: [
                 { variableId: "community_trust", delta: 8 },
@@ -512,7 +512,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "twenty_and_qa",
-              label: "Trim the deck to twenty minutes and run open question-and-answer for the rest",
+              label: "Trim the deck to twenty minutes and run open question-and-answer from the floor for the rest of the time",
               quality: "acceptable",
               effects: [
                 { variableId: "community_trust", delta: 5 },
@@ -541,7 +541,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "accept_petition",
-              label: "Amend the agenda to accept the petition into the record, and say aloud why the amendment is being made",
+              label: "Amend the agenda to accept the petition, and say aloud why you are amending it",
               quality: "best",
               effects: [
                 { variableId: "community_trust", delta: 8 },
@@ -553,7 +553,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "petition_in_comment",
-              label: "Ask them to read it during the public comment period already on the agenda",
+              label: "Ask them to read the petition during the public comment period already on the agenda",
               quality: "acceptable",
               effects: [
                 { variableId: "community_trust", delta: 3 },
@@ -565,7 +565,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "decline_not_on_agenda",
-              label: "Decline; the agenda was posted, and changing it now is how hearings get challenged",
+              label: "Decline; the agenda was posted, and amending it at the top of a hearing is how hearings get challenged",
               quality: "poor",
               effects: [
                 { variableId: "community_trust", delta: -14 },
@@ -585,7 +585,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "uncertainty_with_date",
-              label: "Say you do not know, explain exactly what the answer depends on, and commit to reporting back publicly on July 15 either way",
+              label: "Say you do not know, explain what it depends on, and commit to reporting back publicly on July 15",
               quality: "best",
               effects: [
                 { variableId: "community_trust", delta: 8 },
@@ -627,7 +627,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "publish_the_record",
-              label: "Publish the table notes, the petition, and written answers to every question you could not answer in the room, in both languages, before the board votes",
+              label: "Publish the notes, the petition, and answers to the open questions, in both languages, before the vote",
               quality: "best",
               effects: [
                 { variableId: "community_trust", delta: 8 },
@@ -639,7 +639,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "summary_to_board",
-              label: "Give the board a written summary of the themes at the vote and post it afterward",
+              label: "Give the board a written summary of the themes at the vote, and post the full record afterward",
               quality: "acceptable",
               effects: [
                 { variableId: "community_trust", delta: 5 },
@@ -732,7 +732,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
                 { variableId: "regulatory_standing", delta: -8 },
               ],
               feedback:
-                "<p>The instinct to get schools running is right, and restoring before the systems are isolated can overwrite the evidence that decides what you must report and to whom. Continuity and containment genuinely compete here; the order matters more than the speed.</p>",
+                "<p>The instinct to get schools running is right. What it misses is that restoring before the systems are isolated can overwrite the evidence that decides what you must report and to whom. Continuity and containment genuinely compete here; the order matters more than the speed.</p>",
               goTo: "scene:the_first_hour",
             },
             {
@@ -758,7 +758,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "incident_command",
-              label: "Stand up one incident command — you decide, counsel advises, Alvarez speaks, Delgado runs technical — and brief Okonjo hourly",
+              label: "Stand up one incident command — you decide, counsel advises, Alvarez speaks — and brief Okonjo hourly",
               quality: "best",
               effects: [
                 { variableId: "regulatory_standing", delta: 4 },
@@ -778,12 +778,12 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
                 { variableId: "community_trust", delta: -5 },
               ],
               feedback:
-                "<p>A small circle moves fast, and it means every question in the district lands on the three most overloaded people in it. By Monday your board will have learned about this from somebody who is not you.</p>",
+                "<p>A small circle moves fast. It also means every question in the district lands on the three most overloaded people in it, and by Monday your board will have learned about this from somebody who is not you.</p>",
               goTo: "scene:monday_morning",
             },
             {
               id: "everyone_decides",
-              label: "Put every cabinet member and both board officers on a running call so nobody feels shut out",
+              label: "Put every cabinet member and both board officers on a running call and decide as a group; nobody should feel shut out",
               quality: "poor",
               effects: [
                 { variableId: "regulatory_standing", delta: -10 },
@@ -804,7 +804,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "paper_protocols",
-              label: "Open on time with published paper protocols for attendance, medication and pickup verification, and a written service-log plan for students whose plans require one",
+              label: "Open on time with published paper protocols for attendance, medication, pickup verification, and service logs",
               quality: "best",
               effects: [
                 { variableId: "instructional_continuity", delta: 8 },
@@ -817,7 +817,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "delay_two_days",
-              label: "Close Monday and Tuesday as emergency days, restore what you can, reopen Wednesday",
+              label: "Close Monday and Tuesday as emergency days, restore what you can, and reopen Wednesday on whatever is back",
               quality: "acceptable",
               effects: [
                 { variableId: "instructional_continuity", delta: -8 },
@@ -825,7 +825,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
                 { variableId: "community_trust", delta: -2 },
               ],
               feedback:
-                "<p>Two days buys real technical room, and it costs six thousand students two days of instruction and several thousand families two days of childcare they had not planned. It is a defensible call. It is not a free one.</p>",
+                "<p>Two days buys real technical room. The price is six thousand students' instruction and several thousand families' childcare, neither of which anyone had planned for. It is a defensible call. It is not a free one.</p>",
               goTo: "scene:what_to_say",
             },
             {
@@ -851,7 +851,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "say_what_you_know",
-              label: "Publish now: what happened, what you do not yet know, what Monday looks like, and when the next update comes — then keep that schedule whether or not there is news",
+              label: "Publish now: what happened, what you do not yet know, what Monday looks like, and when the next update comes",
               quality: "best",
               effects: [
                 { variableId: "community_trust", delta: 10 },
@@ -871,7 +871,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
                 { variableId: "instructional_continuity", delta: 4 },
               ],
               feedback:
-                "<p>Staff who can answer questions are worth a great deal, and a message given to four hundred employees is a public message with extra steps and no timestamp. The screenshot in the group chat is not going to wait for your confidence to catch up.</p>",
+                "<p>Staff who can answer questions are worth a great deal. A message given to four hundred employees, though, is a public message with extra steps and no timestamp — and the screenshot in the group chat is not going to wait for your confidence to catch up.</p>",
               goTo: "scene:the_demand",
             },
             {
@@ -944,7 +944,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "notify_now",
-              label: "Notify now: tell every family in the affected years what is known, what is not, and what the district is doing, and follow with specifics as the firm confirms them",
+              label: "Notify now: tell every family in the affected years what is known and what is not, and follow with specifics later",
               quality: "best",
               effects: [
                 { variableId: "regulatory_standing", delta: 5 },
@@ -956,7 +956,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "joint_notice",
-              label: "Send the notice counsel drafted on Saturday, jointly with the state education agency and the county office, with a family help line live the same hour",
+              label: "Send counsel's Saturday draft jointly with the state agency and the county office, and open a family help line the same hour",
               quality: "best",
               showIf: { variableId: "regulatory_standing", comparator: "gte", value: 80 },
               effects: [
@@ -970,7 +970,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "wait_for_the_list",
-              label: "Take Vance's position and wait for the confirmed list so the notice can be accurate",
+              label: "Take Vance's position and wait until the firm can name the affected students, so the notice tells families something useful rather than something frightening",
               quality: "poor",
               effects: [
                 { variableId: "regulatory_standing", delta: -18 },
@@ -1002,7 +1002,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "working_group_line",
-              label: "Ask the family working group from April to run a parent-to-parent help line beside the district's, with a liaison and a shared script",
+              label: "Ask April's family working group to run a parent-to-parent help line beside the district's, on a shared script",
               quality: "best",
               showIf: { variableId: "community_trust", comparator: "gte", value: 60 },
               effects: [
@@ -1035,7 +1035,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "own_the_deferral",
-              label: "Present the full timeline, name the February deferral as a contributing decision that was yours, and bring the multi-year replacement plan",
+              label: "Present the full timeline, own the February deferral as a contributing decision, and bring the multi-year replacement plan",
               quality: "best",
               effects: [
                 { variableId: "community_trust", delta: 8 },
@@ -1048,7 +1048,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "technical_findings_only",
-              label: "Present the technical timeline and the vendor's recommendations; the budget history is a separate conversation",
+              label: "Present the technical timeline and the vendor's recommendations, and take the budget history up separately with the board in the spring",
               quality: "acceptable",
               effects: [
                 { variableId: "community_trust", delta: 2 },
@@ -1060,7 +1060,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "blame_the_vendor",
-              label: "Frame the review around the vendor's failure and the sophistication of the attack",
+              label: "Frame the review around the vendor's failure and the sophistication of the attack, which no district of this size could have stopped",
               quality: "poor",
               effects: [
                 { variableId: "community_trust", delta: -16 },
@@ -1112,7 +1112,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
       title: "",
       role: "You are an assistant public defender in Vela County, appointed nine days ago to represent Miguel Santos.",
       intro:
-        "<p>You are an assistant public defender in Vela County, appointed nine days ago to represent Miguel Santos, 24, charged with second-degree burglary and receiving stolen property. The prosecutor's offer expires in twelve days. Vela County and everyone in this scenario are fictional, and this is a teaching scenario about defense practice rather than legal advice.</p><p>By the end of it you will be able to evaluate a plea decision by the quality of the process behind it — investigation, disclosure, advice on collateral consequences, and the client's own informed consent — rather than by how the case happens to turn out. Two things are tracked: <b>Client trust</b> and <b>Case strength</b>. Watch what happens to them; they do not always move together, and one of them is not a measure of how well you are doing your job.</p><p><i>(Authoring note, starter only — delete this line in your own version: this is where a scene header image goes. Upload one in the editor and set its role and alt text; see docs/exemplars/alt-policy.md.)</i></p>",
+        "<p>You are an assistant public defender in Vela County, appointed nine days ago to represent Miguel Santos, 24, charged with second-degree burglary and receiving stolen property. The prosecutor's offer expires in twelve days. Vela County and everyone in this scenario are fictional, and this is a teaching scenario about defense practice rather than legal advice.</p><p>By the end of it you will be able to evaluate a plea decision by the quality of the process behind it — investigation, disclosure, advice on collateral consequences, and the client's own informed consent — rather than by how the case happens to turn out. Two things are tracked: <b>Client trust</b> and <b>Case strength</b>. Watch what happens to them; they do not always move together, and one of them is not a measure of how well you are doing your job.</p><p><i>(Starter note: add a scene header image in the editor — Image, role, and description on the first scene. Delete this line in your version.)</i></p>",
       variables: [
         { id: "client_trust", label: "Client trust", initial: 55, min: 0, max: 100, visible: true },
         { id: "case_strength", label: "Case strength", initial: 40, min: 0, max: 100, visible: true },
@@ -1126,7 +1126,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "explain_and_wait",
-              label: "Meet Santos, walk him through the offer, the exposure and the clock, and tell him you are not asking for a decision today",
+              label: "Meet Santos, walk him through the offer, the exposure and the clock, and ask for no decision today",
               quality: "best",
               effects: [{ variableId: "client_trust", delta: 8 }],
               feedback:
@@ -1139,7 +1139,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
               quality: "acceptable",
               effects: [{ variableId: "client_trust", delta: 2 }],
               feedback:
-                "<p>The written record is genuinely valuable, and a letter cannot hear a question. A client reading two to six years alone at a kitchen table tends to decide something before you ever discuss it.</p>",
+                "<p>The written record is genuinely valuable. What it cannot do is hear a question: a client reading two to six years alone at a kitchen table tends to decide something before you ever discuss it.</p>",
               goTo: "scene:the_file",
             },
             {
@@ -1161,7 +1161,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "investigate_and_compel",
-              label: "Send Dana Whitmore after Ortega and the store, and file a motion to compel the unproduced recording",
+              label: "Send Dana Okafor after Ortega and the store, and file a motion to compel the unproduced recording",
               quality: "best",
               effects: [
                 { variableId: "case_strength", delta: 20 },
@@ -1180,7 +1180,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
                 { variableId: "client_trust", delta: 2 },
               ],
               feedback:
-                "<p>Working the case yourself beats not working it, and it leaves the roadside identification and the missing recording untouched. Caseload is a real constraint and it is not an answer to the question of what you knew.</p>",
+                "<p>Working the case yourself beats not working it. It still leaves the roadside identification and the missing recording untouched. Caseload is a real constraint; it is not an answer to the question of what you knew.</p>",
               goTo: "scene:the_kitchen_table",
             },
             {
@@ -1205,7 +1205,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "advise_and_reserve",
-              label: "Give him your honest read of the risk on both paths, tell him what you would want to know in his position, and be clear the choice is his",
+              label: "Give him your honest read of the risk on both paths, and be clear the choice is his",
               quality: "best",
               effects: [{ variableId: "client_trust", delta: 8 }],
               feedback:
@@ -1218,12 +1218,12 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
               quality: "acceptable",
               effects: [{ variableId: "client_trust", delta: -2 }],
               feedback:
-                "<p>Neutrality feels respectful, and it can leave a client alone with a decision he asked for help with. Withholding your professional judgment is not the same as protecting his autonomy.</p>",
+                "<p>Neutrality feels respectful. In practice it can leave a client alone with a decision he asked for help with, and withholding your professional judgment is not the same as protecting his autonomy.</p>",
               goTo: "scene:the_advisal",
             },
             {
               id: "predict_acquittal",
-              label: "Tell him you like the case; the identification is weak and no jury convicts on this",
+              label: "Tell him you like the case; the identification is weak, the fingerprint is partial, and no jury convicts on this",
               quality: "poor",
               effects: [{ variableId: "client_trust", delta: 6 }],
               feedback:
@@ -1240,7 +1240,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "consult_before_advising",
-              label: "Stop the plea discussion, send the consult, and tell Santos plainly that you will not advise him further on this offer until you know the immigration consequence",
+              label: "Stop the plea discussion, send the consult, and tell Santos you cannot advise him until the answer comes back",
               quality: "best",
               effects: [
                 { variableId: "client_trust", delta: 8 },
@@ -1274,11 +1274,11 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           id: "the_recording",
           title: "Forty hours left",
           body:
-            "<p>The recording surfaces Thursday afternoon, produced on your motion or handed over late in a supplemental disclosure. It shows two figures crossing the road at 11:38 at night; neither is identifiable, one is noticeably taller than Santos, and the timestamp is four minutes off the eyewitness's account. It is not exoneration and it is not nothing. ADA Lindqvist, hearing that you have it, says the eighteen-month offer stands until Monday and will not improve.</p>",
+            "<p>The recording surfaces Thursday afternoon, produced on your motion or handed over late in a supplemental disclosure. It shows two figures crossing the road at 11:38 at night; neither is identifiable, one is noticeably taller than Santos, and the timestamp is four minutes off the eyewitness's account. It is not exoneration and it is not nothing. ADA Trujillo, hearing that you have it, says the eighteen-month offer stands until Monday and will not improve.</p>",
           choices: [
             {
               id: "show_client_reassess",
-              label: "Sit down with Santos, show him the recording, and re-explain both paths in light of what it does and does not prove",
+              label: "Sit down with Santos, show him the recording, and re-explain both paths in light of it",
               quality: "best",
               effects: [
                 { variableId: "client_trust", delta: 8 },
@@ -1290,7 +1290,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "push_for_better_offer",
-              label: "Take the recording and the identification problems to Lindqvist and ask for a disposition without the receiving count",
+              label: "Take the recording and the identification problems to Trujillo and ask for a disposition without the receiving count",
               quality: "best",
               showIf: { variableId: "case_strength", comparator: "gte", value: 60 },
               effects: [
@@ -1323,7 +1323,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           choices: [
             {
               id: "confirm_and_document",
-              label: "Walk through the offer, the exposure and the collateral consequences one last time, confirm in his own words what he understands, put the advice and his decision in a memo to the file, and then do what he decides",
+              label: "Walk him through the offer, the exposure and the collateral consequences once more, confirm what he understands, memo the file, and do what he decides",
               quality: "best",
               effects: [{ variableId: "client_trust", delta: 6 }],
               feedback:
@@ -1341,7 +1341,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
             },
             {
               id: "decide_for_him",
-              label: "Tell him the answer is obvious by now, and that you have already told Lindqvist he is taking it",
+              label: "Tell him the answer is obvious by now, and that you have already told Trujillo he is taking it",
               quality: "poor",
               effects: [{ variableId: "client_trust", delta: -20 }],
               feedback:
@@ -1363,7 +1363,7 @@ export const BRANCHING_STARTERS: Record<string, { label: string; description: st
           id: "outcome_luck",
           title: "It worked out",
           body:
-            "<p>The eyewitness moves out of state in the spring. Lindqvist cannot make the burglary count without her, the charge is reduced, and Santos ends up with an outcome better than the offer he was weighing. He shakes your hand in the hallway and means it.</p><p>Now change one fact. If the witness had stayed, exactly the same choices you made would have produced a client who pleaded to an offense whose consequences nobody had researched, on evidence nobody had tested, with no record of what he understood. The choices did not become good because the witness moved.</p><p>This is the ending students argue with, and it is the one worth arguing about. Outcomes are distributed by luck as much as by skill. The process is the only part that was ever yours, and it is the only part anyone can review.</p>",
+            "<p>The eyewitness moves out of state in the spring. Trujillo cannot make the burglary count without her, the charge is reduced, and Santos ends up with an outcome better than the offer he was weighing. He shakes your hand in the hallway and means it.</p><p>Now change one fact. If the witness had stayed, exactly the same choices you made would have produced a client who pleaded to an offense whose consequences nobody had researched, on evidence nobody had tested, with no record of what he understood. The choices did not become good because the witness moved.</p><p>This is the ending students argue with, and it is the one worth arguing about. Outcomes are distributed by luck as much as by skill. The process is the only part that was ever yours, and it is the only part anyone can review.</p>",
         },
         {
           id: "plea_unravels",

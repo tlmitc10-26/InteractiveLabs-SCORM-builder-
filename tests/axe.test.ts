@@ -139,8 +139,8 @@ describe("axe-core accessibility gate: branching scenario", () => {
 
   it("has zero violations at the jury starter's ending + debrief", async () => {
     mountBranchingScenario(document.getElementById("root")!, juryConfig);
-    clickChoice("Raise your doubts about the timeline before anyone votes");
-    clickChoice("Walk the group through the conflict step by step");
+    clickChoice("Raise your doubts before the room votes");
+    clickChoice("Walk the group through the conflict");
     clickChoice("Ask them to explain what evidence would change their mind");
 
     const results = await auditBody();

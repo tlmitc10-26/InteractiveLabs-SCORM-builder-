@@ -10,7 +10,9 @@
 
 Learner-visible, appears in the interactive's intro:
 
-> By the end of this scenario you will be able to choose where a mid-year budget reduction lands and defend that choice on the record: naming the impact before the recommendation, disclosing what the plan costs in future years, and answering the people it hurts in the room where the decision is made.
+> By the end of this scenario you will be able to choose where a mid-year reduction lands and defend that choice on the record: naming the impact before the recommendation, and then answering for the decision wherever it lands you — in a board packet that has to disclose what the plan costs in future years, or in a room full of the people it hurts.
+
+**Why the third clause is disjunctive** (final review, item 4): the graph in §6 sends `defer_technology`/`hold_vacancies` to `the_board_packet` and `cut_after_school` to `the_parents_arrive`, so no single play-through reaches both the disclosure scene and the public-comment scene. The earlier wording promised both as a conjunction and no path delivered it. The fix narrows the promise to what every path actually teaches — impact-before-recommendation in scene 1, a choice with named consequences in scene 2, and then accountability in whichever forum the choice leads to — rather than rerouting, which would have meant chaining the two terminal scenes and breaking the 4-scene / 1-variable escalation contract this module exists to demonstrate.
 
 ## 2. Discipline pattern
 
@@ -24,6 +26,7 @@ Every online program that prepares people to run something — a school, a clini
 - **SME line** on each choice is a defensibility rationale for review. It is **brief-only** and never appears in the config or to the learner.
 - **Effects** are integer deltas on the variable named. `goTo` targets are given as `scene:<id>` / `ending:<id>`.
 - `feedbackMode: "debrief"`, `showPathInDebrief: true`, `headerColor` left unset (runtime paints the default brand band).
+- **Label length is not a quality cue** (final review, item 1): across this module's multi-choice scenes, the single longest label (by word count) may be the `best` choice in **at most 40%** of them. Best labels are trimmed to their decision essence; acceptable and poor labels carry equally substantive phrasing, never filler. A tie for longest does not count as a cue. `tests/exemplar-content.test.ts` enforces this per starter.
 
 ## 4. Configuration summary
 
@@ -45,7 +48,7 @@ Every online program that prepares people to run something — a school, a clini
 
 **Intro (learner-visible, carries the objective):**
 
-> Sierra Vista Unified has 6,200 students, four months left in its fiscal year, and $1.9 million less than it had yesterday. You are the superintendent. By the end of this scenario you will be able to choose where a mid-year reduction lands and defend that choice on the record: naming the impact before the recommendation, disclosing what the plan costs in future years, and answering the people it hurts in the room where the decision is made.
+> Sierra Vista Unified has 6,200 students, four months left in its fiscal year, and $1.9 million less than it had yesterday. You are the superintendent. By the end of this scenario you will be able to choose where a mid-year reduction lands and defend that choice on the record: naming the impact before the recommendation, and then answering for the decision wherever it lands you — in a board packet that has to disclose what the plan costs in future years, or in a room full of the people it hurts.
 >
 > One thing is tracked as you go: **Board confidence** — how much credibility you carry into the next decision. There is no option here that harms nobody. Choose the one you could explain in public.
 
@@ -120,7 +123,9 @@ Every online program that prepares people to run something — a school, a clini
 ### Scene `the_board_packet` — "The board packet"
 
 **Body:**
-> Simone Alvarez has the draft board packet open and one question: how much of this goes in it. Your plan has a tail — deferred replacements or posts left unfilled — that lands in next year's budget at roughly $2.3 million, and nobody has budgeted for it. Board member Roy Vance has asked twice for the clean version, not the encyclopedia. The packet posts publicly at five o'clock tomorrow.
+> Simone Alvarez has the draft board packet open and one question: how much of this goes in it. Your plan has a tail, and which tail depends on what you chose. Deferring the technology refresh pushes roughly $2.3 million of replacement cost into a future year that nobody has provided for. Holding vacancies pushes nothing forward and saves nothing twice: the posts are budgeted again in July, so the $1.9 million has to be found somewhere else next year. Board member Roy Vance has asked twice for the clean version, not the encyclopedia. The packet posts publicly at five o'clock tomorrow.
+
+**Fiscal note** (final review, item 5): this scene is reachable from BOTH `defer_technology` and `hold_vacancies`, so the tail has to be branch-correct. Only deferral creates a new future obligation, and $2.3 million is that branch's figure alone. Holding vacant posts open creates no future cost — the posts were budgeted and are budgeted again in July, restoring the baseline — so its disclosure duty is the opposite one: that the $1.9 million is a **non-recurring** saving and next year's reduction is still unfound. Attributing $2.3 million to either branch indiscriminately, as the earlier body did, is the sort of thing a chief business official would strike in review.
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |

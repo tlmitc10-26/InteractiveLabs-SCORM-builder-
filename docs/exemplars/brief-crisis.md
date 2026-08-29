@@ -24,6 +24,7 @@ Capstone assessments in leadership programs are almost always a case study and a
 - **SME line** on each choice is a review rationale — **brief-only**, never in the config or shown to the learner.
 - **Conditional choices:** three, each written out in §5 with its exact `showIf` object. Every scene that has one also has at least two unconditional choices.
 - `feedbackMode: "debrief"`, `showPathInDebrief: true`.
+- **Label length is not a quality cue** (final review, item 1): across this module's multi-choice scenes, the single longest label (by word count) may be the `best` choice in **at most 40%** of them. Best labels are trimmed to their decision essence; acceptable and poor labels carry equally substantive phrasing, never filler. A tie for longest does not count as a cue. `tests/exemplar-content.test.ts` enforces this per starter.
 
 ## 4. Configuration summary
 
@@ -72,7 +73,7 @@ All three are oriented the same way — higher is better — deliberately, so th
 > Isolation buys the one thing you cannot get back later: an intact record of what happened. Counsel and the insurer both have roles that begin in the first hour rather than the first press call, and the call you make now is what determines which options exist on Wednesday.
 
 **Feedback — `restore_first`:**
-> The instinct to get schools running is right, and restoring before the systems are isolated can overwrite the evidence that decides what you must report and to whom. Continuity and containment genuinely compete here; the order matters more than the speed.
+> The instinct to get schools running is right. What it misses is that restoring before the systems are isolated can overwrite the evidence that decides what you must report and to whom. Continuity and containment genuinely compete here; the order matters more than the speed.
 
 **Feedback — `wait_for_monday`:**
 > Every hour an intrusion runs unexamined is an hour of further access, and a delay that begins as caution is read afterward as concealment. Notification clocks generally run from discovery, not from when it became convenient to look.
@@ -89,15 +90,15 @@ All three are oriented the same way — higher is better — deliberately, so th
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `incident_command` | Stand up one incident command — you decide, counsel advises, Alvarez speaks, Delgado runs technical — and brief Okonjo hourly | `best` | `regulatory_standing` +4, `instructional_continuity` +2, `community_trust` +4 | `scene:monday_morning` |
+| `incident_command` | Stand up one incident command — you decide, counsel advises, Alvarez speaks — and brief Okonjo hourly | `best` | `regulatory_standing` +4, `instructional_continuity` +2, `community_trust` +4 | `scene:monday_morning` |
 | `small_circle` | Keep the circle small — you, Delgado, counsel — and update the full board Monday | `acceptable` | `instructional_continuity` +2, `community_trust` -5 | `scene:monday_morning` |
-| `everyone_decides` | Put every cabinet member and both board officers on a running call so nobody feels shut out | `poor` | `regulatory_standing` -10, `instructional_continuity` -5, `community_trust` -5 | `scene:monday_morning` |
+| `everyone_decides` | Put every cabinet member and both board officers on a running call and decide as a group; nobody should feel shut out | `poor` | `regulatory_standing` -10, `instructional_continuity` -5, `community_trust` -5 | `scene:monday_morning` |
 
 **Feedback — `incident_command`:**
 > Incident command is not bureaucracy; it is the mechanism that stops six people giving five versions of the same facts. Hourly briefings to your board president keep governance informed without moving the decision out of the room where the facts are.
 
 **Feedback — `small_circle`:**
-> A small circle moves fast, and it means every question in the district lands on the three most overloaded people in it. By Monday your board will have learned about this from somebody who is not you.
+> A small circle moves fast. It also means every question in the district lands on the three most overloaded people in it, and by Monday your board will have learned about this from somebody who is not you.
 
 **Feedback — `everyone_decides`:**
 > Inclusion is not coordination. A twelve-person call with no decision-maker produces twelve partial accounts, and one of them reaches a parent group before the facts are stable enough to correct.
@@ -114,15 +115,15 @@ All three are oriented the same way — higher is better — deliberately, so th
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `paper_protocols` | Open on time with published paper protocols for attendance, medication and pickup verification, and a written service-log plan for students whose plans require one | `best` | `instructional_continuity` +8, `regulatory_standing` +2, `community_trust` +4 | `scene:what_to_say` |
-| `delay_two_days` | Close Monday and Tuesday as emergency days, restore what you can, reopen Wednesday | `acceptable` | `instructional_continuity` -8, `regulatory_standing` +2, `community_trust` -2 | `scene:what_to_say` |
+| `paper_protocols` | Open on time with published paper protocols for attendance, medication, pickup verification, and service logs | `best` | `instructional_continuity` +8, `regulatory_standing` +2, `community_trust` +4 | `scene:what_to_say` |
+| `delay_two_days` | Close Monday and Tuesday as emergency days, restore what you can, and reopen Wednesday on whatever is back | `acceptable` | `instructional_continuity` -8, `regulatory_standing` +2, `community_trust` -2 | `scene:what_to_say` |
 | `open_and_improvise` | Open on time and tell principals to improvise; they know their families | `poor` | `instructional_continuity` -14, `regulatory_standing` -12, `community_trust` -8 | `scene:what_to_say` |
 
 **Feedback — `paper_protocols`:**
 > Continuity is a set of specific written workarounds, not a decision to be brave. Putting the service-log plan in writing is also what later lets the district show that entitled minutes were delivered rather than merely intended.
 
 **Feedback — `delay_two_days`:**
-> Two days buys real technical room, and it costs six thousand students two days of instruction and several thousand families two days of childcare they had not planned. It is a defensible call. It is not a free one.
+> Two days buys real technical room. The price is six thousand students' instruction and several thousand families' childcare, neither of which anyone had planned for. It is a defensible call. It is not a free one.
 
 **Feedback — `open_and_improvise`:**
 > Principals will improvise regardless; the question is whether they improvise from a common protocol or invent forty of them. Medication and custody release are the two places where a good-faith improvisation becomes a child in the wrong car.
@@ -139,7 +140,7 @@ All three are oriented the same way — higher is better — deliberately, so th
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `say_what_you_know` | Publish now: what happened, what you do not yet know, what Monday looks like, and when the next update comes — then keep that schedule whether or not there is news | `best` | `community_trust` +10, `regulatory_standing` +2 | `scene:the_demand` |
+| `say_what_you_know` | Publish now: what happened, what you do not yet know, what Monday looks like, and when the next update comes | `best` | `community_trust` +10, `regulatory_standing` +2 | `scene:the_demand` |
 | `brief_staff_first` | Brief principals and staff Sunday so they can answer families Monday, and hold the public statement until you know more | `acceptable` | `community_trust` -4, `regulatory_standing` +2, `instructional_continuity` +4 | `scene:the_demand` |
 | `say_nothing_yet` | Say nothing until the forensic picture is clear; a wrong statement now is worse than silence | `poor` | `community_trust` -14, `regulatory_standing` -4 | `scene:the_notification` |
 
@@ -147,7 +148,7 @@ All three are oriented the same way — higher is better — deliberately, so th
 > A stated update rhythm is the most valuable thing you can offer while the facts are thin, because it converts an information vacuum into a wait people can tolerate. Publishing your uncertainties is also what makes tomorrow's corrections survivable.
 
 **Feedback — `brief_staff_first`:**
-> Staff who can answer questions are worth a great deal, and a message given to four hundred employees is a public message with extra steps and no timestamp. The screenshot in the group chat is not going to wait for your confidence to catch up.
+> Staff who can answer questions are worth a great deal. A message given to four hundred employees, though, is a public message with extra steps and no timestamp — and the screenshot in the group chat is not going to wait for your confidence to catch up.
 
 **Feedback — `say_nothing_yet`:**
 > Silence is not neutral. It says the district either does not know or will not say, and both readings are worse than here is what we know so far. The correction you are afraid of is far cheaper than the vacuum you are creating.
@@ -189,9 +190,9 @@ All three are oriented the same way — higher is better — deliberately, so th
 
 | Choice `id` | Label | Quality | `showIf` | Effects | Goes to |
 | --- | --- | --- | --- | --- | --- |
-| `notify_now` | Notify now: tell every family in the affected years what is known, what is not, and what the district is doing, and follow with specifics as the firm confirms them | `best` | none | `regulatory_standing` +5, `community_trust` +6 | `scene:staff_and_families` |
-| `joint_notice` | Send the notice counsel drafted on Saturday, jointly with the state education agency and the county office, with a family help line live the same hour | `best` | `regulatory_standing` `gte` **80** | `regulatory_standing` +6, `community_trust` +8, `instructional_continuity` +2 | `scene:staff_and_families` |
-| `wait_for_the_list` | Take Vance's position and wait for the confirmed list so the notice can be accurate | `poor` | none | `regulatory_standing` -18, `community_trust` -10 | `scene:staff_and_families` |
+| `notify_now` | Notify now: tell every family in the affected years what is known and what is not, and follow with specifics later | `best` | none | `regulatory_standing` +5, `community_trust` +6 | `scene:staff_and_families` |
+| `joint_notice` | Send counsel's Saturday draft jointly with the state agency and the county office, and open a family help line the same hour | `best` | `regulatory_standing` `gte` **80** | `regulatory_standing` +6, `community_trust` +8, `instructional_continuity` +2 | `scene:staff_and_families` |
+| `wait_for_the_list` | Take Vance's position and wait until the firm can name the affected students, so the notice tells families something useful rather than something frightening | `poor` | none | `regulatory_standing` -18, `community_trust` -10 | `scene:staff_and_families` |
 
 **Feedback — `notify_now`:**
 > Waiting for a perfect list means families learn this from somebody else first, and the duty does not pause for precision. Two notices, one prompt and honest and one specific, beat a single late and complete one.
@@ -215,7 +216,7 @@ All three are oriented the same way — higher is better — deliberately, so th
 | Choice `id` | Label | Quality | `showIf` | Effects | Goes to |
 | --- | --- | --- | --- | --- | --- |
 | `pay_and_staff` | Compensate the reconstruction work at the contractual rate, and pull substitutes and central office staff onto the help line | `best` | none | `instructional_continuity` +8, `community_trust` +6 | `scene:the_after_action` |
-| `working_group_line` | Ask the family working group from April to run a parent-to-parent help line beside the district's, with a liaison and a shared script | `best` | `community_trust` `gte` **60** | `instructional_continuity` +6, `community_trust` +12 | `scene:the_after_action` |
+| `working_group_line` | Ask April's family working group to run a parent-to-parent help line beside the district's, on a shared script | `best` | `community_trust` `gte` **60** | `instructional_continuity` +6, `community_trust` +12 | `scene:the_after_action` |
 | `ask_for_goodwill` | Thank staff publicly and ask them to absorb the work; the budget is already carrying an incident | `poor` | none | `instructional_continuity` -10, `community_trust` -12 | `ending:trust_deficit` |
 
 **Feedback — `pay_and_staff`:**
@@ -239,9 +240,9 @@ All three are oriented the same way — higher is better — deliberately, so th
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `own_the_deferral` | Present the full timeline, name the February deferral as a contributing decision that was yours, and bring the multi-year replacement plan | `best` | `community_trust` +8, `regulatory_standing` +5, `instructional_continuity` +4 | `ending:stewardship` |
-| `technical_findings_only` | Present the technical timeline and the vendor's recommendations; the budget history is a separate conversation | `acceptable` | `community_trust` +2, `regulatory_standing` +2 | `ending:contained_but_costly` |
-| `blame_the_vendor` | Frame the review around the vendor's failure and the sophistication of the attack | `poor` | `community_trust` -16, `regulatory_standing` -12 | `ending:regulatory_reckoning` |
+| `own_the_deferral` | Present the full timeline, own the February deferral as a contributing decision, and bring the multi-year replacement plan | `best` | `community_trust` +8, `regulatory_standing` +5, `instructional_continuity` +4 | `ending:stewardship` |
+| `technical_findings_only` | Present the technical timeline and the vendor's recommendations, and take the budget history up separately with the board in the spring | `acceptable` | `community_trust` +2, `regulatory_standing` +2 | `ending:contained_but_costly` |
+| `blame_the_vendor` | Frame the review around the vendor's failure and the sophistication of the attack, which no district of this size could have stopped | `poor` | `community_trust` -16, `regulatory_standing` -12 | `ending:regulatory_reckoning` |
 
 **Feedback — `own_the_deferral`:**
 > An after-action review is worth exactly as much as its least comfortable sentence. Naming your own earlier decision as a contributing cause is what converts an incident into a budget the board will actually fund.

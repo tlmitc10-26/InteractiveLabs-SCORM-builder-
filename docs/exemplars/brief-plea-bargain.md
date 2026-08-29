@@ -25,6 +25,7 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 - **SME line** on each choice is a review rationale — **brief-only**, never in the config or shown to the learner.
 - **Conditional choice:** one, `showIf: { variableId: "case_strength", comparator: "gte", value: 60 }`.
 - `feedbackMode: "debrief"`, `showPathInDebrief: true`.
+- **Label length is not a quality cue** (final review, item 1): across this module's multi-choice scenes, the single longest label (by word count) may be the `best` choice in **at most 40%** of them. Best labels are trimmed to their decision essence; acceptable and poor labels carry equally substantive phrasing, never filler. A tie for longest does not count as a cue. `tests/exemplar-content.test.ts` enforces this per starter.
 
 ## 4. Configuration summary
 
@@ -51,9 +52,9 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 >
 > By the end of it you will be able to evaluate a plea decision by the quality of the process behind it — investigation, disclosure, advice on collateral consequences, and the client's own informed consent — rather than by how the case happens to turn out. Two things are tracked: **Client trust** and **Case strength**. Watch what happens to them; they do not always move together, and one of them is not a measure of how well you are doing your job.
 >
-> *(Authoring note, starter only — delete this line in your own version: this is where a scene header image goes. Upload one in the editor and set its role and alt text; see docs/exemplars/alt-policy.md.)*
+> *(Starter note: add a scene header image in the editor — Image, role, and description on the first scene. Delete this line in your version.)*
 
-**Cast:** Miguel Santos (client, 24, warehouse picker, father of a nine-month-old, lawful permanent resident since age eleven); Teresa Santos (his aunt); Ruben Ortega (his cousin, owner of the car); ADA Karen Lindqvist (prosecutor); Judge Alma Ferreira; Dana Whitmore (office investigator). All fictional.
+**Cast:** Miguel Santos (client, 24, warehouse picker, father of a nine-month-old, lawful permanent resident since age eleven); Teresa Santos (his aunt); Ruben Ortega (his cousin, owner of the car); ADA Karen Trujillo (prosecutor); Judge Alma Ferreira; Dana Okafor (office investigator). All fictional.
 
 ## 5. Content
 
@@ -64,7 +65,7 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `explain_and_wait` | Meet Santos, walk him through the offer, the exposure and the clock, and tell him you are not asking for a decision today | `best` | `client_trust` +8 | `scene:the_file` |
+| `explain_and_wait` | Meet Santos, walk him through the offer, the exposure and the clock, and ask for no decision today | `best` | `client_trust` +8 | `scene:the_file` |
 | `summary_letter` | Send a clear written summary of the offer and the exposure, and schedule the meeting for next week | `acceptable` | `client_trust` +2 | `scene:the_file` |
 | `recommend_immediately` | Tell him to take it; probation with no jail on facts like these is a good outcome and he should not gamble | `poor` | `client_trust` -8 | `scene:the_file` |
 
@@ -72,7 +73,7 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 > The first meeting decides whether a client brings you facts or brings you what he thinks you want to hear. Separating here is the offer from here is your decision is what keeps the decision his.
 
 **Feedback — `summary_letter`:**
-> The written record is genuinely valuable, and a letter cannot hear a question. A client reading two to six years alone at a kitchen table tends to decide something before you ever discuss it.
+> The written record is genuinely valuable. What it cannot do is hear a question: a client reading two to six years alone at a kitchen table tends to decide something before you ever discuss it.
 
 **Feedback — `recommend_immediately`:**
 > The recommendation might even turn out to be right, and made before any investigation it is a guess in a suit. Whether to plead is one of the few decisions that belongs to the client alone, and it is only his if he had the information and the room to make it.
@@ -89,7 +90,7 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `investigate_and_compel` | Send Dana Whitmore after Ortega and the store, and file a motion to compel the unproduced recording | `best` | `case_strength` +20, `client_trust` +6 | `scene:the_kitchen_table` |
+| `investigate_and_compel` | Send Dana Okafor after Ortega and the store, and file a motion to compel the unproduced recording | `best` | `case_strength` +20, `client_trust` +6 | `scene:the_kitchen_table` |
 | `work_it_yourself` | Keep calling Ortega yourself and read the report closely; the office investigator is three weeks out | `acceptable` | `case_strength` +6, `client_trust` +2 | `scene:the_kitchen_table` |
 | `rely_on_the_report` | The report is detailed and the offer is generous; work from what the state has given you | `poor` | `case_strength` -10, `client_trust` -5 | `scene:the_kitchen_table` |
 
@@ -97,7 +98,7 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 > A plea evaluated against an uninvestigated case is not an evaluation; it is a coin flip with paperwork. The unproduced recording is the one item that could move this case in either direction, which is exactly why he needs it before he decides.
 
 **Feedback — `work_it_yourself`:**
-> Working the case yourself beats not working it, and it leaves the roadside identification and the missing recording untouched. Caseload is a real constraint and it is not an answer to the question of what you knew.
+> Working the case yourself beats not working it. It still leaves the roadside identification and the missing recording untouched. Caseload is a real constraint; it is not an answer to the question of what you knew.
 
 **Feedback — `rely_on_the_report`:**
 > The police report is one party's account of the case, written by the party that has to prove it. Advising on it alone means your client's decision rests entirely on evidence nobody has tested.
@@ -114,15 +115,15 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `advise_and_reserve` | Give him your honest read of the risk on both paths, tell him what you would want to know in his position, and be clear the choice is his | `best` | `client_trust` +8 | `scene:the_advisal` |
+| `advise_and_reserve` | Give him your honest read of the risk on both paths, and be clear the choice is his | `best` | `client_trust` +8 | `scene:the_advisal` |
 | `decline_to_advise` | Tell him you cannot make this decision for him, and lay out the two paths without a recommendation | `acceptable` | `client_trust` -2 | `scene:the_advisal` |
-| `predict_acquittal` | Tell him you like the case; the identification is weak and no jury convicts on this | `poor` | `client_trust` +6 | `scene:the_advisal` |
+| `predict_acquittal` | Tell him you like the case; the identification is weak, the fingerprint is partial, and no jury convicts on this | `poor` | `client_trust` +6 | `scene:the_advisal` |
 
 **Feedback — `advise_and_reserve`:**
 > Clients are entitled to your judgment and not obliged to adopt it. Saying both of those things in the same conversation is the whole skill.
 
 **Feedback — `decline_to_advise`:**
-> Neutrality feels respectful, and it can leave a client alone with a decision he asked for help with. Withholding your professional judgment is not the same as protecting his autonomy.
+> Neutrality feels respectful. In practice it can leave a client alone with a decision he asked for help with, and withholding your professional judgment is not the same as protecting his autonomy.
 
 **Feedback — `predict_acquittal`:**
 > Notice that his trust in you went up. Confidence is contagious and unfalsifiable until the verdict, and a prediction offered as a probability educates a client where the same prediction offered as a promise replaces his decision with your optimism.
@@ -139,7 +140,7 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `consult_before_advising` | Stop the plea discussion, send the consult, and tell Santos plainly that you will not advise him further on this offer until you know the immigration consequence | `best` | `client_trust` +8, `case_strength` +5 | `scene:the_recording` |
+| `consult_before_advising` | Stop the plea discussion, send the consult, and tell Santos you cannot advise him until the answer comes back | `best` | `client_trust` +8, `case_strength` +5 | `scene:the_recording` |
 | `general_warning` | Tell him a plea could affect his status and that he should speak with an immigration attorney, then carry on | `acceptable` | none | `scene:the_recording` |
 | `not_my_area` | Immigration is a different practice area; focus on the criminal exposure, which is what the office was appointed for | `poor` | `client_trust` -12 | `scene:the_decision` |
 
@@ -160,12 +161,12 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 ### Scene `the_recording` — "Forty hours left"
 
 **Body:**
-> The recording surfaces Thursday afternoon, produced on your motion or handed over late in a supplemental disclosure. It shows two figures crossing the road at 11:38 at night; neither is identifiable, one is noticeably taller than Santos, and the timestamp is four minutes off the eyewitness's account. It is not exoneration and it is not nothing. ADA Lindqvist, hearing that you have it, says the eighteen-month offer stands until Monday and will not improve.
+> The recording surfaces Thursday afternoon, produced on your motion or handed over late in a supplemental disclosure. It shows two figures crossing the road at 11:38 at night; neither is identifiable, one is noticeably taller than Santos, and the timestamp is four minutes off the eyewitness's account. It is not exoneration and it is not nothing. ADA Trujillo, hearing that you have it, says the eighteen-month offer stands until Monday and will not improve.
 
 | Choice `id` | Label | Quality | `showIf` | Effects | Goes to |
 | --- | --- | --- | --- | --- | --- |
-| `show_client_reassess` | Sit down with Santos, show him the recording, and re-explain both paths in light of what it does and does not prove | `best` | none | `client_trust` +8, `case_strength` +8 | `scene:the_decision` |
-| `push_for_better_offer` | Take the recording and the identification problems to Lindqvist and ask for a disposition without the receiving count | `best` | `case_strength` `gte` **60** | `case_strength` +10, `client_trust` +6 | `scene:the_decision` |
+| `show_client_reassess` | Sit down with Santos, show him the recording, and re-explain both paths in light of it | `best` | none | `client_trust` +8, `case_strength` +8 | `scene:the_decision` |
+| `push_for_better_offer` | Take the recording and the identification problems to Trujillo and ask for a disposition without the receiving count | `best` | `case_strength` `gte` **60** | `case_strength` +10, `client_trust` +6 | `scene:the_decision` |
 | `keep_it_simple` | The offer is still good and the recording muddies it; do not complicate his decision forty hours out | `poor` | none | `client_trust` -10, `case_strength` -5 | `scene:the_decision` |
 
 **Feedback — `show_client_reassess`:**
@@ -189,9 +190,9 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 
 | Choice `id` | Label | Quality | Effects | Goes to |
 | --- | --- | --- | --- | --- |
-| `confirm_and_document` | Walk through the offer, the exposure and the collateral consequences one last time, confirm in his own words what he understands, put the advice and his decision in a memo to the file, and then do what he decides | `best` | `client_trust` +6 | `ending:informed_choice` |
+| `confirm_and_document` | Walk him through the offer, the exposure and the collateral consequences once more, confirm what he understands, memo the file, and do what he decides | `best` | `client_trust` +6 | `ending:informed_choice` |
 | `support_whatever` | He has the information; tell him you support whatever he decides, and go to court | `acceptable` | `client_trust` +4 | `ending:outcome_luck` |
-| `decide_for_him` | Tell him the answer is obvious by now, and that you have already told Lindqvist he is taking it | `poor` | `client_trust` -20 | `ending:plea_unravels` |
+| `decide_for_him` | Tell him the answer is obvious by now, and that you have already told Trujillo he is taking it | `poor` | `client_trust` -20 | `ending:plea_unravels` |
 
 **Feedback — `confirm_and_document`:**
 > The colloquy in court tests whether a plea was voluntary; your file memo is the only record of whether it was informed. When somebody asks in two years, that memo is the only witness you have.
@@ -219,7 +220,7 @@ Criminal justice is one of the highest-enrollment online disciplines, and the ov
 ### Ending `outcome_luck` — "It worked out"
 
 **Body (three paragraphs):**
-> The eyewitness moves out of state in the spring. Lindqvist cannot make the burglary count without her, the charge is reduced, and Santos ends up with an outcome better than the offer he was weighing. He shakes your hand in the hallway and means it.
+> The eyewitness moves out of state in the spring. Trujillo cannot make the burglary count without her, the charge is reduced, and Santos ends up with an outcome better than the offer he was weighing. He shakes your hand in the hallway and means it.
 >
 > Now change one fact. If the witness had stayed, exactly the same choices you made would have produced a client who pleaded to an offense whose consequences nobody had researched, on evidence nobody had tested, with no record of what he understood. The choices did not become good because the witness moved.
 >
@@ -278,7 +279,7 @@ Citations are for the reviewer and the SME. They are not quoted in learner-visib
 
 ### Committed starter
 
-Image-less. No scene carries `imageAssetId`, `imageRole`, or `imageAlt`. The start scene's intro carries the one-line authoring note in §4 marking where a header image goes.
+Image-less. No scene carries `imageAssetId`, `imageRole`, or `imageAlt`. The start scene's intro carries the one-line starter note in §4 marking where a header image goes.
 
 ### Canvas-review zip (image-bearing copy)
 

@@ -120,7 +120,7 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
     it("matches the exact expected sequence a screen-reader user tabbing through the start scene hears", () => {
       const root = mountJury();
       expect(focusOrderTranscript(root)).toEqual([
-        { role: "button", name: "Raise your doubts about the timeline before anyone votes" },
+        { role: "button", name: "Raise your doubts before the room votes" },
         { role: "button", name: "Vote with the majority to keep things moving" },
         { role: "button", name: "Ask to re-examine the evidence list first" },
       ]);
@@ -134,7 +134,7 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
         { role: "text", name: "You are a juror in a criminal trial." },
         { role: "heading level 2", name: "The First Vote" },
         { role: "status", name: "Jury trust: 50", live: "polite" },
-        { role: "button", name: "Raise your doubts about the timeline before anyone votes" },
+        { role: "button", name: "Raise your doubts before the room votes" },
         { role: "button", name: "Vote with the majority to keep things moving" },
         { role: "button", name: "Ask to re-examine the evidence list first" },
       ]);
@@ -144,12 +144,12 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
   describe("3. post-choice transcript and focus", () => {
     it("moves to the new scene's heading, buttons, and updated variable status, with focus on the new h2", () => {
       const root = mountJury();
-      clickChoice(root, "Raise your doubts about the timeline before anyone votes");
+      clickChoice(root, "Raise your doubts before the room votes");
 
       expect(readingOrderTranscript(root)).toEqual([
         { role: "heading level 2", name: "The Timeline" },
         { role: "status", name: "Jury trust: 60", live: "polite" },
-        { role: "button", name: "Walk the group through the conflict step by step" },
+        { role: "button", name: "Walk the group through the conflict" },
         { role: "button", name: "Call it a clerical error and move on" },
       ]);
 
@@ -170,14 +170,14 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
 
     it("still exposes exactly one polite, atomic live region after a choice, with the updated value", () => {
       const root = mountJury();
-      clickChoice(root, "Raise your doubts about the timeline before anyone votes");
+      clickChoice(root, "Raise your doubts before the room votes");
       expect(liveRegionsOf(root)).toEqual([{ politeness: "polite", atomic: true, text: "Jury trust: 60" }]);
     });
 
     it("still exposes exactly one polite, atomic live region at the ending", () => {
       const root = mountJury();
-      clickChoice(root, "Raise your doubts about the timeline before anyone votes"); // -> timeline, trust 60
-      clickChoice(root, "Walk the group through the conflict step by step"); // -> holdout, trust 75
+      clickChoice(root, "Raise your doubts before the room votes"); // -> timeline, trust 60
+      clickChoice(root, "Walk the group through the conflict"); // -> holdout, trust 75
       clickChoice(root, "Ask them to explain what evidence would change their mind"); // -> ending, trust 85
       expect(liveRegionsOf(root)).toEqual([{ politeness: "polite", atomic: true, text: "Jury trust: 85" }]);
     });
@@ -197,8 +197,8 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
       const root = mountJury();
       // Play the best path all the way to an ending: first_vote -> speak_up
       // -> timeline -> walk_through -> holdout -> invite_reasons -> ending.
-      clickChoice(root, "Raise your doubts about the timeline before anyone votes");
-      clickChoice(root, "Walk the group through the conflict step by step");
+      clickChoice(root, "Raise your doubts before the room votes");
+      clickChoice(root, "Walk the group through the conflict");
       clickChoice(root, "Ask them to explain what evidence would change their mind");
 
       const entries = readingOrderTranscript(root);
@@ -215,10 +215,10 @@ describe("screen-reader announcement contract (jury starter, branching scenario)
         {
           role: "text",
           name:
-            "The First Vote: Raise your doubts about the timeline before anyone votes ( Best choice) " +
+            "The First Vote: Raise your doubts before the room votes ( Best choice) " +
             "Other options: Vote with the majority to keep things moving, Ask to re-examine the evidence list first. " +
             "Speaking up before the vote keeps the deliberation grounded in the evidence instead of the room's momentum. " +
-            "The Timeline: Walk the group through the conflict step by step ( Best choice) " +
+            "The Timeline: Walk the group through the conflict ( Best choice) " +
             "Other options: Call it a clerical error and move on. " +
             "Walking the room through the conflict turns a vague unease into a concrete point the jury can actually weigh. " +
             "The Holdout: Ask them to explain what evidence would change their mind ( Best choice) " +

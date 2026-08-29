@@ -68,11 +68,15 @@ export const STARTERS: Record<string, { label: string; description: string; grou
     // Transcribed verbatim from parseSandboxCompanionDoc(docs/exemplars/dose-response.companion.txt).config
     // (Task 7 of the exemplar library plan) — the committed companion doc is
     // the source of truth; tests/exemplar-content.test.ts asserts this config
-    // stays structurally equal to that doc's parse result.
+    // stays structurally equal to that doc's parse result. The ONE deliberate
+    // divergence is `title`: this module's placeholder-title invariant (see the
+    // file header) wins, so the title stays "" here while the committed doc
+    // carries the real, faculty-facing TITLE. The parity test normalizes title
+    // away and asserts the doc's TITLE equals this starter's `label` instead.
     config: sandboxConfigSchema.parse({
-      title: "Dose-Response Explorer",
+      title: "",
       intro:
-        "<p>This is an educational model, not clinical guidance: it uses simplified one compartment pharmacokinetics to show how dose and dosing interval shape peak and trough concentrations, and it must never be used to select, adjust, or check a dose for a real patient. By the end of this activity you will be able to predict how a change in dose, dosing interval, or patient weight moves the peak and trough concentrations of a drug at steady state, and explain why accumulation is set by the interval and the half life rather than by the size of the dose.</p>",
+        "<p>This is an educational model, not clinical guidance: it uses simplified one compartment pharmacokinetics to show how dose and dosing interval shape peak and trough concentrations, and it must never be used to select, adjust, or check a dose for a real patient. The agent, its half life, and every threshold in the challenges below are invented for teaching; no real drug behaves exactly this way. Two of those thresholds are easy to confuse, so keep them apart: a trough floor of 2 mg per litre, below which this model treats the drug as too dilute to act, and a peak target band of 12 to 20 mg per litre, above which it treats the drug as toxic. By the end of this activity you will be able to predict how a change in dose, dosing interval, or patient weight moves the peak and trough concentrations of a drug at steady state, and explain why accumulation is set by the interval and the half life rather than by the size of the dose.</p>",
       inputs: [
         { id: "dose", label: "Dose", type: "slider", min: 100, max: 1500, step: 25, defaultValue: 500, units: "mg" },
         { id: "dosing_interval", label: "Dosing interval", type: "slider", min: 4, max: 24, step: 1, defaultValue: 8, units: "hours" },
@@ -92,9 +96,9 @@ export const STARTERS: Record<string, { label: string; description: string; grou
         { id: "peak_concentration_vs_dose", title: "Peak concentration across doses", xInputId: "dose", yOutputId: "peak_concentration", samples: 40 },
       ],
       challenges: [
-        { id: "keep_the_trough_at_or_above_2_mg", prompt: "Keep the trough at or above 2 mg per litre so the drug stays in its therapeutic range across the whole interval.", outputId: "trough_concentration", comparator: "gte", value: 2 },
+        { id: "keep_the_trough_at_or_above_2_mg", prompt: "Keep the trough at or above 2 mg per litre, the floor below which this model treats the drug as too dilute to act.", outputId: "trough_concentration", comparator: "gte", value: 2 },
         { id: "keep_the_peak_at_or_below_20_mg", prompt: "Keep the peak at or below 20 mg per litre, the toxicity ceiling in this model.", outputId: "peak_concentration", comparator: "lte", value: 20 },
-        { id: "land_the_peak_inside_the_therape", prompt: "Land the peak inside the therapeutic window of 12 to 20 mg per litre.", outputId: "peak_concentration", comparator: "between", min: 12, max: 20 },
+        { id: "land_the_peak_inside_the_target", prompt: "Land the peak inside the target band, 12 to 20 mg per litre in this model.", outputId: "peak_concentration", comparator: "between", min: 12, max: 20 },
         { id: "accumulation_is_set_by_the_inter", prompt: "Accumulation is set by the interval and the half life, not by the size of the dose. Find an interval that keeps the accumulation factor in a moderate range.", outputId: "accumulation_factor", comparator: "between", min: 1.5, max: 3 },
       ],
     }),
@@ -106,9 +110,10 @@ export const STARTERS: Record<string, { label: string; description: string; grou
     // Transcribed verbatim from parseSandboxCompanionDoc(docs/exemplars/break-even-studio.companion.txt).config
     // (Task 7 of the exemplar library plan) — the committed companion doc is
     // the source of truth; tests/exemplar-content.test.ts asserts this config
-    // stays structurally equal to that doc's parse result.
+    // stays structurally equal to that doc's parse result, with `title`
+    // normalized away (see the dose-response note above).
     config: sandboxConfigSchema.parse({
-      title: "Break-Even Studio",
+      title: "",
       intro:
         "<p>A small community ceramics studio sells seats in monthly workshops. Every seat costs something in clay, glaze and firing; the rent, the kiln lease and the insurance cost the same whether one person books or three hundred do. By the end of this activity you will be able to find a price, cost and volume combination that makes the studio viable, and explain why raising the price and raising the volume are not interchangeable ways of getting there. Move the sliders until all four challenges are met at the same time.</p>",
       inputs: [

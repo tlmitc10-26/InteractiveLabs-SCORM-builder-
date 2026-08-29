@@ -1,6 +1,6 @@
-TITLE: 
+TITLE: The Budget Cut
 ROLE: You are the superintendent of Sierra Vista Unified, a public school district of about 6,200 students, in your second year in the job.
-INTRO: Sierra Vista Unified has 6,200 students, four months left in its fiscal year, and $1.9 million less than it had yesterday. You are the superintendent. By the end of this scenario you will be able to choose where a mid-year reduction lands and defend that choice on the record: naming the impact before the recommendation, disclosing what the plan costs in future years, and answering the people it hurts in the room where the decision is made.One thing is tracked as you go: Board confidence — how much credibility you carry into the next decision. There is no option here that harms nobody. Choose the one you could explain in public.
+INTRO: Sierra Vista Unified has 6,200 students, four months left in its fiscal year, and $1.9 million less than it had yesterday. You are the superintendent. By the end of this scenario you will be able to choose where a mid-year reduction lands and defend that choice on the record: naming the impact before the recommendation, and then answering for the decision wherever it lands you — in a board packet that has to disclose what the plan costs in future years, or in a room full of the people it hurts.One thing is tracked as you go: Board confidence — how much credibility you carry into the next decision. There is no option here that harms nobody. Choose the one you could explain in public.
 TRACK: Board confidence (0 to 100, start at 50, visible)
 FEEDBACK: debrief
 
@@ -25,7 +25,7 @@ Cho's written analysis comes back in four days and it is honest about the trade-
   Feedback: A single clean line is the easiest cut to execute and the hardest to defend, because it concentrates the entire reduction on the students with the fewest alternatives. If it is genuinely the right call, it has to be argued in public before it is made rather than after.
 
 SCENE: The board packet
-Simone Alvarez has the draft board packet open and one question: how much of this goes in it. Your plan has a tail — deferred replacements or posts left unfilled — that lands in next year's budget at roughly $2.3 million, and nobody has budgeted for it. Board member Roy Vance has asked twice for the clean version, not the encyclopedia. The packet posts publicly at five o'clock tomorrow.
+Simone Alvarez has the draft board packet open and one question: how much of this goes in it. Your plan has a tail, and which tail depends on what you chose. Deferring the technology refresh pushes roughly $2.3 million of replacement cost into a future year that nobody has provided for. Holding vacancies pushes nothing forward and saves nothing twice: the posts are budgeted again in July, so the $1.9 million has to be found somewhere else next year. Board member Roy Vance has asked twice for the clean version, not the encyclopedia. The packet posts publicly at five o'clock tomorrow.
 
 - Publish the full schedule, with the year each deferred cost comes due (BEST, Board confidence +12) -> Credibility intact
   Feedback: Publishing what the plan costs later is what separates a plan from an accounting maneuver. Boards forgive bad news they hear early; what they rarely forgive is the second version of a number.

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { BRANCHING_STARTERS, branchingStarterConfig } from "@/lib/engines/branching-scenario/starters";
 import { validateBranchingConfig, type BranchingConfig } from "@/lib/engines/branching-scenario/schema";
-import { parseCompanionDoc, type ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
+import { parseCompanionDoc, serializeCompanionDoc, type ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
 import { adapterFor } from "@/lib/engines/dispatch";
 import { assemblePackage, zipPackage } from "@/lib/export/package";
 import { parseSandboxCompanionDoc } from "@/lib/engines/param-sandbox/companion-doc";
@@ -36,6 +36,110 @@ function countShowIf(config: BranchingConfig): number {
   let n = 0;
   for (const s of config.scenes) for (const c of s.choices) if (c.showIf) n++;
   return n;
+}
+
+/**
+ * The committed-companion-doc contract, shared by all four branching
+ * exemplars (previously copy-pasted once for the Sierra Vista arc and again
+ * for Plea Bargain). Two halves:
+ *
+ *  - `describeCommittedDocParity` — the doc parses cleanly, validates, and
+ *    round-trips back to a config structurally identical to the starter
+ *    (compared BY TITLE/LABEL, never by id: the companion-doc format names
+ *    things by title, so ids are deliberately not preserved).
+ *  - the byte-equality assertion inside it — the committed doc is EXACTLY
+ *    `serializeCompanionDoc({ ...starter.config, title: starter.label })`.
+ *    Structural parity alone let the two drift in every dimension the
+ *    comparison does not visit (scene/ending bodies, feedback text, the
+ *    intro); byte-equality closes that gap and makes "regenerate the doc
+ *    from the starter" the only way to change one.
+ */
+function describeCommittedDocParity(starterId: string, slug: string): void {
+  describe(`docs/exemplars/${slug}.companion.txt`, () => {
+    const docPath = join(process.cwd(), "docs", "exemplars", `${slug}.companion.txt`);
+    const docText = readFileSync(docPath, "utf8");
+    const { config: original, label } = BRANCHING_STARTERS[starterId];
+
+    it("parses with zero error-severity issues", () => {
+      const { report } = parseCompanionDoc(docText);
+      expect(errors(report), JSON.stringify(errors(report))).toHaveLength(0);
+    });
+
+    it("parses to a config that validates via validateBranchingConfig", () => {
+      const { config } = parseCompanionDoc(docText);
+      const r = validateBranchingConfig(config);
+      expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+    });
+
+    it("is byte-for-byte serializeCompanionDoc({ ...starter.config, title: starter.label })", () => {
+      const expected = serializeCompanionDoc({ ...original, title: label });
+      expect(
+        docText,
+        `docs/exemplars/${slug}.companion.txt is stale — regenerate it from the starter with serializeCompanionDoc({ ...BRANCHING_STARTERS["${starterId}"].config, title: BRANCHING_STARTERS["${starterId}"].label })`,
+      ).toBe(expected);
+    });
+
+    it("carries the real, faculty-facing title (not the starter's placeholder \"\")", () => {
+      const { config } = parseCompanionDoc(docText);
+      expect((config as { title: string }).title).toBe(label);
+    });
+
+    it("is structurally equal to the starter by title/label/quality/effects/goTo-by-title/showIf", () => {
+      const { config } = parseCompanionDoc(docText);
+      const validated = validateBranchingConfig(config);
+      expect(validated.ok, !validated.ok ? validated.errors.join("; ") : "").toBe(true);
+      const reparsed = (validated as { ok: true; config: BranchingConfig }).config;
+
+      expect(reparsed.role).toBe(original.role);
+      expect(reparsed.feedbackMode).toBe(original.feedbackMode);
+
+      expect(
+        reparsed.variables.map((v) => ({ label: v.label, min: v.min, max: v.max, initial: v.initial, visible: v.visible })),
+      ).toEqual(original.variables.map((v) => ({ label: v.label, min: v.min, max: v.max, initial: v.initial, visible: v.visible })));
+
+      const origStart = original.scenes.find((s) => s.id === original.startSceneId);
+      const newStart = reparsed.scenes.find((s) => s.id === reparsed.startSceneId);
+      expect(newStart?.title).toBe(origStart?.title);
+
+      const titleOf = (cfg: BranchingConfig, goTo: string): string | undefined => {
+        const [kind, id] = goTo.split(":");
+        return kind === "scene" ? cfg.scenes.find((s) => s.id === id)?.title : cfg.endings.find((e) => e.id === id)?.title;
+      };
+      const varLabel = (cfg: BranchingConfig, variableId: string): string | undefined =>
+        cfg.variables.find((v) => v.id === variableId)?.label;
+
+      expect(reparsed.scenes).toHaveLength(original.scenes.length);
+      original.scenes.forEach((origScene, i) => {
+        const newScene = reparsed.scenes[i];
+        expect(newScene.title).toBe(origScene.title);
+        expect(newScene.choices).toHaveLength(origScene.choices.length);
+        origScene.choices.forEach((origChoice, j) => {
+          const newChoice = newScene.choices[j];
+          expect(newChoice.label).toBe(origChoice.label);
+          expect(newChoice.quality).toBe(origChoice.quality);
+          expect(
+            newChoice.effects.map((e) => ({ label: varLabel(reparsed, e.variableId), delta: e.delta })),
+          ).toEqual(origChoice.effects.map((e) => ({ label: varLabel(original, e.variableId), delta: e.delta })));
+          expect(titleOf(reparsed, newChoice.goTo)).toBe(titleOf(original, origChoice.goTo));
+          if (origChoice.showIf) {
+            expect(newChoice.showIf?.comparator).toBe(origChoice.showIf.comparator);
+            expect(newChoice.showIf?.value).toBe(origChoice.showIf.value);
+            expect(newChoice.showIf?.min).toBe(origChoice.showIf.min);
+            expect(newChoice.showIf?.max).toBe(origChoice.showIf.max);
+            const label = varLabel(reparsed, newChoice.showIf!.variableId);
+            expect(label).toBe(varLabel(original, origChoice.showIf.variableId));
+          } else {
+            expect(newChoice.showIf).toBeUndefined();
+          }
+        });
+      });
+
+      expect(reparsed.endings).toHaveLength(original.endings.length);
+      for (const origEnding of original.endings) {
+        expect(reparsed.endings.some((e) => e.title === origEnding.title)).toBe(true);
+      }
+    });
+  });
 }
 
 describe("Sierra Vista arc — escalation contract", () => {
@@ -73,9 +177,11 @@ describe("Sierra Vista arc — escalation contract", () => {
     expect(countShowIf(config)).toBe(0);
   });
 
-  it('module 2 ("community-meeting") has exactly 1 showIf choice', () => {
+  it('module 2 ("community-meeting") has exactly 1 showIf choice, gated on community_trust gte 60 (the working-group gate)', () => {
     const { config } = BRANCHING_STARTERS["community-meeting"];
     expect(countShowIf(config)).toBe(1);
+    const gated = config.scenes.flatMap((s) => s.choices).find((c) => c.showIf);
+    expect(gated?.showIf).toEqual({ variableId: "community_trust", comparator: "gte", value: 60 });
   });
 
   it('module 3 ("crisis") has at least 3 showIf choices', () => {
@@ -99,78 +205,39 @@ describe("Sierra Vista arc — escalation contract", () => {
 });
 
 describe("Sierra Vista arc — committed companion docs (parity + doc-format quality)", () => {
-  for (const mod of ARC) {
-    describe(`docs/exemplars/${mod.slug}.companion.txt`, () => {
-      const docPath = join(process.cwd(), "docs", "exemplars", `${mod.slug}.companion.txt`);
-      const docText = readFileSync(docPath, "utf8");
-      const { config: original } = BRANCHING_STARTERS[mod.id];
+  for (const mod of ARC) describeCommittedDocParity(mod.id, mod.slug);
+});
 
-      it("parses with zero error-severity issues", () => {
-        const { report } = parseCompanionDoc(docText);
-        expect(errors(report), JSON.stringify(errors(report))).toHaveLength(0);
-      });
+/**
+ * The length cue (final review, item 1). Faculty-authored branching scenarios
+ * drift toward a tell where the best choice is simply the longest one, which
+ * lets a learner score well by counting words instead of reasoning. This gate
+ * caps how often that pattern may hold PER STARTER: in at most 40% of a
+ * starter's multi-choice scenes may the single longest label (by word count)
+ * also be the `best` choice. A tie for longest does not count — the cue only
+ * exists when one label is unambiguously longest.
+ */
+describe("branching starters — label length is not a quality cue", () => {
+  const MAX_LONGEST_IS_BEST_RATIO = 0.4;
+  const wordCount = (label: string): number => label.trim().split(/\s+/).length;
 
-      it("parses to a config that validates via validateBranchingConfig", () => {
-        const { config } = parseCompanionDoc(docText);
-        const r = validateBranchingConfig(config);
-        expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
-      });
+  for (const [starterId, starter] of Object.entries(BRANCHING_STARTERS)) {
+    it(`starter "${starterId}": the longest label is uniquely the best choice in at most 40% of its multi-choice scenes`, () => {
+      const multiChoiceScenes = starter.config.scenes.filter((s) => s.choices.length > 1);
+      expect(multiChoiceScenes.length, `starter "${starterId}" has no multi-choice scenes`).toBeGreaterThan(0);
 
-      it("is structurally equal to the starter by title/label/quality/effects/goTo-by-title/showIf", () => {
-        const { config } = parseCompanionDoc(docText);
-        const validated = validateBranchingConfig(config);
-        expect(validated.ok, !validated.ok ? validated.errors.join("; ") : "").toBe(true);
-        const reparsed = (validated as { ok: true; config: BranchingConfig }).config;
+      const offenders: string[] = [];
+      for (const scene of multiChoiceScenes) {
+        const counts = scene.choices.map((c) => wordCount(c.label));
+        const longest = Math.max(...counts);
+        const atLongest = counts.reduce<number[]>((acc, n, i) => (n === longest ? [...acc, i] : acc), []);
+        if (atLongest.length === 1 && scene.choices[atLongest[0]].quality === "best") offenders.push(scene.id);
+      }
 
-        expect(reparsed.role).toBe(original.role);
-        expect(reparsed.feedbackMode).toBe(original.feedbackMode);
-
-        expect(
-          reparsed.variables.map((v) => ({ label: v.label, min: v.min, max: v.max, initial: v.initial, visible: v.visible })),
-        ).toEqual(original.variables.map((v) => ({ label: v.label, min: v.min, max: v.max, initial: v.initial, visible: v.visible })));
-
-        const origStart = original.scenes.find((s) => s.id === original.startSceneId);
-        const newStart = reparsed.scenes.find((s) => s.id === reparsed.startSceneId);
-        expect(newStart?.title).toBe(origStart?.title);
-
-        const titleOf = (cfg: BranchingConfig, goTo: string): string | undefined => {
-          const [kind, id] = goTo.split(":");
-          return kind === "scene" ? cfg.scenes.find((s) => s.id === id)?.title : cfg.endings.find((e) => e.id === id)?.title;
-        };
-        const varLabel = (cfg: BranchingConfig, variableId: string): string | undefined =>
-          cfg.variables.find((v) => v.id === variableId)?.label;
-
-        expect(reparsed.scenes).toHaveLength(original.scenes.length);
-        original.scenes.forEach((origScene, i) => {
-          const newScene = reparsed.scenes[i];
-          expect(newScene.title).toBe(origScene.title);
-          expect(newScene.choices).toHaveLength(origScene.choices.length);
-          origScene.choices.forEach((origChoice, j) => {
-            const newChoice = newScene.choices[j];
-            expect(newChoice.label).toBe(origChoice.label);
-            expect(newChoice.quality).toBe(origChoice.quality);
-            expect(
-              newChoice.effects.map((e) => ({ label: varLabel(reparsed, e.variableId), delta: e.delta })),
-            ).toEqual(origChoice.effects.map((e) => ({ label: varLabel(original, e.variableId), delta: e.delta })));
-            expect(titleOf(reparsed, newChoice.goTo)).toBe(titleOf(original, origChoice.goTo));
-            if (origChoice.showIf) {
-              expect(newChoice.showIf?.comparator).toBe(origChoice.showIf.comparator);
-              expect(newChoice.showIf?.value).toBe(origChoice.showIf.value);
-              expect(newChoice.showIf?.min).toBe(origChoice.showIf.min);
-              expect(newChoice.showIf?.max).toBe(origChoice.showIf.max);
-              const label = varLabel(reparsed, newChoice.showIf!.variableId);
-              expect(label).toBe(varLabel(original, origChoice.showIf.variableId));
-            } else {
-              expect(newChoice.showIf).toBeUndefined();
-            }
-          });
-        });
-
-        expect(reparsed.endings).toHaveLength(original.endings.length);
-        for (const origEnding of original.endings) {
-          expect(reparsed.endings.some((e) => e.title === origEnding.title)).toBe(true);
-        }
-      });
+      expect(
+        offenders.length / multiChoiceScenes.length,
+        `scenes where the longest label is uniquely the best choice: ${offenders.join(", ") || "none"} (${offenders.length} of ${multiChoiceScenes.length})`,
+      ).toBeLessThanOrEqual(MAX_LONGEST_IS_BEST_RATIO);
     });
   }
 });
@@ -245,8 +312,13 @@ describe("Plea Bargain — starter content quality", () => {
 
   it("carries the authoring note about the header image in the intro", () => {
     expect(config.intro).toBeTruthy();
-    expect(config.intro).toContain("this is where a scene header image goes");
-    expect(config.intro).toContain("docs/exemplars/alt-policy.md");
+    // Faculty-facing wording (final review, item 9a): names the editor
+    // controls by their on-screen labels rather than pointing at a repo path
+    // a faculty author has no way to open.
+    expect(config.intro).toContain("add a scene header image in the editor");
+    expect(config.intro).toContain("Image, role, and description on the first scene");
+    expect(config.intro).toContain("Delete this line in your version");
+    expect(config.intro).not.toContain("docs/exemplars/");
   });
 
   it("carries the learner-visible learning objective in the intro", () => {
@@ -255,76 +327,7 @@ describe("Plea Bargain — starter content quality", () => {
 });
 
 describe("Plea Bargain — committed companion doc (parity + doc-format quality)", () => {
-  const docPath = join(process.cwd(), "docs", "exemplars", "plea-bargain.companion.txt");
-  const docText = readFileSync(docPath, "utf8");
-  const { config: original } = BRANCHING_STARTERS["plea-bargain"];
-
-  it("parses with zero error-severity issues", () => {
-    const { report } = parseCompanionDoc(docText);
-    expect(errors(report), JSON.stringify(errors(report))).toHaveLength(0);
-  });
-
-  it("parses to a config that validates via validateBranchingConfig", () => {
-    const { config } = parseCompanionDoc(docText);
-    const r = validateBranchingConfig(config);
-    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
-  });
-
-  it("is structurally equal to the starter by title/label/quality/effects/goTo-by-title/showIf", () => {
-    const { config } = parseCompanionDoc(docText);
-    const validated = validateBranchingConfig(config);
-    expect(validated.ok, !validated.ok ? validated.errors.join("; ") : "").toBe(true);
-    const reparsed = (validated as { ok: true; config: BranchingConfig }).config;
-
-    expect(reparsed.role).toBe(original.role);
-    expect(reparsed.feedbackMode).toBe(original.feedbackMode);
-
-    expect(
-      reparsed.variables.map((v) => ({ label: v.label, min: v.min, max: v.max, initial: v.initial, visible: v.visible })),
-    ).toEqual(original.variables.map((v) => ({ label: v.label, min: v.min, max: v.max, initial: v.initial, visible: v.visible })));
-
-    const origStart = original.scenes.find((s) => s.id === original.startSceneId);
-    const newStart = reparsed.scenes.find((s) => s.id === reparsed.startSceneId);
-    expect(newStart?.title).toBe(origStart?.title);
-
-    const titleOf = (cfg: BranchingConfig, goTo: string): string | undefined => {
-      const [kind, id] = goTo.split(":");
-      return kind === "scene" ? cfg.scenes.find((s) => s.id === id)?.title : cfg.endings.find((e) => e.id === id)?.title;
-    };
-    const varLabel = (cfg: BranchingConfig, variableId: string): string | undefined =>
-      cfg.variables.find((v) => v.id === variableId)?.label;
-
-    expect(reparsed.scenes).toHaveLength(original.scenes.length);
-    original.scenes.forEach((origScene, i) => {
-      const newScene = reparsed.scenes[i];
-      expect(newScene.title).toBe(origScene.title);
-      expect(newScene.choices).toHaveLength(origScene.choices.length);
-      origScene.choices.forEach((origChoice, j) => {
-        const newChoice = newScene.choices[j];
-        expect(newChoice.label).toBe(origChoice.label);
-        expect(newChoice.quality).toBe(origChoice.quality);
-        expect(
-          newChoice.effects.map((e) => ({ label: varLabel(reparsed, e.variableId), delta: e.delta })),
-        ).toEqual(origChoice.effects.map((e) => ({ label: varLabel(original, e.variableId), delta: e.delta })));
-        expect(titleOf(reparsed, newChoice.goTo)).toBe(titleOf(original, origChoice.goTo));
-        if (origChoice.showIf) {
-          expect(newChoice.showIf?.comparator).toBe(origChoice.showIf.comparator);
-          expect(newChoice.showIf?.value).toBe(origChoice.showIf.value);
-          expect(newChoice.showIf?.min).toBe(origChoice.showIf.min);
-          expect(newChoice.showIf?.max).toBe(origChoice.showIf.max);
-          const label = varLabel(reparsed, newChoice.showIf!.variableId);
-          expect(label).toBe(varLabel(original, origChoice.showIf.variableId));
-        } else {
-          expect(newChoice.showIf).toBeUndefined();
-        }
-      });
-    });
-
-    expect(reparsed.endings).toHaveLength(original.endings.length);
-    for (const origEnding of original.endings) {
-      expect(reparsed.endings.some((e) => e.title === origEnding.title)).toBe(true);
-    }
-  });
+  describeCommittedDocParity("plea-bargain", "plea-bargain");
 });
 
 describe("Plea Bargain — export package budget", () => {
@@ -409,6 +412,22 @@ function challengeSatisfied(challenge: SandboxConfig["challenges"][number], valu
   return value >= challenge.min! && value <= challenge.max!;
 }
 
+/**
+ * Sandbox parity comparison (final review, item 9c). The committed doc is the
+ * source of truth for everything EXCEPT `title`: starter-configs.ts has a
+ * documented invariant that a starter's `config.title` is the placeholder ""
+ * (the real title always comes from the "New interactive" form), while the
+ * committed doc carries the real, faculty-facing TITLE so a designer who
+ * opens the .txt sees a named activity. So the deep-equal normalizes `title`
+ * to the starter's, and the doc's actual TITLE is asserted separately against
+ * the starter's `label`.
+ */
+function expectSandboxDocParity(parsed: SandboxConfig, starterConfig: SandboxConfig, label: string): void {
+  expect(parsed.title, "the committed doc should carry the real, faculty-facing TITLE").toBe(label);
+  expect(starterConfig.title, 'starter configs keep the placeholder title ""').toBe("");
+  expect({ ...parsed, title: starterConfig.title }).toEqual(starterConfig);
+}
+
 function assertWithinInputRanges(config: SandboxConfig, inputValues: Record<string, number>): void {
   for (const inp of config.inputs) {
     const v = inputValues[inp.id];
@@ -421,7 +440,7 @@ function assertWithinInputRanges(config: SandboxConfig, inputValues: Record<stri
 describe("Dose-Response Explorer — companion doc is the source of truth (stress test)", () => {
   const docPath = join(process.cwd(), "docs", "exemplars", "dose-response.companion.txt");
   const docText = readFileSync(docPath, "utf8");
-  const { config: starterConfig } = PS_STARTERS["dose-response"];
+  const { config: starterConfig, label: starterLabel } = PS_STARTERS["dose-response"];
 
   it("parses with zero error-severity issues", () => {
     const { report } = parseSandboxCompanionDoc(docText);
@@ -439,12 +458,12 @@ describe("Dose-Response Explorer — companion doc is the source of truth (stres
     expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
   });
 
-  it("the starter config is structurally equal to parse(doc) (labels/types/ranges/defaults/units/formulas/decimals/charts/challenges)", () => {
+  it("the starter config is structurally equal to parse(doc) (labels/types/ranges/defaults/units/formulas/decimals/charts/challenges), title normalized", () => {
     const { config } = parseSandboxCompanionDoc(docText);
     const validated = validateSandboxConfig(config);
     expect(validated.ok, !validated.ok ? validated.errors.join("; ") : "").toBe(true);
     if (!validated.ok) return;
-    expect(validated.config).toEqual(starterConfig);
+    expectSandboxDocParity(validated.config, starterConfig, starterLabel);
   });
 
   it("is grouped as an exemplar with a description naming the pattern", () => {
@@ -460,6 +479,23 @@ describe("Dose-Response Explorer — companion doc is the source of truth (stres
     expect(starterConfig.intro).toBeTruthy();
     const introText = (starterConfig.intro ?? "").replace(/^<p>/, "");
     expect(introText.startsWith(statement)).toBe(true);
+  });
+
+  // Final review, items 2 and 3: the trough floor (>=2 mg/L) and the peak
+  // target band (12-20 mg/L) are two different thresholds and the intro must
+  // not blur them into one "therapeutic window"; and the fiction disclosure
+  // (invented agent, invented thresholds) has to be learner-visible, not
+  // buried in the brief.
+  it("discloses the fiction and keeps the trough floor and the peak target band distinct", () => {
+    const intro = starterConfig.intro ?? "";
+    expect(intro).toContain("invented for teaching");
+    expect(intro).toContain("trough floor of 2 mg per litre");
+    expect(intro).toContain("peak target band of 12 to 20 mg per litre");
+
+    const prompts = starterConfig.challenges.map((c) => c.prompt);
+    expect(prompts.join(" "), 'no challenge may call a threshold "the therapeutic window"').not.toContain("therapeutic");
+    expect(prompts[0]).not.toContain("across the whole interval");
+    expect(prompts[2]).toContain("in this model");
   });
 
   it("has 5 inputs, 5 outputs, 2 charts, 4 challenges", () => {
@@ -543,7 +579,7 @@ describe("Dose-Response Explorer — export package budget", () => {
 describe("Break-Even Studio — companion doc is the source of truth (stress test)", () => {
   const docPath = join(process.cwd(), "docs", "exemplars", "break-even-studio.companion.txt");
   const docText = readFileSync(docPath, "utf8");
-  const { config: starterConfig } = PS_STARTERS["break-even-studio"];
+  const { config: starterConfig, label: starterLabel } = PS_STARTERS["break-even-studio"];
 
   it("parses with zero error-severity issues", () => {
     const { report } = parseSandboxCompanionDoc(docText);
@@ -561,12 +597,12 @@ describe("Break-Even Studio — companion doc is the source of truth (stress tes
     expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
   });
 
-  it("the starter config is structurally equal to parse(doc) (labels/types/ranges/defaults/units/formulas/decimals/charts/challenges)", () => {
+  it("the starter config is structurally equal to parse(doc) (labels/types/ranges/defaults/units/formulas/decimals/charts/challenges), title normalized", () => {
     const { config } = parseSandboxCompanionDoc(docText);
     const validated = validateSandboxConfig(config);
     expect(validated.ok, !validated.ok ? validated.errors.join("; ") : "").toBe(true);
     if (!validated.ok) return;
-    expect(validated.config).toEqual(starterConfig);
+    expectSandboxDocParity(validated.config, starterConfig, starterLabel);
   });
 
   it("is grouped as an exemplar with a description naming the pattern", () => {

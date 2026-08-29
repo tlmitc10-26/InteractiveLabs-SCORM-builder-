@@ -1,5 +1,5 @@
 TITLE: Dose-Response Explorer
-INTRO: This is an educational model, not clinical guidance: it uses simplified one compartment pharmacokinetics to show how dose and dosing interval shape peak and trough concentrations, and it must never be used to select, adjust, or check a dose for a real patient. By the end of this activity you will be able to predict how a change in dose, dosing interval, or patient weight moves the peak and trough concentrations of a drug at steady state, and explain why accumulation is set by the interval and the half life rather than by the size of the dose.
+INTRO: This is an educational model, not clinical guidance: it uses simplified one compartment pharmacokinetics to show how dose and dosing interval shape peak and trough concentrations, and it must never be used to select, adjust, or check a dose for a real patient. The agent, its half life, and every threshold in the challenges below are invented for teaching; no real drug behaves exactly this way. Two of those thresholds are easy to confuse, so keep them apart: a trough floor of 2 mg per litre, below which this model treats the drug as too dilute to act, and a peak target band of 12 to 20 mg per litre, above which it treats the drug as toxic. By the end of this activity you will be able to predict how a change in dose, dosing interval, or patient weight moves the peak and trough concentrations of a drug at steady state, and explain why accumulation is set by the interval and the half life rather than by the size of the dose.
 
 INPUT: Dose (slider, mg, 100 to 1500, step 25, start 500)
 INPUT: Dosing interval (slider, hours, 4 to 24, step 1, start 8)
@@ -16,7 +16,7 @@ OUTPUT: Trough concentration (mg/L, 2 decimals) = Peak concentration * exp(-Elim
 CHART: Trough concentration vs Dosing interval (40 samples, titled Trough concentration across dosing intervals)
 CHART: Peak concentration vs Dose (40 samples, titled Peak concentration across doses)
 
-CHALLENGE: Keep the trough at or above 2 mg per litre so the drug stays in its therapeutic range across the whole interval. -> Trough concentration at least 2
+CHALLENGE: Keep the trough at or above 2 mg per litre, the floor below which this model treats the drug as too dilute to act. -> Trough concentration at least 2
 CHALLENGE: Keep the peak at or below 20 mg per litre, the toxicity ceiling in this model. -> Peak concentration at most 20
-CHALLENGE: Land the peak inside the therapeutic window of 12 to 20 mg per litre. -> Peak concentration between 12 and 20
+CHALLENGE: Land the peak inside the target band, 12 to 20 mg per litre in this model. -> Peak concentration between 12 and 20
 CHALLENGE: Accumulation is set by the interval and the half life, not by the size of the dose. Find an interval that keeps the accumulation factor in a moderate range. -> Accumulation factor between 1.5 and 3
