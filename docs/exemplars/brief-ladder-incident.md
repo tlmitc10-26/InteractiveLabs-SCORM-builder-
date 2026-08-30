@@ -45,7 +45,7 @@ That decision is a reasoning task, not a recall task, and it fails in a characte
 
 **The situation (learner-facing framing):** an inventory associate at a fictional distribution company falls from a stepladder in a returns aisle and is seriously hurt. The learner is the investigator. The injured employee has no memory of the minute before the fall, so the case can only be decided from the documentary record.
 
-**Cast** (all fictional, as is the employer): Marisol Quintero, inventory associate, injured; Ehsan Farhadi, shift supervisor, who filed the report and did not see the fall; Curtis Boyd, facilities technician, who performs the ladder inspections; Jinhee Park, order picker, the only witness; Tanya Okonkwo, EHS manager; the examination is signed out by Vantage Materials Testing, an outside laboratory. Northline Fulfillment, its Building 4, and every document reproduced below are invented for this exercise.
+**Cast** (all fictional, as is the employer): Marisol Quintero, inventory associate, injured; Ehsan Farhadi, shift supervisor, who filed the report and did not see the fall; Curtis Boyd, facilities technician, who performs the ladder inspections; Jinhee Park, order picker, the only witness; Tanya Okonkwo, EHS manager; the examination is signed out by Vantage Materials Testing, an outside laboratory. Corvale Fulfillment, its Building 4, and every document reproduced below are invented for this exercise.
 
 **Artifacts**
 
@@ -69,18 +69,18 @@ Three of these are load-bearing for the design brief's requirements:
 
 | # | id | label | credit | reasons |
 | --- | --- | --- | --- | --- |
-| 1 | `the_ladder_failed_structurally` | The ladder failed structurally | `full` | 5 (3 sound, 2 flawed) |
-| 2 | `the_employee_s_own_actions_cause` | The employee's own actions caused the fall | `partial` | 4 (2 sound, 2 flawed) |
-| 3 | `training_and_procedures_at_the_s` | Training and procedures at the site were inadequate | `none` | 4 (2 sound, 2 flawed) |
+| 1 | `the_employee_s_own_actions_cause` | The employee's own actions caused the fall | `partial` | 4 (2 sound, 2 flawed) |
+| 2 | `the_ladder_failed_structurally` | The ladder failed structurally | `full` | 5 (3 sound, 2 flawed) |
+| 3 | `the_site_s_written_training_and` | The site's written training and procedures were inadequate | `none` | 4 (2 sound, 2 flawed) |
 
 **Named reasoning flaws taught by `flawNote`** — every flawed reason names its flaw rather than merely contradicting itself:
 
 | Conclusion | Flawed reason | Named flaw |
 | --- | --- | --- |
-| 1 | the file records no proof the ladder was sound | absence of evidence treated as evidence |
-| 1 | the ladder was unsafe from the day it left the factory | overreach beyond what the report finds |
-| 2 | Park says she always moves fast | character reasoning |
-| 2 | she was reaching, so the reach brought her down | post hoc |
+| 1 | Park says she always moves fast | character reasoning |
+| 1 | she was reaching, so the reach brought her down | coincidence taken for cause |
+| 2 | the file records no proof the ladder was sound | absence of evidence treated as evidence |
+| 2 | the ladder was unsafe from the day it left the factory | overreach beyond what the report finds |
 | 3 | someone was badly hurt, so the program was inadequate | overreach from an outcome to a system |
 | 3 | the gap starts the month shifts changed | post hoc |
 
@@ -89,14 +89,14 @@ Three of these are load-bearing for the design brief's requirements:
 | Artifact | Conclusion 1 | Conclusion 2 | Conclusion 3 |
 | --- | --- | --- | --- |
 | Incident report | supports (weak) | supports (weak) | — |
-| Ladder examination report | supports (**strong**) | contradicts (**strong**) | — |
-| Witness statement | supports (weak) | — | supports (weak) |
-| Ladder inspection log | supports (weak) | — | supports (weak) |
+| Ladder examination report | contradicts (**strong**) | supports (**strong**) | — |
+| Witness statement | — | supports (weak) | supports (weak) |
+| Ladder inspection log | — | supports (weak) | supports (weak) |
 | Training records | — | — | contradicts (**strong**) |
-| Ladder safety procedure | — | supports (weak) | contradicts (**strong**) |
+| Ladder safety procedure | supports (weak) | — | contradicts (**strong**) |
 | Peak season overtime notice | — | — | — |
 
-The witness statement is deliberately mapped to two different conclusions and to neither of them as strong: the sound of a crack before the fall is weak support for equipment failure, and "I could not tell you the last time I saw anyone look one over" is weak support for a procedural finding. The same statement's remarks about how the injured associate generally works are mapped nowhere at all, because they are not evidence about this fall — the point the conclusion-2 `flawNote` makes explicitly.
+The witness statement is deliberately mapped to two different conclusions and to neither of them as strong: the sound of a crack before the fall is weak support for equipment failure, and "I could not tell you the last time I saw anyone look one over" is weak support for a procedural finding. The same statement's remarks about how the injured associate generally works are mapped nowhere at all, because they are not evidence about this fall — the point the conclusion-1 `flawNote` makes explicitly.
 
 ## 5. Content — the companion doc
 
@@ -104,14 +104,14 @@ This is the exact text of `docs/exemplars/ladder-incident.companion.txt`. `INTRO
 
 ```
 TITLE: The Ladder Incident
-INTRO: Just after nine in the morning on 12 February 2026, an inventory associate at Northline Fulfillment's Building 4 fell from a stepladder in the returns aisle and was seriously hurt. You have been assigned the investigation. Northline Fulfillment, its employees and every document here are fictional, and this is a teaching case about how investigators reason from evidence rather than guidance for any real incident. Read the artifacts, add the ones you find probative to your case file, and commit to the conclusion you can defend. By the end you will be able to distinguish the condition that caused an incident from the conditions that merely contributed to it, and to say what a given record does and does not establish. Three explanations are on offer and the evidence is genuinely mixed. One of them is better supported than the others, and finding out which one takes reading the records closely rather than quickly.
+INTRO: Just after nine in the morning on 12 February 2026, an inventory associate at Corvale Fulfillment's Building 4 fell from a stepladder in the returns aisle and was seriously hurt. You have been assigned the investigation. Corvale Fulfillment, its employees and every document here are fictional, and this is a teaching case about how investigators reason from evidence rather than guidance for any real incident. Read the artifacts, add the ones you find probative to your case file, and commit to the conclusion you can defend. By the end you will be able to distinguish the condition that caused an incident from the conditions that merely contributed to it, and to say what a given record does and does not establish. Three explanations are on offer and the evidence is genuinely mixed. One of them is better supported than the others, and finding out which one takes reading the records closely rather than quickly.
 MODE: best-supported
 
 ARTIFACT: Incident report (text)
-Source: Northline Fulfillment incident report NF-2026-018, filed by E. Farhadi, shift supervisor
+Source: Corvale Fulfillment incident report NF-2026-018, filed by E. Farhadi, shift supervisor
 At approximately 09:20 on 12 February 2026, inventory associate Marisol Quintero fell from a portable stepladder in Aisle 12 of Building 4 while retrieving a returns tote from the third rack level. Quintero was working a standard eight-hour shift, her second shift back after four scheduled days off. She was found on the floor by order picker Jinhee Park, treated on site, and transported. Recorded injuries are a fractured left wrist and a concussion.
 
-The ladder is an eight-foot fiberglass stepladder, asset tag L-14, rated at 300 pounds. It was found lying on its right side with the rear left rail separated from the top cap. Quintero's weight together with the tote is recorded as 214 pounds. The tote was found on the floor about five feet to the left of the ladder's base. The base itself had not moved from the position marked by the floor tape.
+The ladder is an eight-foot aluminum stepladder, asset tag L-14, rated at 300 pounds. It was found lying on its right side with the rear left rail separated from the top cap. Quintero's weight together with the tote is recorded as 214 pounds. The tote was found on the floor about five feet to the left of the ladder's base. The base itself had not moved from the position marked by the floor tape.
 
 Farhadi did not witness the fall and reached Aisle 12 roughly ninety seconds afterward. Quintero has given no statement: she has no recollection of the minute before the fall, which the treating clinician attributed to the head injury. The ladder was tagged, impounded the same day, and released to an outside laboratory for examination.
 
@@ -119,7 +119,7 @@ ARTIFACT: Ladder examination report (text)
 Source: Vantage Materials Testing report VMT-4471, examination of asset L-14, 3 March 2026
 The ladder arrived sealed and was examined as received. The rear left rail is separated from the top cap at the upper rivet hole. The separation runs through the rail wall from the rivet hole to the outer edge, a distance of about one and one quarter inches.
 
-Under magnification the fracture surface has two distinct regions. About seventy percent of the surface, measured outward from the rivet hole, is discolored and oxidized and carries beach markings consistent with a crack that opened and closed repeatedly over an extended period. The remaining thirty percent is bright, clean and free of oxidation, consistent with final separation at the time of the incident. The oxidized region cannot have formed at the moment of failure.
+Under magnification the fracture surface has two distinct regions. About seventy percent of the surface, measured outward from the rivet hole, is discolored and oxidized and carries beach markings consistent with a crack that grew progressively under repeated loading, arresting and restarting over an extended period. The remaining thirty percent is bright, clean and free of oxidation, consistent with final separation at the time of the incident. The oxidized region cannot have formed at the moment of failure.
 
 The rail material meets specification and the fracture shows no manufacturing defect. The recorded load of 214 pounds is well inside the ladder's 300 pound rating; with seventy percent of the rail section already cracked, the remaining section would separate under loads far below that rating.
 
@@ -134,7 +134,7 @@ Marisol moves fast. Everybody on returns moves fast, it is how the shift gets cl
 Nobody uses those ladders except returns. I could not tell you the last time I saw anyone look one over.
 
 ARTIFACT: Ladder inspection log (table)
-Source: Northline Fulfillment facilities inspection log, Building 4, extract
+Source: Corvale Fulfillment facilities inspection log, Building 4, extract
 Caption: Monthly portable ladder inspections recorded for the Building 4 returns area
 | Date | Asset tag | Inspector | Result |
 | 2025-09-04 | L-14 | C. Boyd | Pass |
@@ -145,7 +145,7 @@ Caption: Monthly portable ladder inspections recorded for the Building 4 returns
 | 2026-02-05 | L-12 | C. Boyd | Pass |
 
 ARTIFACT: Training records (table)
-Source: Northline Fulfillment learning management system extract, Building 4
+Source: Corvale Fulfillment learning management system extract, Building 4
 Caption: Safety training on file for the employees named in this case
 | Employee | Course | Completed | Score |
 | M. Quintero | Portable ladder safety | 2025-11-18 | 92 percent |
@@ -155,8 +155,8 @@ Caption: Safety training on file for the employees named in this case
 | J. Park | Portable ladder safety | 2025-11-18 | 84 percent |
 
 ARTIFACT: Ladder safety procedure (text)
-Source: Northline Fulfillment SOP 4.12, Portable Ladder Safety, revision 5, effective 1 July 2024
-4.1 Scope. This procedure applies to every portable stepladder and extension ladder at a Northline Fulfillment site and to every employee who uses one.
+Source: Corvale Fulfillment SOP 4.12, Portable Ladder Safety, revision 5, effective 1 July 2024
+4.1 Scope. This procedure applies to every portable stepladder and extension ladder at a Corvale Fulfillment site and to every employee who uses one.
 
 4.2 Pre-use inspection. Before each use the user shall inspect the ladder for cracked, bent or missing parts, including the rails, steps, spreaders, feet and the rail-to-cap joints. A ladder with any crack or deformation shall be red-tagged, removed from service immediately, and reported to facilities within the same shift.
 
@@ -170,6 +170,16 @@ Beginning 1 November, Building 4 runs ten-hour shifts Monday through Thursday fo
 
 The facilities and maintenance team stays on its existing schedule. Questions to your shift supervisor or to Tanya Okonkwo, EHS manager.
 
+CONCLUSION: The employee's own actions caused the fall (defensible)
+Rationale: This conclusion is defensible on the record, and it is not the best-supported one. A tote five feet to the left of a ladder base that never moved is real evidence of a reach past the side rail, and reaching past the rails is the specific act SOP 4.12 prohibits. An investigator who got this far is reasoning from evidence rather than from assumption.
+
+What moves it out of first place is the examination report. A rail cracked through seventy percent of its section separates under loads far below the ladder's rating, so the fall is fully explained without any departure from procedure, while a reach on its own does not explain the fracture surface at all. The reach, if it happened, changed when a cracked rail let go rather than whether it would. Investigations that stop at the person nearest the injury are the most common failure mode in this work, and they are common precisely because there is usually some evidence for them.
+
+- The tote was found five feet to the left of a ladder base that had not moved, which is consistent with a reach past the side rail. (SOUND)
+- SOP 4.12 prohibits reaching beyond the side rails, and Quintero was current on that training. (SOUND)
+- Park says Quintero always moves fast and once stood on the top cap of another ladder, so she was probably careless this time as well. (FLAWED: Character reasoning. A colleague's impression of how someone generally works, plus one unrelated incident months earlier, is not evidence about what this person did on this ladder on this morning.)
+- She was reaching to her left when the ladder went over, and the reach is therefore what brought her down. (FLAWED: Coincidence taken for cause. Two things that happen in the same instant are not thereby cause and effect. The rail separated in that same instant, and the examination shows it would have separated under a load well inside the rating.)
+
 CONCLUSION: The ladder failed structurally (best)
 Rationale: The physical evidence settles the mechanism. About seventy percent of the fracture face was oxidized before the day of the fall, which means the rail was already cracked through most of its section while the ladder stayed in service, and the load at separation was well inside the ladder's rating. A defect that had been growing for months, on a unit whose last recorded inspection was more than four months old, is the explanation that accounts for every artifact in the file rather than only some of them.
 
@@ -181,17 +191,7 @@ Naming the ladder as the cause is not the same as saying nothing else went wrong
 - Nothing in the file records the ladder as sound on the morning of the fall, and that silence is itself proof the ladder was defective. (FLAWED: Treats an absence of evidence as evidence. The examination establishes the defect; a gap in the paperwork establishes nothing on its own, and the same move would condemn any ladder with an incomplete file.)
 - The examination shows that this ladder was unsafe from the day it left the factory, and every unit from that batch should be pulled. (FLAWED: Overreach. The report finds a fatigue crack that grew over an extended period and expressly finds no manufacturing defect, which is a claim about this unit's recent service life, not about its condition when new.)
 
-CONCLUSION: The employee's own actions caused the fall (defensible)
-Rationale: This conclusion is defensible on the record, and it is not the best-supported one. A tote five feet to the left of a ladder base that never moved is real evidence of a reach past the side rail, and reaching past the rails is the specific act SOP 4.12 prohibits. An investigator who got this far is reasoning from evidence rather than from assumption.
-
-What moves it out of first place is the examination report. A rail cracked through seventy percent of its section separates under loads far below the ladder's rating, so the fall is fully explained without any departure from procedure, while a reach on its own does not explain the fracture surface at all. The reach, if it happened, changed when a cracked rail let go rather than whether it would. Investigations that stop at the person nearest the injury are the most common failure mode in this work, and they are common precisely because there is usually some evidence for them.
-
-- The tote was found five feet to the left of a ladder base that had not moved, which is consistent with a reach past the side rail. (SOUND)
-- SOP 4.12 prohibits reaching beyond the side rails, and Quintero was current on that training. (SOUND)
-- Park says Quintero always moves fast and once stood on the top cap of another ladder, so she was probably careless this time as well. (FLAWED: Character reasoning. A colleague's impression of how someone generally works, plus one unrelated incident months earlier, is not evidence about what this person did on this ladder on this morning.)
-- She was reaching to her left when the ladder went over, and the reach is therefore what brought her down. (FLAWED: Post hoc. Two things that happen in the same instant are not thereby cause and effect. The rail separated in that same instant, and the examination shows it would have separated under a load well inside the rating.)
-
-CONCLUSION: Training and procedures at the site were inadequate (unsupported)
+CONCLUSION: The site's written training and procedures were inadequate (unsupported)
 Rationale: The instinct behind this conclusion is a good one and the evidence does not carry it. SOP 4.12 is specific about the exact failure mode in this case: it requires inspection of the rail-to-cap joints, immediate red-tagging of any crack, and a documented monthly inspection recorded against the asset tag. The training records show the associate current on ladder safety and the technician current on ladder inspection.
 
 The log does show a real defect in execution, four consecutive months recorded against L-12 while L-14 was left out, and an investigator is entitled to weigh that. But a procedure that was written correctly and then not performed on one unit is a compliance failure rather than an inadequate procedure, and the two findings generate different corrective actions. Calling this one inadequate training would send the site off to rewrite documents that already say the right thing.
@@ -201,26 +201,26 @@ The log does show a real defect in execution, four consecutive months recorded a
 - An associate was seriously hurt on a routine task, so the site's safety program was not adequate. (FLAWED: Overreach from an outcome to a system. How badly someone is hurt is a function of height and landing, not of program quality, and reasoning backward from harm condemns every program that ever has an incident.)
 - The inspection gap starts in November, the month Building 4 went to ten-hour shifts, so the peak season schedule is what degraded the program. (FLAWED: Post hoc. The notice itself says facilities and maintenance stayed on their existing schedule, so the two facts only share a month. A date that lines up is a reason to look, not a finding.)
 
+MAP: Incident report supports The employee's own actions caused the fall (weak)
+MAP: Ladder safety procedure supports The employee's own actions caused the fall (weak)
+MAP: Ladder examination report contradicts The employee's own actions caused the fall (strong)
 MAP: Ladder examination report supports The ladder failed structurally (strong)
 MAP: Incident report supports The ladder failed structurally (weak)
 MAP: Witness statement supports The ladder failed structurally (weak)
 MAP: Ladder inspection log supports The ladder failed structurally (weak)
-MAP: Incident report supports The employee's own actions caused the fall (weak)
-MAP: Ladder safety procedure supports The employee's own actions caused the fall (weak)
-MAP: Ladder examination report contradicts The employee's own actions caused the fall (strong)
-MAP: Ladder inspection log supports Training and procedures at the site were inadequate (weak)
-MAP: Witness statement supports Training and procedures at the site were inadequate (weak)
-MAP: Training records contradicts Training and procedures at the site were inadequate (strong)
-MAP: Ladder safety procedure contradicts Training and procedures at the site were inadequate (strong)
+MAP: Ladder inspection log supports The site's written training and procedures were inadequate (weak)
+MAP: Witness statement supports The site's written training and procedures were inadequate (weak)
+MAP: Training records contradicts The site's written training and procedures were inadequate (strong)
+MAP: Ladder safety procedure contradicts The site's written training and procedures were inadequate (strong)
 ```
 
 ### SME defensibility
 
 Brief-only. These are the grounds on which an occupational-safety investigator would defend each credit level.
 
-- **Conclusion 1, `full`.** Fractography is the standard basis for dating a metal or composite failure, and the two-region fracture surface — an oxidized, beach-marked region and a bright final-separation region — is the textbook signature of progressive cracking followed by overload of the remaining section. The examination also removes the two alternative mechanisms an investigator has to exclude: the load was inside the rating, and the material met specification with no manufacturing defect. The finding is therefore about the *condition* of a specific unit that stayed in service while cracked, which is what makes the corrective action an equipment-control action.
-- **Conclusion 2, `partial`.** The reach is a real inference from real evidence — a tote displaced five feet from a base that never moved — and SOP 4.12 §4.4 makes reaching past the side rails a defined departure. An investigator who finds a contributing unsafe act here is not wrong. What they cannot say is that the act *caused* the fall, because a rail cracked through seventy percent of its section is expected to separate under loads far below the rating, so the outcome is fully explained without the act. Partial credit is the exactly right amount: the reasoning is competent and the causal ranking is wrong.
-- **Conclusion 3, `none`.** "Inadequate training or procedures" is the finding the record here specifically forecloses. The written procedure names the failure mode (rail-to-cap joints), states the control (monthly documented inspection recorded against asset tag), and states the response (red-tag and remove from service). The training records show both the user and the inspector current. The genuine defect is that the control was not executed on this unit, which is a compliance finding and a different corrective action. Marking this `none` rather than `partial` is deliberate: an exemplar that gives partial credit to the systemic story would teach that "blame the system" is always half right, which is the mirror image of the error conclusion 2 exists to catch.
+- **Conclusion 1, `partial`.** The reach is a real inference from real evidence — a tote displaced five feet from a base that never moved — and SOP 4.12 §4.4 makes reaching past the side rails a defined departure. An investigator who finds a contributing unsafe act here is not wrong. What they cannot say is that the act *caused* the fall, because a rail cracked through seventy percent of its section is expected to separate under loads far below the rating, so the outcome is fully explained without the act. Partial credit is the exactly right amount: the reasoning is competent and the causal ranking is wrong.
+- **Conclusion 2, `full`.** Fractography is the standard basis for dating a metal or composite failure, and the two-region fracture surface — an oxidized, beach-marked region and a bright final-separation region — is the textbook signature of progressive cracking followed by overload of the remaining section. The examination also removes the two alternative mechanisms an investigator has to exclude: the load was inside the rating, and the material met specification with no manufacturing defect. The finding is therefore about the *condition* of a specific unit that stayed in service while cracked, which is what makes the corrective action an equipment-control action.
+- **Conclusion 3, `none`.** "Inadequate training or procedures" is the finding the record here specifically forecloses. The written procedure names the failure mode (rail-to-cap joints), states the control (monthly documented inspection recorded against asset tag), and states the response (red-tag and remove from service). The training records show both the user and the inspector current. The genuine defect is that the control was not executed on this unit, which is a compliance finding and a different corrective action. Marking this `none` rather than `partial` is deliberate: an exemplar that gives partial credit to the systemic story would teach that "blame the system" is always half right, which is the mirror image of the error conclusion 1 exists to catch.
 
 ## 6. Witness score walkthrough and verification
 
@@ -233,13 +233,13 @@ Every number in this section is output from the real modules, produced by runnin
 | `parseCaseCompanionDoc` report | **0 issues** (0 errors, 0 warnings, 0 info) |
 | `validateCaseConfig` | `ok: true` |
 | artifacts parsed | 7 (`incident_report`, `ladder_examination_report`, `witness_statement`, `ladder_inspection_log`, `training_records`, `ladder_safety_procedure`, `peak_season_overtime_notice`) |
-| conclusions parsed | 3 (`the_ladder_failed_structurally` `full`, `the_employee_s_own_actions_cause` `partial`, `training_and_procedures_at_the_s` `none`) |
+| conclusions parsed | 3 (`the_employee_s_own_actions_cause` `partial`, `the_ladder_failed_structurally` `full`, `the_site_s_written_training_and` `none`) |
 | expert-map entries | 11 |
-| intro length | 929 characters (cap 5000) |
-| longest artifact body | `ladder_examination_report`, 1294 characters (cap 3000) |
+| intro length | 925 characters (cap 5000) |
+| longest artifact body | `ladder_examination_report`, 1333 characters (cap 3000) |
 | longest expert rationale | `the_ladder_failed_structurally`, 1064 characters (cap 3000) |
 | longest reason text | 158 characters (cap 300) |
-| longest flaw note | 214 characters (cap 300) |
+| longest flaw note | 233 characters (cap 300) |
 
 ### Expert-map gate
 
@@ -247,9 +247,9 @@ Every conclusion needs at least one `supports` entry (spec §2, review #19); the
 
 | Conclusion | supports | contradicts | evidence denominator |
 | --- | --- | --- | --- |
-| `the_ladder_failed_structurally` | 4 — examination (strong), incident report (weak), witness statement (weak), inspection log (weak) | 0 | 4 |
 | `the_employee_s_own_actions_cause` | 2 — incident report (weak), safety procedure (weak) | 1 — examination (strong) | 2 |
-| `training_and_procedures_at_the_s` | 2 — inspection log (weak), witness statement (weak) | 2 — training records (strong), safety procedure (strong) | 2 |
+| `the_ladder_failed_structurally` | 4 — examination (strong), incident report (weak), witness statement (weak), inspection log (weak) | 0 | 4 |
+| `the_site_s_written_training_and` | 2 — inspection log (weak), witness statement (weak) | 2 — training records (strong), safety procedure (strong) | 2 |
 
 Total 11 entries, within the 2–96 cap. **Unmapped artifacts: `peak_season_overtime_notice`** — the required red herring, and the editor's unmapped-artifact advisory will list exactly this one.
 
@@ -315,7 +315,7 @@ Same case file as the witness path, but with every sound reason of each conclusi
 | Chosen conclusion | evidence | reason | credit | totalPct |
 | --- | --- | --- | --- | --- |
 | `the_ladder_failed_structurally` | 3/4 | 3/3 | full | **88** |
-| `training_and_procedures_at_the_s` | 1/2 | 2/2 | none | **55** |
+| `the_site_s_written_training_and` | 1/2 | 2/2 | none | **55** |
 | `the_employee_s_own_actions_cause` | 0/2 | 2/2 | partial | **40** |
 
 And with the complete case file — all seven artifacts included, which is what a thorough learner ends up with:
@@ -324,9 +324,9 @@ And with the complete case file — all seven artifacts included, which is what 
 | --- | --- | --- | --- | --- |
 | `the_ladder_failed_structurally` | 4/4 | 3/3 | full | **100** |
 | `the_employee_s_own_actions_cause` | 1/2 | 2/2 | partial | **65** |
-| `training_and_procedures_at_the_s` | 0/2 | 2/2 | none | **30** |
+| `the_site_s_written_training_and` | 0/2 | 2/2 | none | **30** |
 
-Two things worth stating for the reviewer. First, the ordering only becomes the intended 100 / 65 / 30 once the case file is complete: the partial-file table has conclusion 3 above conclusion 2, because a learner who never opened the training records and the SOP has not collected the two artifacts that demolish the systemic story. That is the scoring model working as designed — leaving probative evidence out of the case file protects a weak conclusion — and it is exactly what the amber "left out" chips in the debrief exist to show. Second, conclusion 2 lands at 40 on the partial file because its single included support is cancelled by the included examination report: `max(0, 1 − 1) = 0`. A learner who reads the decisive artifact and still concludes employee error is scored on having read it.
+Two things worth stating for the reviewer. First, the ordering only becomes the intended 100 / 65 / 30 once the case file is complete: the partial-file table has conclusion 3 above conclusion 1, because a learner who never opened the training records and the SOP has not collected the two artifacts that demolish the systemic story. That is the scoring model working as designed — leaving probative evidence out of the case file protects a weak conclusion — and it is exactly what the amber "left out" chips in the debrief exist to show. Second, conclusion 1 lands at 40 on the partial file because its single included support is cancelled by the included examination report: `max(0, 1 − 1) = 0`. A learner who reads the decisive artifact and still concludes employee error is scored on having read it.
 
 ### Reason length is not a quality cue
 
@@ -334,9 +334,9 @@ Spec §7's pooled formulation, computed across all three conclusions. Word count
 
 | Conclusion | word counts (doc order) | longest | shortest |
 | --- | --- | --- | --- |
-| `the_ladder_failed_structurally` | 23, 28, 26, 25, 24 | 28, unique, **sound** | 23, unique, **sound** |
 | `the_employee_s_own_actions_cause` | 27, 15, 25, 20 | 27, unique, **sound** | 15, unique, **sound** |
-| `training_and_procedures_at_the_s` | 25, 28, 17, 24 | 28, unique, **sound** | 17, unique, *flawed* |
+| `the_ladder_failed_structurally` | 23, 28, 26, 25, 24 | 28, unique, **sound** | 23, unique, **sound** |
+| `the_site_s_written_training_and` | 25, 28, 17, 24 | 28, unique, **sound** | 17, unique, *flawed* |
 
 | Gate | Measured | Limit | Result |
 | --- | --- | --- | --- |
@@ -347,8 +347,8 @@ Advisory band: `|mean(words(sound)) − mean(words(flawed))| ≤ 0.15 · mean(wo
 
 | Quantity | Value |
 | --- | --- |
-| sound reasons (n = 7) | 23, 28, 26, 27, 15, 25, 28 — mean **24.5714** |
-| flawed reasons (n = 6) | 25, 24, 25, 20, 17, 24 — mean **22.5000** |
+| sound reasons (n = 7) | 27, 15, 23, 28, 26, 25, 28 — mean **24.5714** |
+| flawed reasons (n = 6) | 25, 20, 25, 24, 17, 24 — mean **22.5000** |
 | all reasons (n = 13) | mean **23.6154** |
 | \|mean(sound) − mean(flawed)\| | **2.0714** |
 | 0.15 · mean(all) | **3.5423** |
@@ -361,11 +361,11 @@ The one offender is deliberate and disclosed: under conclusion 3, "An associate 
 The employer, the site, every person, every document and the laboratory are fictional. The professional content the credit levels encode:
 
 - U.S. Occupational Safety and Health Administration, 29 CFR 1910.23 (Ladders) — the general-industry requirements the fictional SOP 4.12 is modeled on, including inspection of ladders for visible defects before initial use in each work shift, prompt removal from service of defective ladders, and the prohibition on using a ladder beyond its rated load or in a manner that puts the user off balance.
-- ANSI/ASC A14.5, *Safety Requirements for Portable Reinforced Plastic Ladders*, and ANSI/ASC A14.2 for metal ladders — duty ratings, and the manufacturer inspection-checklist convention the examination report's "item six" refers to.
+- ANSI/ASC A14.2, *Safety Requirements for Portable Metal Ladders* — duty ratings, and the manufacturer inspection-checklist convention the examination report's "item six" refers to.
 - U.S. National Institute for Occupational Safety and Health, Fatality Assessment and Control Evaluation (FACE) program, ladder-fall reports — the recurring finding pattern this case is built against: a defective or unmaintained ladder, an inspection program on paper, and an initial finding of employee error.
 - ASM International, *ASM Handbook, Volume 11: Failure Analysis and Prevention* — fatigue fractography: beach marks, the distinction between a progressive crack region and a final fast-fracture region, and the inference that oxidation on a fracture surface predates the final separation.
 - Center for Chemical Process Safety, *Guidelines for Investigating Process Safety Incidents* — the causal-factor method underlying the brief's central distinction between the condition without which the incident does not occur and the conditions that contribute to it.
-- Sidney Dekker, *The Field Guide to Understanding "Human Error"* — the analysis of why investigations terminate at the person nearest the harm, which is the specific failure mode conclusion 2 is designed to make visible rather than to punish.
+- Sidney Dekker, *The Field Guide to Understanding "Human Error"* — the analysis of why investigations terminate at the person nearest the harm, which is the specific failure mode conclusion 1 is designed to make visible rather than to punish.
 
 Citations are for the reviewer and the SME. Nothing is quoted in learner-visible text, and no statement in the interactive could be mistaken for a compliance determination about a real workplace; the intro says so.
 

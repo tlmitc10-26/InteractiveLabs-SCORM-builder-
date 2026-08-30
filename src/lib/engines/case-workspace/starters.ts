@@ -107,22 +107,22 @@ export const CASE_STARTERS: Record<string, { label: string; description: string;
     config: caseConfigSchema.parse({
       title: "",
       intro:
-        "<p>Just after nine in the morning on 12 February 2026, an inventory associate at Northline Fulfillment's Building 4 fell from a stepladder in the returns aisle and was seriously hurt. You have been assigned the investigation. Northline Fulfillment, its employees and every document here are fictional, and this is a teaching case about how investigators reason from evidence rather than guidance for any real incident. Read the artifacts, add the ones you find probative to your case file, and commit to the conclusion you can defend. By the end you will be able to distinguish the condition that caused an incident from the conditions that merely contributed to it, and to say what a given record does and does not establish. Three explanations are on offer and the evidence is genuinely mixed. One of them is better supported than the others, and finding out which one takes reading the records closely rather than quickly.</p>",
+        "<p>Just after nine in the morning on 12 February 2026, an inventory associate at Corvale Fulfillment's Building 4 fell from a stepladder in the returns aisle and was seriously hurt. You have been assigned the investigation. Corvale Fulfillment, its employees and every document here are fictional, and this is a teaching case about how investigators reason from evidence rather than guidance for any real incident. Read the artifacts, add the ones you find probative to your case file, and commit to the conclusion you can defend. By the end you will be able to distinguish the condition that caused an incident from the conditions that merely contributed to it, and to say what a given record does and does not establish. Three explanations are on offer and the evidence is genuinely mixed. One of them is better supported than the others, and finding out which one takes reading the records closely rather than quickly.</p>",
       scoringMode: "best-supported",
       artifacts: [
         {
           "id": "incident_report",
           "title": "Incident report",
-          "sourceLine": "Northline Fulfillment incident report NF-2026-018, filed by E. Farhadi, shift supervisor",
+          "sourceLine": "Corvale Fulfillment incident report NF-2026-018, filed by E. Farhadi, shift supervisor",
           "kind": "text",
-          "body": "<p>At approximately 09:20 on 12 February 2026, inventory associate Marisol Quintero fell from a portable stepladder in Aisle 12 of Building 4 while retrieving a returns tote from the third rack level. Quintero was working a standard eight-hour shift, her second shift back after four scheduled days off. She was found on the floor by order picker Jinhee Park, treated on site, and transported. Recorded injuries are a fractured left wrist and a concussion.</p><p>The ladder is an eight-foot fiberglass stepladder, asset tag L-14, rated at 300 pounds. It was found lying on its right side with the rear left rail separated from the top cap. Quintero's weight together with the tote is recorded as 214 pounds. The tote was found on the floor about five feet to the left of the ladder's base. The base itself had not moved from the position marked by the floor tape.</p><p>Farhadi did not witness the fall and reached Aisle 12 roughly ninety seconds afterward. Quintero has given no statement: she has no recollection of the minute before the fall, which the treating clinician attributed to the head injury. The ladder was tagged, impounded the same day, and released to an outside laboratory for examination.</p>"
+          "body": "<p>At approximately 09:20 on 12 February 2026, inventory associate Marisol Quintero fell from a portable stepladder in Aisle 12 of Building 4 while retrieving a returns tote from the third rack level. Quintero was working a standard eight-hour shift, her second shift back after four scheduled days off. She was found on the floor by order picker Jinhee Park, treated on site, and transported. Recorded injuries are a fractured left wrist and a concussion.</p><p>The ladder is an eight-foot aluminum stepladder, asset tag L-14, rated at 300 pounds. It was found lying on its right side with the rear left rail separated from the top cap. Quintero's weight together with the tote is recorded as 214 pounds. The tote was found on the floor about five feet to the left of the ladder's base. The base itself had not moved from the position marked by the floor tape.</p><p>Farhadi did not witness the fall and reached Aisle 12 roughly ninety seconds afterward. Quintero has given no statement: she has no recollection of the minute before the fall, which the treating clinician attributed to the head injury. The ladder was tagged, impounded the same day, and released to an outside laboratory for examination.</p>"
         },
         {
           "id": "ladder_examination_report",
           "title": "Ladder examination report",
           "sourceLine": "Vantage Materials Testing report VMT-4471, examination of asset L-14, 3 March 2026",
           "kind": "text",
-          "body": "<p>The ladder arrived sealed and was examined as received. The rear left rail is separated from the top cap at the upper rivet hole. The separation runs through the rail wall from the rivet hole to the outer edge, a distance of about one and one quarter inches.</p><p>Under magnification the fracture surface has two distinct regions. About seventy percent of the surface, measured outward from the rivet hole, is discolored and oxidized and carries beach markings consistent with a crack that opened and closed repeatedly over an extended period. The remaining thirty percent is bright, clean and free of oxidation, consistent with final separation at the time of the incident. The oxidized region cannot have formed at the moment of failure.</p><p>The rail material meets specification and the fracture shows no manufacturing defect. The recorded load of 214 pounds is well inside the ladder's 300 pound rating; with seventy percent of the rail section already cracked, the remaining section would separate under loads far below that rating.</p><p>A hairline separation at the rail-to-cap joint would have been visible on close examination of that joint, which is item six of the manufacturer's inspection checklist. It would not be visible from the floor or from the front of the ladder.</p>"
+          "body": "<p>The ladder arrived sealed and was examined as received. The rear left rail is separated from the top cap at the upper rivet hole. The separation runs through the rail wall from the rivet hole to the outer edge, a distance of about one and one quarter inches.</p><p>Under magnification the fracture surface has two distinct regions. About seventy percent of the surface, measured outward from the rivet hole, is discolored and oxidized and carries beach markings consistent with a crack that grew progressively under repeated loading, arresting and restarting over an extended period. The remaining thirty percent is bright, clean and free of oxidation, consistent with final separation at the time of the incident. The oxidized region cannot have formed at the moment of failure.</p><p>The rail material meets specification and the fracture shows no manufacturing defect. The recorded load of 214 pounds is well inside the ladder's 300 pound rating; with seventy percent of the rail section already cracked, the remaining section would separate under loads far below that rating.</p><p>A hairline separation at the rail-to-cap joint would have been visible on close examination of that joint, which is item six of the manufacturer's inspection checklist. It would not be visible from the floor or from the front of the ladder.</p>"
         },
         {
           "id": "witness_statement",
@@ -134,7 +134,7 @@ export const CASE_STARTERS: Record<string, { label: string; description: string;
         {
           "id": "ladder_inspection_log",
           "title": "Ladder inspection log",
-          "sourceLine": "Northline Fulfillment facilities inspection log, Building 4, extract",
+          "sourceLine": "Corvale Fulfillment facilities inspection log, Building 4, extract",
           "kind": "table",
           "table": {
             "caption": "Monthly portable ladder inspections recorded for the Building 4 returns area",
@@ -152,7 +152,7 @@ export const CASE_STARTERS: Record<string, { label: string; description: string;
         {
           "id": "training_records",
           "title": "Training records",
-          "sourceLine": "Northline Fulfillment learning management system extract, Building 4",
+          "sourceLine": "Corvale Fulfillment learning management system extract, Building 4",
           "kind": "table",
           "table": {
             "caption": "Safety training on file for the employees named in this case",
@@ -169,9 +169,9 @@ export const CASE_STARTERS: Record<string, { label: string; description: string;
         {
           "id": "ladder_safety_procedure",
           "title": "Ladder safety procedure",
-          "sourceLine": "Northline Fulfillment SOP 4.12, Portable Ladder Safety, revision 5, effective 1 July 2024",
+          "sourceLine": "Corvale Fulfillment SOP 4.12, Portable Ladder Safety, revision 5, effective 1 July 2024",
           "kind": "text",
-          "body": "<p>4.1 Scope. This procedure applies to every portable stepladder and extension ladder at a Northline Fulfillment site and to every employee who uses one.</p><p>4.2 Pre-use inspection. Before each use the user shall inspect the ladder for cracked, bent or missing parts, including the rails, steps, spreaders, feet and the rail-to-cap joints. A ladder with any crack or deformation shall be red-tagged, removed from service immediately, and reported to facilities within the same shift.</p><p>4.3 Documented inspection. Facilities shall inspect every portable ladder at least monthly, record each inspection against the ladder's asset tag, and retain the record for three years.</p><p>4.4 Use. Users shall maintain three points of contact, shall not stand above the second step from the top, and shall not reach beyond the side rails. Move the ladder rather than reaching from it.</p>"
+          "body": "<p>4.1 Scope. This procedure applies to every portable stepladder and extension ladder at a Corvale Fulfillment site and to every employee who uses one.</p><p>4.2 Pre-use inspection. Before each use the user shall inspect the ladder for cracked, bent or missing parts, including the rails, steps, spreaders, feet and the rail-to-cap joints. A ladder with any crack or deformation shall be red-tagged, removed from service immediately, and reported to facilities within the same shift.</p><p>4.3 Documented inspection. Facilities shall inspect every portable ladder at least monthly, record each inspection against the ladder's asset tag, and retain the record for three years.</p><p>4.4 Use. Users shall maintain three points of contact, shall not stand above the second step from the top, and shall not reach beyond the side rails. Move the ladder rather than reaching from it.</p>"
         },
         {
           "id": "peak_season_overtime_notice",
@@ -182,6 +182,18 @@ export const CASE_STARTERS: Record<string, { label: string; description: string;
         }
       ],
       conclusions: [
+        {
+          "id": "the_employee_s_own_actions_cause",
+          "label": "The employee's own actions caused the fall",
+          "credit": "partial",
+          "expertRationale": "<p>This conclusion is defensible on the record, and it is not the best-supported one. A tote five feet to the left of a ladder base that never moved is real evidence of a reach past the side rail, and reaching past the rails is the specific act SOP 4.12 prohibits. An investigator who got this far is reasoning from evidence rather than from assumption.</p><p>What moves it out of first place is the examination report. A rail cracked through seventy percent of its section separates under loads far below the ladder's rating, so the fall is fully explained without any departure from procedure, while a reach on its own does not explain the fracture surface at all. The reach, if it happened, changed when a cracked rail let go rather than whether it would. Investigations that stop at the person nearest the injury are the most common failure mode in this work, and they are common precisely because there is usually some evidence for them.</p>",
+          "reasons": [
+            { "id": "the_tote_was_found_five_feet_to", "text": "The tote was found five feet to the left of a ladder base that had not moved, which is consistent with a reach past the side rail.", "sound": true },
+            { "id": "sop_4_12_prohibits_reaching_beyo", "text": "SOP 4.12 prohibits reaching beyond the side rails, and Quintero was current on that training.", "sound": true },
+            { "id": "park_says_quintero_always_moves", "text": "Park says Quintero always moves fast and once stood on the top cap of another ladder, so she was probably careless this time as well.", "sound": false, "flawNote": "Character reasoning. A colleague's impression of how someone generally works, plus one unrelated incident months earlier, is not evidence about what this person did on this ladder on this morning." },
+            { "id": "she_was_reaching_to_her_left_whe", "text": "She was reaching to her left when the ladder went over, and the reach is therefore what brought her down.", "sound": false, "flawNote": "Coincidence taken for cause. Two things that happen in the same instant are not thereby cause and effect. The rail separated in that same instant, and the examination shows it would have separated under a load well inside the rating." }
+          ]
+        },
         {
           "id": "the_ladder_failed_structurally",
           "label": "The ladder failed structurally",
@@ -196,20 +208,8 @@ export const CASE_STARTERS: Record<string, { label: string; description: string;
           ]
         },
         {
-          "id": "the_employee_s_own_actions_cause",
-          "label": "The employee's own actions caused the fall",
-          "credit": "partial",
-          "expertRationale": "<p>This conclusion is defensible on the record, and it is not the best-supported one. A tote five feet to the left of a ladder base that never moved is real evidence of a reach past the side rail, and reaching past the rails is the specific act SOP 4.12 prohibits. An investigator who got this far is reasoning from evidence rather than from assumption.</p><p>What moves it out of first place is the examination report. A rail cracked through seventy percent of its section separates under loads far below the ladder's rating, so the fall is fully explained without any departure from procedure, while a reach on its own does not explain the fracture surface at all. The reach, if it happened, changed when a cracked rail let go rather than whether it would. Investigations that stop at the person nearest the injury are the most common failure mode in this work, and they are common precisely because there is usually some evidence for them.</p>",
-          "reasons": [
-            { "id": "the_tote_was_found_five_feet_to", "text": "The tote was found five feet to the left of a ladder base that had not moved, which is consistent with a reach past the side rail.", "sound": true },
-            { "id": "sop_4_12_prohibits_reaching_beyo", "text": "SOP 4.12 prohibits reaching beyond the side rails, and Quintero was current on that training.", "sound": true },
-            { "id": "park_says_quintero_always_moves", "text": "Park says Quintero always moves fast and once stood on the top cap of another ladder, so she was probably careless this time as well.", "sound": false, "flawNote": "Character reasoning. A colleague's impression of how someone generally works, plus one unrelated incident months earlier, is not evidence about what this person did on this ladder on this morning." },
-            { "id": "she_was_reaching_to_her_left_whe", "text": "She was reaching to her left when the ladder went over, and the reach is therefore what brought her down.", "sound": false, "flawNote": "Post hoc. Two things that happen in the same instant are not thereby cause and effect. The rail separated in that same instant, and the examination shows it would have separated under a load well inside the rating." }
-          ]
-        },
-        {
-          "id": "training_and_procedures_at_the_s",
-          "label": "Training and procedures at the site were inadequate",
+          "id": "the_site_s_written_training_and",
+          "label": "The site's written training and procedures were inadequate",
           "credit": "none",
           "expertRationale": "<p>The instinct behind this conclusion is a good one and the evidence does not carry it. SOP 4.12 is specific about the exact failure mode in this case: it requires inspection of the rail-to-cap joints, immediate red-tagging of any crack, and a documented monthly inspection recorded against the asset tag. The training records show the associate current on ladder safety and the technician current on ladder inspection.</p><p>The log does show a real defect in execution, four consecutive months recorded against L-12 while L-14 was left out, and an investigator is entitled to weigh that. But a procedure that was written correctly and then not performed on one unit is a compliance failure rather than an inadequate procedure, and the two findings generate different corrective actions. Calling this one inadequate training would send the site off to rewrite documents that already say the right thing.</p>",
           "reasons": [
@@ -221,17 +221,17 @@ export const CASE_STARTERS: Record<string, { label: string; description: string;
         }
       ],
       expertMap: [
+        { "artifactId": "incident_report", "conclusionId": "the_employee_s_own_actions_cause", "role": "supports", "strength": "weak" },
+        { "artifactId": "ladder_safety_procedure", "conclusionId": "the_employee_s_own_actions_cause", "role": "supports", "strength": "weak" },
+        { "artifactId": "ladder_examination_report", "conclusionId": "the_employee_s_own_actions_cause", "role": "contradicts", "strength": "strong" },
         { "artifactId": "ladder_examination_report", "conclusionId": "the_ladder_failed_structurally", "role": "supports", "strength": "strong" },
         { "artifactId": "incident_report", "conclusionId": "the_ladder_failed_structurally", "role": "supports", "strength": "weak" },
         { "artifactId": "witness_statement", "conclusionId": "the_ladder_failed_structurally", "role": "supports", "strength": "weak" },
         { "artifactId": "ladder_inspection_log", "conclusionId": "the_ladder_failed_structurally", "role": "supports", "strength": "weak" },
-        { "artifactId": "incident_report", "conclusionId": "the_employee_s_own_actions_cause", "role": "supports", "strength": "weak" },
-        { "artifactId": "ladder_safety_procedure", "conclusionId": "the_employee_s_own_actions_cause", "role": "supports", "strength": "weak" },
-        { "artifactId": "ladder_examination_report", "conclusionId": "the_employee_s_own_actions_cause", "role": "contradicts", "strength": "strong" },
-        { "artifactId": "ladder_inspection_log", "conclusionId": "training_and_procedures_at_the_s", "role": "supports", "strength": "weak" },
-        { "artifactId": "witness_statement", "conclusionId": "training_and_procedures_at_the_s", "role": "supports", "strength": "weak" },
-        { "artifactId": "training_records", "conclusionId": "training_and_procedures_at_the_s", "role": "contradicts", "strength": "strong" },
-        { "artifactId": "ladder_safety_procedure", "conclusionId": "training_and_procedures_at_the_s", "role": "contradicts", "strength": "strong" }
+        { "artifactId": "ladder_inspection_log", "conclusionId": "the_site_s_written_training_and", "role": "supports", "strength": "weak" },
+        { "artifactId": "witness_statement", "conclusionId": "the_site_s_written_training_and", "role": "supports", "strength": "weak" },
+        { "artifactId": "training_records", "conclusionId": "the_site_s_written_training_and", "role": "contradicts", "strength": "strong" },
+        { "artifactId": "ladder_safety_procedure", "conclusionId": "the_site_s_written_training_and", "role": "contradicts", "strength": "strong" }
       ],
     }),
   },
