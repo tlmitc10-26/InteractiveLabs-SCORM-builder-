@@ -9,6 +9,9 @@ import { mountBranchingScenario } from "@/engine-runtime/branching-scenario/main
 import { branchingStarterConfig, BRANCHING_STARTERS } from "@/lib/engines/branching-scenario/starters";
 import { toBranchingRuntimeConfig } from "@/lib/engines/branching-scenario/runtime-config";
 import { branchingConfigSchema } from "@/lib/engines/branching-scenario/schema";
+import { mountCaseWorkspace, type RuntimeCaseConfig } from "@/engine-runtime/case-workspace/main";
+import { CASE_STARTERS, caseStarterConfig } from "@/lib/engines/case-workspace/starters";
+import { toCaseRuntimeConfig } from "@/lib/engines/case-workspace/runtime-config";
 
 /** Renders every violation (id, impact, help, and each offending node's
  *  outerHTML) so a failure tells you exactly what to fix without re-running
@@ -228,6 +231,156 @@ describe("axe-core accessibility gate: branching scenario", () => {
 
     const results = await auditBody();
     expect(results.violations).toEqual([]);
+  });
+});
+
+describe("axe-core accessibility gate: case workspace", () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="root"></div>';
+  });
+
+  const noAssets = () => { throw new Error("no assets in this config"); };
+
+  /** Exercises every artifact kind (text/image/table), a "single" scoring
+   *  mode, and an expert map covering all four artifact/conclusion
+   *  relationships the debrief's comparison list renders — see
+   *  tests/case-runtime.test.ts's richConfig for the same shape, kept
+   *  independent here so this file's fixtures don't depend on another
+   *  test file's exports. */
+  const richConfig: RuntimeCaseConfig = toCaseRuntimeConfig(
+    {
+      title: "The Equipment Failure Case",
+      intro: "<p>Review the artifacts and decide what happened.</p>",
+      scoringMode: "single",
+      artifacts: [
+        { id: "memo", title: "Maintenance Memo", sourceLine: "Internal memo, p.1", kind: "text", body: "<p>The lift was flagged for service three times.</p>" },
+        { id: "photo", title: "Scene Photo", kind: "image", imageAssetId: "scene", imageRole: "informative", imageAlt: "The lift mechanism after the incident" },
+        {
+          id: "logs",
+          title: "Access Logs",
+          kind: "table",
+          table: { caption: "Badge swipes, 6-8pm", headers: ["Time", "Employee"], rows: [["6:02", "R. Alvarez"], ["7:45", "T. Kim"]] },
+        },
+        { id: "weather", title: "Weather Log", kind: "text", body: "<p>Clear skies, no precipitation.</p>" },
+      ],
+      conclusions: [
+        {
+          id: "equipment_failure",
+          label: "Equipment failure",
+          credit: "full",
+          expertRationale: "<p>The maintenance history is the most direct explanation.</p>",
+          reasons: [
+            { id: "ef_sound", text: "The lift had unresolved service flags.", sound: true },
+            { id: "ef_flaw", text: "T. Kim badged in that evening.", sound: false, flawNote: "Presence at the scene doesn't establish a mechanical cause." },
+          ],
+        },
+        {
+          id: "operator_error",
+          label: "Operator error",
+          credit: "none",
+          expertRationale: "<p>The evidence does not support operator error.</p>",
+          reasons: [
+            { id: "oe_sound", text: "An untrained employee badged in that evening.", sound: true },
+            { id: "oe_flaw", text: "Clear weather ruled out every other cause.", sound: false, flawNote: "Ruling out one alternative doesn't establish this one." },
+          ],
+        },
+      ],
+      expertMap: [
+        { artifactId: "memo", conclusionId: "equipment_failure", role: "supports", strength: "strong" },
+        { artifactId: "logs", conclusionId: "equipment_failure", role: "contradicts", strength: "weak" },
+        { artifactId: "photo", conclusionId: "operator_error", role: "supports", strength: "weak" },
+        { artifactId: "weather", conclusionId: "equipment_failure", role: "contradicts", strength: "weak" },
+      ],
+    },
+    (id) => `assets/${id}.png`,
+  ) as unknown as RuntimeCaseConfig;
+
+  function clickByText(selector: string, text: string): void {
+    const btn = Array.from(document.querySelectorAll<HTMLButtonElement>(selector)).find((b) => b.textContent === text);
+    if (!btn) throw new Error(`no ${selector} with text "${text}"`);
+    btn.click();
+  }
+
+  function selectArtifactByTitlePrefix(title: string): void {
+    const btn = Array.from(document.querySelectorAll<HTMLButtonElement>(".ilb-artifact-btn")).find((b) => b.textContent?.startsWith(title));
+    if (!btn) throw new Error(`no artifact button starting with "${title}"`);
+    btn.click();
+  }
+
+  it("has zero violations at the brief step", async () => {
+    mountCaseWorkspace(document.getElementById("root")!, richConfig);
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations in the workspace viewing a text artifact", async () => {
+    mountCaseWorkspace(document.getElementById("root")!, richConfig);
+    clickByText(".ilb-btn-pill", "Open the case file.");
+    selectArtifactByTitlePrefix("Maintenance Memo");
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations in the workspace viewing an image artifact", async () => {
+    mountCaseWorkspace(document.getElementById("root")!, richConfig);
+    clickByText(".ilb-btn-pill", "Open the case file.");
+    selectArtifactByTitlePrefix("Scene Photo");
+    const img = document.querySelector(".ilb-artifact-image");
+    expect(img).not.toBeNull(); // sanity: the state under audit actually rendered
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations in the workspace viewing a table artifact, with the artifact added to the case file", async () => {
+    mountCaseWorkspace(document.getElementById("root")!, richConfig);
+    clickByText(".ilb-btn-pill", "Open the case file.");
+    selectArtifactByTitlePrefix("Access Logs");
+    clickByText(".ilb-viewer-actions .ilb-btn", "Add as weak support");
+    const table = document.querySelector(".ilb-artifact-table");
+    expect(table).not.toBeNull(); // sanity: the state under audit actually rendered
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations at the conclude step with the reason group open", async () => {
+    mountCaseWorkspace(document.getElementById("root")!, richConfig);
+    clickByText(".ilb-btn-pill", "Open the case file.");
+    clickByText(".ilb-btn-pill", "Ready to conclude");
+    const radio = document.querySelector<HTMLInputElement>('input[type="radio"]')!;
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(document.querySelector(".ilb-reason-group")).not.toBeNull(); // sanity
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations at the debrief step", async () => {
+    mountCaseWorkspace(document.getElementById("root")!, richConfig);
+    clickByText(".ilb-btn-pill", "Open the case file.");
+    selectArtifactByTitlePrefix("Maintenance Memo");
+    clickByText(".ilb-viewer-actions .ilb-btn", "Add as strong support");
+    clickByText(".ilb-btn-pill", "Ready to conclude");
+    const radio = document.querySelector<HTMLInputElement>('input[type="radio"]')!;
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change", { bubbles: true }));
+    const box = document.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    clickByText(".ilb-btn-pill", "Submit conclusion");
+    expect(document.querySelector(".ilb-eyebrow")).not.toBeNull(); // sanity
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations for every case-workspace starter's brief step", async () => {
+    for (const id of Object.keys(CASE_STARTERS)) {
+      document.body.innerHTML = '<div id="root"></div>';
+      const config = toCaseRuntimeConfig(caseStarterConfig(id, `Starter check: ${id}`), noAssets) as unknown as RuntimeCaseConfig;
+      mountCaseWorkspace(document.getElementById("root")!, config);
+
+      const results = await auditBody();
+      expect(results.violations, `starter "${id}": ${describeViolations(results.violations)}`).toEqual([]);
+    }
   });
 });
 

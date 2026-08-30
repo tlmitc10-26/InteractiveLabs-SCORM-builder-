@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Editor } from "./editor";
 import { emptySandboxConfig, migrateLegacyColors, SandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import { branchingStarterConfig } from "@/lib/engines/branching-scenario/starters";
+import { caseStarterConfig } from "@/lib/engines/case-workspace/starters";
 import { ENGINE_ADAPTERS } from "@/lib/engines/dispatch";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,13 @@ export default async function InteractivePage({ params }: { params: Promise<{ id
     } catch (err) {
       console.error(`interactives/${interactive.id}: configJson is not valid JSON, falling back to a blank scenario`, err);
       initialConfig = branchingStarterConfig("blank", interactive.title);
+    }
+  } else if (interactive.engineId === "case-workspace") {
+    try {
+      initialConfig = JSON.parse(interactive.configJson);
+    } catch (err) {
+      console.error(`interactives/${interactive.id}: configJson is not valid JSON, falling back to a blank case`, err);
+      initialConfig = caseStarterConfig("blank", interactive.title);
     }
   } else {
     // Unrecognized engineId (data-integrity problem, not a normal path) —

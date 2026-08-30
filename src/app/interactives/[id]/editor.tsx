@@ -6,6 +6,7 @@
 // stable import regardless of which engine an interactive uses.
 import { ParamSandboxEditor, type EConfig as ParamSandboxConfig } from "./param-sandbox-editor";
 import { BranchingEditor, type EBranchingConfig } from "./branching-editor";
+import { CaseEditor, type ECaseConfig } from "./case-editor";
 import type { AssetRef } from "./editor-shared";
 
 export function Editor({ engineId, interactiveId, initialTitle, initialConfig, assets }: {
@@ -27,6 +28,16 @@ export function Editor({ engineId, interactiveId, initialTitle, initialConfig, a
         interactiveId={interactiveId}
         initialTitle={initialTitle}
         initialConfig={initialConfig as EBranchingConfig}
+        assets={assets}
+      />
+    );
+  }
+  if (engineId === "case-workspace") {
+    return (
+      <CaseEditor
+        interactiveId={interactiveId}
+        initialTitle={initialTitle}
+        initialConfig={initialConfig as ECaseConfig}
         assets={assets}
       />
     );

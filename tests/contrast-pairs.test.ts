@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { contrastRatio, meetsBodyText, meetsNonText, ratioLabel } from "@/lib/design/contrast";
 import { colorHex } from "@/lib/design/tokens";
 
@@ -231,5 +233,28 @@ describe("contrast-pairs: parameter sandbox visual pass", () => {
       expect(meetsBodyText(ratio)).toBe(true);
       expect(ratio).toBeGreaterThanOrEqual(7);
     });
+  });
+});
+
+describe("contrast-pairs: case workspace engine.css -- zero new color pairs (plan Task 7)", () => {
+  // Machine-enforced version of the ZERO-new-color-pairs claim in
+  // src/engine-runtime/case-workspace/engine.css's own header comment: every
+  // hex literal in that file must already be one of the approved literals
+  // this module documents above (the branching-scenario visual pass's exact
+  // chip palette: #365409/#f2f7ec "best", #644a00/#7a5a00/#fff8e1 "ok",
+  // #8b1f1f/#fbeeee "poor") plus plain white (#fff), used the same way
+  // branching's own engine.css uses it (card/button backgrounds) -- never a
+  // NEW literal. Reads the file live (not a copy/paste of its contents), so
+  // a future literal added to engine.css without updating this approved set
+  // fails this test rather than silently shipping an unaudited color pair.
+  const APPROVED_HEX_LITERALS = new Set([
+    "#365409", "#644a00", "#7a5a00", "#8b1f1f", "#f2f7ec", "#fbeeee", "#fff", "#fff8e1",
+  ]);
+
+  it("every hex literal in case-workspace/engine.css is in the approved set (no new pairs)", () => {
+    const cssPath = path.resolve(__dirname, "../src/engine-runtime/case-workspace/engine.css");
+    const css = readFileSync(cssPath, "utf8");
+    const found = new Set((css.match(/#[0-9a-fA-F]{3,8}/g) ?? []).map((h) => h.toLowerCase()));
+    expect(found).toEqual(APPROVED_HEX_LITERALS);
   });
 });

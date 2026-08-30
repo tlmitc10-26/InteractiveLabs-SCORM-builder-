@@ -6,6 +6,8 @@ import { scanPackage } from "@/lib/export/scanner";
 import { emptySandboxConfig, validateSandboxConfig } from "@/lib/engines/param-sandbox/schema";
 import { branchingStarterConfig } from "@/lib/engines/branching-scenario/starters";
 import { validateBranchingConfig } from "@/lib/engines/branching-scenario/schema";
+import { caseStarterConfig } from "@/lib/engines/case-workspace/starters";
+import { validateCaseConfig } from "@/lib/engines/case-workspace/schema";
 
 describe("engineEntry", () => {
   it("returns the matching engine entry from the manifest", () => {
@@ -59,16 +61,36 @@ describe("adapterFor", () => {
     if (viaAdapter.ok && direct.ok) expect(viaAdapter.config).toEqual(direct.config);
   });
 
+  it("dispatches the case-workspace adapter by engineId (third engine, plan Task 6)", () => {
+    const adapter = adapterFor("case-workspace");
+    expect(adapter.engineId).toBe("case-workspace");
+    expect(adapter.version).toBe("1.0.0");
+    expect(adapter.label).toBe("Case / Evidence Workspace");
+    expect(adapter).toBe(ENGINE_ADAPTERS["case-workspace"]);
+  });
+
+  it("validates through the case-workspace adapter identically to validateCaseConfig", () => {
+    const adapter = adapterFor("case-workspace");
+    const config = caseStarterConfig("blank", "Adapter Test");
+    const direct = validateCaseConfig(config);
+    const viaAdapter = adapter.validate(config);
+    expect(viaAdapter.ok).toBe(direct.ok);
+    if (viaAdapter.ok && direct.ok) expect(viaAdapter.config).toEqual(direct.config);
+  });
+
   it("builds a title-stamped starter config per engine via adapter.starterConfig", () => {
     const ps = adapterFor("param-sandbox").starterConfig("blank", "My Sandbox") as { title: string };
     expect(ps.title).toBe("My Sandbox");
     const branching = adapterFor("branching-scenario").starterConfig("jury", "My Scenario") as { title: string };
     expect(branching.title).toBe("My Scenario");
+    const caseWorkspace = adapterFor("case-workspace").starterConfig("blank", "My Case") as { title: string };
+    expect(caseWorkspace.title).toBe("My Case");
   });
 
   it("falls back to each engine's default starter for an unknown starter id, rather than throwing", () => {
     expect(() => adapterFor("param-sandbox").starterConfig("no-such-starter", "T")).not.toThrow();
     expect(() => adapterFor("branching-scenario").starterConfig("no-such-starter", "T")).not.toThrow();
+    expect(() => adapterFor("case-workspace").starterConfig("no-such-starter", "T")).not.toThrow();
   });
 
   it("exposes starters metadata (id/label/description) for each engine, for uniform UI dispatch", () => {
@@ -77,7 +99,7 @@ describe("adapterFor", () => {
     // every starter must carry a non-empty id/label/description and a valid
     // group, ids must be unique, and the "blank" starter must exist so the
     // picker always has a from-scratch option.
-    for (const engineId of ["param-sandbox", "branching-scenario"] as const) {
+    for (const engineId of ["param-sandbox", "branching-scenario", "case-workspace"] as const) {
       const starters = adapterFor(engineId).starters;
       const ids = starters.map((s) => s.id);
       expect(new Set(ids).size, `${engineId} starter ids should be unique`).toBe(ids.length);
@@ -104,6 +126,18 @@ describe("adapterFor", () => {
       for (const choice of scene.choices) if (choice.feedback) expect(values).toContain(choice.feedback);
     }
     for (const ending of config.endings) expect(values).toContain(ending.body);
+  });
+
+  it("richTextValues walks the case-workspace config's intro + every artifact body + conclusion body + expertRationale (not just intro)", () => {
+    const adapter = adapterFor("case-workspace");
+    const config = caseStarterConfig("blank", "RichText Test");
+    const values = adapter.richTextValues(config);
+    expect(values).toContain(config.intro);
+    for (const artifact of config.artifacts) if (artifact.body) expect(values).toContain(artifact.body);
+    for (const conclusion of config.conclusions) {
+      if (conclusion.body) expect(values).toContain(conclusion.body);
+      expect(values).toContain(conclusion.expertRationale);
+    }
   });
 });
 
@@ -256,5 +290,60 @@ describe("engine #2 golden path: jury starter (branching-scenario) end-to-end", 
     });
     expect(report.passed).toBe(false);
     expect(report.violations.some((v) => v.rule === "sanitizer")).toBe(true);
+  });
+});
+
+describe("engine #3 golden path: blank starter (case-workspace) end-to-end", () => {
+  it("assembles, scans clean, and zips deterministically — the fixture-free golden test for the third engine", async () => {
+    const adapter = adapterFor("case-workspace");
+    expect(adapter.engineId).toBe("case-workspace");
+    const config = caseStarterConfig("blank", "Blank Case");
+
+    const build = () =>
+      assemblePackage({
+        identifier: "ILB-case",
+        title: config.title,
+        engineId: "case-workspace",
+        config,
+        runtime: { toRuntimeConfig: adapter.toRuntimeConfig, collectAssetIds: adapter.collectAssetIds },
+        resolveAsset: async () => { throw new Error("the blank case starter has no assets"); },
+      });
+
+    const a = await build();
+
+    // Same invariant as engine #2's golden test: assemblePackage emits
+    // engine/engine.js + engine/scorm-adapter.js for ANY engine, so this
+    // proves that holds for engine #3 too, not just by inspection of
+    // package.ts.
+    expect(Object.keys(a.engineChecksums)).toEqual(
+      expect.arrayContaining(["engine/engine.js", "engine/scorm-adapter.js"]),
+    );
+    const paths = [...a.files.keys()].sort();
+    expect(paths).toEqual([
+      "content/config.json",
+      "engine/engine.css",
+      "engine/engine.js",
+      "engine/scorm-adapter.js",
+      "imsmanifest.xml",
+      "index.html",
+    ]);
+
+    const report = scanPackage(a.files, {
+      engineChecksums: a.engineChecksums,
+      urlAllowlist: [],
+      authoringConfig: config,
+      validate: adapter.validate,
+      richTextFields: adapter.richTextValues,
+      expectedIndexHtml: a.indexHtml,
+    });
+    expect(report.violations).toEqual([]);
+    expect(report.passed).toBe(true);
+
+    const zip1 = await zipPackage(a.files);
+    const zip2 = await zipPackage((await build()).files);
+    expect(zip1.equals(zip2)).toBe(true); // byte-stable
+
+    // Package budget (spec/plan): every engine zip must stay under 40KB.
+    expect(zip1.length).toBeLessThan(40 * 1024);
   });
 });

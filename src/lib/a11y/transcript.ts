@@ -23,9 +23,29 @@ import { computeAccessibleName } from "dom-accessibility-api";
  * sandbox's score/challenge strips; the branching runtime's role line,
  * score line, and path-debrief list). `controlRoleOf` below throws on any
  * focusable element shape it doesn't recognize, on purpose: if engine work
- * ever adds a new focusable control kind (a radio group, a new link shape),
- * this module MUST be extended consciously rather than silently mis-mapping
- * (or silently omitting) its announcement.
+ * ever adds a new focusable control kind (a new link shape, say), this
+ * module MUST be extended consciously rather than silently mis-mapping (or
+ * silently omitting) its announcement. Native `<input type="radio">` and its
+ * checked state (spec docs/superpowers/specs/2026-08-28-case-workspace-
+ * design.md §8) is one such conscious extension, added for the case-
+ * workspace runtime's Conclude step -- mirrors the pre-existing checkbox
+ * checked-state path exactly.
+ *
+ * Review round F6: <fieldset><legend> is DELIBERATELY out of this module's
+ * contract -- `categoryOf` has no case for it (a legend carries no
+ * standalone accessible-name concept of its own the way a heading or
+ * control does; it contributes to the FIELDSET's accessible name instead),
+ * so it never gets a TranscriptEntry here, and its text is invisible to
+ * both readingOrderTranscript and focusOrderTranscript. The compensating
+ * control for the one place this actually matters -- the case workspace's
+ * Conclude step, where choosing a conclusion moves focus onto the (new)
+ * reason group's own legend so its text is what gets announced next (spec
+ * §3: "focus moves to the reason group's legend") -- is the explicit
+ * `document.activeElement`/`.textContent` assertions in
+ * tests/sr-transcript-case.test.ts (e.g. "choosing a conclusion flips its
+ * radio to checked and reveals its two reason checkboxes, unchecked"),
+ * which check the focused legend directly rather than relying on this
+ * module to have captured it as a transcript entry.
  */
 
 export interface TranscriptEntry {
@@ -49,7 +69,7 @@ export interface TranscriptEntry {
   live?: "polite" | "assertive";
 }
 
-type ControlRole = "slider" | "spinbutton" | "checkbox" | "combobox" | "listbox" | "button" | "link";
+type ControlRole = "slider" | "spinbutton" | "checkbox" | "radio" | "combobox" | "listbox" | "button" | "link";
 
 /** Tags this module knows how to treat as a keyboard-focusable control. Any
  *  OTHER element that is (per the DOM) focusable is not walked as a control
@@ -148,7 +168,7 @@ function closestLive(el: Element, root: Element): "polite" | "assertive" | undef
 function controlRoleOf(el: Element): ControlRole {
   const explicit = el.getAttribute("role");
   if (explicit) {
-    if (explicit === "slider" || explicit === "spinbutton" || explicit === "checkbox"
+    if (explicit === "slider" || explicit === "spinbutton" || explicit === "checkbox" || explicit === "radio"
       || explicit === "combobox" || explicit === "listbox" || explicit === "button" || explicit === "link") {
       return explicit;
     }
@@ -160,6 +180,7 @@ function controlRoleOf(el: Element): ControlRole {
     if (type === "range") return "slider";
     if (type === "number") return "spinbutton";
     if (type === "checkbox") return "checkbox";
+    if (type === "radio") return "radio";
     throw new Error(`readingOrderTranscript: unmapped focusable element <input type="${type}"> -- extend controlRoleOf`);
   }
   if (tag === "select") {
@@ -188,7 +209,7 @@ function describeControl(el: Element, root: Element): TranscriptEntry {
     const value = (el as HTMLInputElement).value;
     return { role, name, value, ...(states.length ? { states } : {}), ...(live ? { live } : {}) };
   }
-  if (role === "checkbox") {
+  if (role === "checkbox" || role === "radio") {
     const checked = (el as HTMLInputElement).checked;
     states.unshift(checked ? "checked" : "not checked");
     return { role, name, states, ...(live ? { live } : {}) };
@@ -222,9 +243,26 @@ type Category = "heading" | "control" | "img" | "status" | "text-carrier";
  *  The runtime visual pass (2026-08-28) adds one more: the ending's
  *  "Scenario complete" eyebrow -- the ONE deliberate new visible/announced
  *  text that pass introduces (see src/engine-runtime/branching-scenario/
- *  main.ts's renderEnding). */
+ *  main.ts's renderEnding). Case workspace (M1) reuses "ilb-score-line" and
+ *  "ilb-eyebrow" as-is (both are generic, not namespaced per engine -- the
+ *  "ilb-" convention is shared vocabulary across runtimes) and adds its own
+ *  two PURE-TEXT lists (no interactive controls inside either <li>, same
+ *  shape as "ilb-debrief-list" above): the debrief's per-artifact
+ *  comparison list and its reason-review list -- both are graded feedback
+ *  a screen-reader user must be able to confirm reads correctly, so they
+ *  get the same whole-list-as-one-entry treatment rather than being left
+ *  untracked like ordinary prose (e.g. an artifact's own body text, or the
+ *  expert-rationale block, which stay untracked exactly like branching's
+ *  scene/ending body copy). Review round F5 adds one more: "ilb-case-file-
+ *  strength" -- the Strong/Weak support label inside each case-file-panel
+ *  row (workspace step) -- as its OWN carrier, separate from the row's
+ *  artifact-title text (which stays untracked prose exactly like the debrief
+ *  carriers' own untracked neighbors above), so a screen-reader user gets an
+ *  explicit reading-order confirmation of which strength they assigned to
+ *  an artifact, not just a sighted-only cue. */
 const TEXT_CARRIER_CLASSES = [
   "ilb-score-status", "ilb-challenge", "ilb-role", "ilb-score-line", "ilb-debrief-list", "ilb-eyebrow",
+  "ilb-comparison-list", "ilb-reason-review-list", "ilb-case-file-strength",
 ];
 
 function categoryOf(el: Element): Category | null {

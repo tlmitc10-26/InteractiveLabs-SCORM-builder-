@@ -17,6 +17,15 @@
         "engine.js": "f6ae5acec9c345cd6eb033440606c4b1f58f0b0216bddec85d9f63000efd6425",
         "engine.css": "b54d542e407af43f9dc1784db76a162fa400098474bee19d02c4f27001a487ce"
       }
+    },
+    {
+      "id": "case-workspace",
+      "version": "1.0.0",
+      "title": "Case / Evidence Workspace",
+      "files": {
+        "engine.js": "390519fbada6e3f26b7d816b97221fd6626d0150fe897eae18198f73e813de96",
+        "engine.css": "61eaeef85dcaa6bf48fa30335df444a4950ac3d635d524f240c445ff9fda498a"
+      }
     }
   ],
   "scorm": {

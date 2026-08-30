@@ -37,7 +37,7 @@ ending/debrief).
 
 ## Engines
 
-ILB ships two engines today, chosen (with a starter) when an interactive is
+ILB ships three engines today, chosen (with a starter) when an interactive is
 created:
 
 - **Parameter Sandbox** — learners experiment with a live model: inputs
@@ -48,8 +48,12 @@ created:
   compounding variables (e.g. "Jury trust"), and routes to the next scene or
   an ending. The grade is the mean of chosen-decision quality weights, not a
   completion click.
+- **Case / Evidence Workspace** — learners examine designer-authored
+  artifacts (text, image, or table), build a case file of the evidence they
+  find relevant, commit to a conclusion, and justify it with reasons —
+  graded against a designer-authored expert map.
 
-Both engines share the same contract: hand-audited runtime bundles
+All three engines share the same contract: hand-audited runtime bundles
 (`src/engine-runtime/**` → `public/engines/**`, SHA-256-checked against
 `engines.manifest.json`), a strict Zod authoring schema, and the existing
 SCORM shell, compliance scanner, design tokens, and accessibility machinery.
@@ -112,6 +116,29 @@ challenge assignments — is drafted first as a brief under `docs/exemplars/`,
 which the shipped starter config transcribes verbatim, so the brief stays the
 single source of truth; `docs/exemplars/alt-policy.md` records the project's
 decorative/informative image-alt policy those briefs follow.
+
+**Case / Evidence Workspace.** The third engine's designer picks one of three
+`scoringMode`s per interactive — `single` (one right answer; process credit
+only counts when the learner also lands on the correct conclusion, stated as
+a visible consequence line next to the mode select, not a tooltip),
+`best-supported` (partial credit across conclusions), or `argument-quality`
+(reasoning graded on its own, credit ignored) — and the same strict schema
+covers artifacts (text/image/table, the table kind rendering as a real
+`<table>` with a `<caption>` and `th scope`), conclusions with sound/flawed
+reasons (a flawed reason requires a flaw note, surfaced to the learner in the
+debrief after they select it), and an expert map of supports/contradicts
+relationships the editor authors artifact-major, one disclosure per
+artifact, with an advisory (not an error) for any artifact left unmapped.
+Scoring is exact integer arithmetic — `Math.round((100 * num) / den)`,
+round-half-up — so a grade never floats between runs. Like the other two
+engines, its screen-reader contract is locked by tests before the runtime
+ships: `tests/sr-transcript-case.test.ts` locks the Conclude step's native
+radio/checkbox announcements (including checked state) and the reason
+group's legend-focus transition on conclusion change, and
+`docs/a11y/nvda-check-case-workspace.md` walks a human NVDA pass through the
+same sequence. M1 ships the engine, editor, blank starter, and export
+wiring; the companion-doc plain-text format and a worked exemplar are
+tracked as follow-on milestones.
 
 ## Design system
 
@@ -225,8 +252,8 @@ tool; any import mode works (graded imports receive both completion and a
 
 ## Roadmap
 
-Case/Evidence Workspace and Process Simulator engines; visual flow-graph
-authoring for Branching Scenario; sign-in + admin policy UI; Vercel + Railway
-deployment; CreateAI generation provider (the Branching Scenario image-alt
-field's AI-suggest → human-accept seam is already in place, awaiting the
-provider).
+Case/Evidence Workspace's companion doc + exemplar (M2/M3); Process Simulator
+engine; visual flow-graph authoring for Branching Scenario; sign-in + admin
+policy UI; Vercel + Railway deployment; CreateAI generation provider (the
+Branching Scenario image-alt field's AI-suggest → human-accept seam is
+already in place, awaiting the provider).

@@ -1,0 +1,250 @@
+/* GENERATED FILE - edit src/lib/design/tokens.json and run npm run build:engines */
+:root {
+  --rds-primary: #8c1d40;
+  --rds-secondary: #ffc627;
+  --rds-success: #446d12;
+  --rds-info: #00a3e0;
+  --rds-warning: #ff7f32;
+  --rds-danger: #b72a2a;
+  --rds-light: #f8f9fa;
+  --rds-dark: #212529;
+  --rds-light-1: #fafafa;
+  --rds-light-2: #f1f1f1;
+  --rds-light-3: #e8e8e8;
+  --rds-light-4: #d0d0d0;
+  --rds-light-5: #bfbfbf;
+  --rds-dark-1: #747474;
+  --rds-dark-2: #484848;
+  --rds-dark-3: #191919;
+}
+:root {
+  --ilb-font-heading: Georgia, 'Times New Roman', serif;
+  --ilb-font-body: Arial, Helvetica, sans-serif;
+  --radius-card: 8px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --radius-chip: 999px;
+  --elev-card: 0 1px 3px rgba(25,25,25,.08), 0 4px 14px rgba(25,25,25,.06);
+  --motion-fast: 150ms;
+}
+
+/* Case / Evidence Workspace engine styles: ported from
+   src/engine-runtime/branching-scenario/engine.css (spec §3: "reduced-
+   motion / focus-ring / target-size / typography rules ported from
+   branching's engine.css") and adapted for this engine's own sections
+   (artifact list, viewer, case-file panel, conclusion radio cards, reason
+   checkbox group, debrief comparison rows). ZERO new color pairs: every
+   rule below reuses an existing --rds-* token or one of the exact chip
+   literals already introduced by branching's engine.css (#365409/
+   var(--rds-success)/#f2f7ec for "best", #644a00/#7a5a00/#fff8e1 for "ok",
+   #8b1f1f/var(--rds-danger)/#fbeeee for "poor"). */
+
+.ilb-case { font-family: var(--ilb-font-body); color: var(--rds-dark); max-width: 760px; margin: 0 auto; padding: var(--sp-4); line-height: 1.55; }
+.ilb-case h2, .ilb-case h3 { font-family: var(--ilb-font-heading); color: var(--rds-primary); font-weight: 700; line-height: 1.2; margin: 0 0 var(--sp-3); }
+.ilb-case h2 { font-size: 24px; }
+@media (min-width: 992px) { .ilb-case h2 { font-size: 30px; } }
+.ilb-case h3 { font-size: 18px; margin-top: var(--sp-5); }
+
+/* ---------- card shell (mirrors branching's .ilb-scene-card) ---------- */
+.ilb-case-card {
+  background: #fff;
+  border-radius: var(--radius-card);
+  box-shadow: var(--elev-card);
+  border: 1px solid var(--rds-light-3);
+  overflow: hidden;
+  margin-bottom: var(--sp-5);
+}
+
+/* ---------- the one live region (spec §3): case-file status only ---------- */
+.ilb-case-status {
+  display: block;
+  padding: var(--sp-2) var(--sp-6);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--rds-dark-2);
+  background: var(--rds-light-1);
+  border-bottom: 1px solid var(--rds-light-3);
+}
+
+.ilb-step { padding-left: var(--sp-6); padding-right: var(--sp-6); padding-top: var(--sp-5); padding-bottom: var(--sp-6); }
+.ilb-step > h2 { margin-bottom: var(--sp-3); }
+
+/* ---------- brief: brand band (never a gradient) + gold rule ---------- */
+.ilb-case-header { width: 100%; margin: calc(-1 * var(--sp-5)) calc(-1 * var(--sp-6)) var(--sp-5); width: calc(100% + 2 * var(--sp-6)); }
+.ilb-case-header--band .ilb-brand-band {
+  width: 100%;
+  height: 96px;
+  /* background-color is set inline (main.ts) to var(--rds-<headerColor>) */
+  border-bottom: 4px solid var(--rds-secondary);
+}
+.ilb-intro { background: #fff8e1; border-left: 4px solid var(--rds-secondary); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-4); }
+
+/* ---------- shared button base (mirrors branching exactly) ---------- */
+.ilb-case .ilb-btn { font: inherit; font-size: 1rem; cursor: pointer; min-height: 24px; }
+.ilb-case .ilb-btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  background: var(--rds-primary);
+  color: #fff;
+  border: 2px solid var(--rds-primary);
+  border-radius: var(--radius-chip);
+  font-weight: 700;
+  padding: 10px 28px;
+  margin: var(--sp-2) var(--sp-2) 0 0;
+}
+.ilb-case .ilb-btn-pill--ghost { background: #fff; color: var(--rds-primary); }
+
+/* ---------- workspace: artifact list ---------- */
+.ilb-artifact-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.ilb-case .ilb-artifact-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  color: var(--rds-dark);
+  border: 2px solid var(--rds-light-4);
+  border-radius: var(--radius-card);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: 48px;
+}
+.ilb-case .ilb-artifact-btn:hover { border-color: var(--rds-primary); }
+.ilb-artifact-title { flex: 1 1 auto; font-weight: 700; }
+.ilb-artifact-kind { font-size: 13px; color: var(--rds-dark-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.ilb-artifact-reviewed { color: var(--rds-primary); font-size: 12px; }
+
+/* ---------- workspace: viewer ---------- */
+.ilb-viewer { background: var(--rds-light-1); border: 1px solid var(--rds-light-3); border-radius: var(--radius-card); padding: var(--sp-4); margin-bottom: var(--sp-4); }
+.ilb-viewer-empty { color: var(--rds-dark-2); font-style: italic; margin: 0; }
+.ilb-artifact-source { font-size: 13px; color: var(--rds-dark-2); font-style: italic; margin: 0 0 var(--sp-3); }
+.ilb-artifact-body { max-width: 70ch; }
+.ilb-artifact-image { display: block; max-width: 100%; height: auto; border-radius: var(--radius-card); }
+.ilb-artifact-table { border-collapse: collapse; width: 100%; margin-bottom: var(--sp-3); }
+.ilb-artifact-table caption { text-align: left; font-weight: 700; margin-bottom: var(--sp-2); color: var(--rds-dark-2); }
+.ilb-artifact-table th, .ilb-artifact-table td { border: 1px solid var(--rds-light-3); padding: var(--sp-2) var(--sp-3); text-align: left; }
+.ilb-artifact-table th { background: var(--rds-light-2); }
+.ilb-viewer-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+
+/* ---------- workspace: case-file panel ---------- */
+.ilb-case-file-panel { margin-bottom: var(--sp-4); }
+.ilb-case-file-empty { color: var(--rds-dark-2); font-style: italic; }
+.ilb-case-file-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.ilb-case-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  border: 1px solid var(--rds-light-3);
+  border-radius: var(--radius-card);
+  padding: var(--sp-2) var(--sp-3);
+}
+.ilb-case .ilb-case-file-remove { background: #fff; color: var(--rds-danger); border: 1px solid var(--rds-danger); border-radius: var(--radius-chip); padding: 6px 14px; font-size: 13px; font-weight: 700; }
+
+/* ---------- conclude: radio conclusion cards ---------- */
+.ilb-conclusion-group { border: 0; padding: 0; margin: 0 0 var(--sp-4); }
+.ilb-conclusion-group > legend { font-weight: 700; padding: 0; margin: 0 0 var(--sp-3); font-size: 15px; }
+.ilb-conclusion-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  border: 2px solid var(--rds-light-4);
+  border-radius: var(--radius-card);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-3);
+  cursor: pointer;
+}
+.ilb-conclusion-card:has(input:checked) { border-color: var(--rds-primary); background: var(--rds-light-1); }
+.ilb-conclusion-label { flex: 1 1 auto; }
+
+/* ---------- conclude: reason checkbox group ---------- */
+.ilb-reason-group { border: 0; padding: 0; margin: 0 0 var(--sp-4); }
+.ilb-reason-group > legend { font-weight: 700; padding: 0; margin: 0 0 var(--sp-3); font-size: 15px; }
+.ilb-reason-row { display: flex; align-items: flex-start; gap: var(--sp-2); margin-bottom: var(--sp-2); cursor: pointer; }
+.ilb-submit-hint { font-size: 13px; color: var(--rds-dark-2); margin: 0 0 var(--sp-2); }
+
+/* ---------- inputs: focus visibility, matches button focus-visible ---------- */
+.ilb-case input[type="radio"]:focus-visible, .ilb-case input[type="checkbox"]:focus-visible {
+  outline: 3px solid var(--rds-primary);
+  outline-offset: 2px;
+}
+
+/* ---------- debrief result head (mirrors branching's .ilb-result-head) ---------- */
+.ilb-result-head { text-align: center; padding: var(--sp-4) 0 var(--sp-5); }
+.ilb-eyebrow {
+  font-size: 13px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rds-dark-1);
+  font-weight: 700;
+  margin: 0 0 var(--sp-2);
+}
+.ilb-result-head h2 { font-size: 28px; }
+@media (min-width: 992px) { .ilb-result-head h2 { font-size: 32px; } }
+.ilb-score-num { font-size: 56px; font-weight: 700; color: var(--rds-primary); line-height: 1; margin-top: var(--sp-3); }
+.ilb-score-num small { font-size: 22px; color: var(--rds-dark-1); font-weight: 400; }
+.ilb-score-line { font-weight: 700; font-size: 14px; color: var(--rds-dark-2); margin: var(--sp-2) 0 0; }
+.ilb-quality-chips { display: flex; gap: var(--sp-2); justify-content: center; margin-top: var(--sp-4); flex-wrap: wrap; }
+.ilb-qchip { border-radius: var(--radius-chip); padding: 5px 14px; font-size: 14px; font-weight: 700; border: 1px solid; }
+/* Chip TEXT colors are AAA literals (>=7:1 on their tints), same values as
+   branching's engine.css -- not a new pair, a REUSE of the exact one. */
+.ilb-qchip--best { color: #365409; border-color: var(--rds-success); background: #f2f7ec; }
+.ilb-qchip--ok { color: #644a00; border-color: #7a5a00; background: #fff8e1; }
+.ilb-qchip--poor { color: #8b1f1f; border-color: var(--rds-danger); background: #fbeeee; }
+
+/* ---------- debrief: per-artifact comparison + reason review rows ---------- */
+/* Same three palettes as the chips above, applied to a list-row shape
+   instead of a pill -- identical color VALUES, a different selector, so
+   this introduces no new pair either. A row with no --best/--ok/--poor
+   modifier (the neutral "correctly excluded" / "correctly unselected"
+   cases) gets no color emphasis at all. */
+.ilb-comparison-list, .ilb-reason-review-list { list-style: none; padding: 0; margin: 0 0 var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.ilb-comparison-row { border: 1px solid var(--rds-light-3); border-radius: var(--radius-card); padding: var(--sp-2) var(--sp-3); }
+.ilb-comparison-row--best { color: #365409; border-color: var(--rds-success); background: #f2f7ec; }
+.ilb-comparison-row--ok { color: #644a00; border-color: #7a5a00; background: #fff8e1; }
+.ilb-comparison-row--poor { color: #8b1f1f; border-color: var(--rds-danger); background: #fbeeee; }
+
+.ilb-expert-rationale { max-width: 70ch; }
+
+/* ---------- 150ms step-transition fade/rise (mirrors branching) ---------- */
+@keyframes ilb-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.ilb-enter { animation: ilb-enter var(--motion-fast) ease-out; }
+
+/* 2.5.8 (WCAG 2.2) target size: every button gets at least a 24px hit area. */
+.ilb-case button { min-height: 24px; }
+
+/* Focus visibility: a clearly visible ring on every interactive control,
+   distinct from any hover styling. */
+.ilb-case button:focus-visible {
+  outline: 3px solid var(--rds-primary);
+  outline-offset: 2px;
+}
+
+/* Visually-hidden but screen-reader-accessible text utility. */
+.ilb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* F7 (review): the three transition:none selectors that used to sit here
+     (.ilb-btn / .ilb-artifact-btn / .ilb-conclusion-card) were dead -- none
+     of those selectors carry a base `transition` property anywhere else in
+     this file, so overriding it to `none` here changed nothing. Only the
+     step-transition animation below is real. */
+  .ilb-enter { animation: none; }
+}
