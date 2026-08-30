@@ -101,9 +101,9 @@ Alvarez says he saw Chen grab the ladder from the closet without checking it.
 
 ARTIFACT: Inspection Table (table)
 Caption: Ladder inspection history
-Date | Result
-March 3 | Flagged, cracked rung
-March 10 | Not reinspected
+| Date | Result |
+| March 3 | Flagged, cracked rung |
+| March 10 | Not reinspected |
 
 CONCLUSION: Equipment failure (best)
 Rationale: The log shows a known defect that was never repaired before the fall.
@@ -1003,6 +1003,411 @@ describe("serializeCaseCompanionDoc — round-trip", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Opus review fix round (items 1-11) — regression coverage per item.
+// ---------------------------------------------------------------------------
+
+describe("parseCaseCompanionDoc — every-conclusion supports floor: duplicate-pair interaction (review item 1)", () => {
+  it("picks an artifact NOT already paired with the conclusion, when the first artifact is already paired via 'contradicts'", () => {
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A1 (text)", "Body one.",
+      "ARTIFACT: A2 (text)", "Body two.",
+      "",
+      "CONCLUSION: C1 (best)", "Rationale: R1", "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A1 contradicts C1 (weak)",
+      "MAP: A1 supports C2 (strong)",
+      "MAP: A2 supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    const errs = errors(report);
+    expect(errs.some((e) => /needs at least one supporting artifact/i.test(e.message) && /"A2"/.test(e.message))).toBe(true);
+    const r = validateCaseConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+    const cfg = (r as { ok: true; config: CaseConfig }).config;
+    const a2 = cfg.artifacts.find((a) => a.title === "A2")!;
+    const c1 = cfg.conclusions.find((c) => c.label === "C1")!;
+    expect(cfg.expertMap).toContainEqual({ artifactId: a2.id, conclusionId: c1.id, role: "supports", strength: "weak" });
+  });
+
+  it("errors without pushing a duplicate map entry when every artifact is already paired with the conclusion that lacks support", () => {
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A1 (text)", "Body one.",
+      "ARTIFACT: A2 (text)", "Body two.",
+      "",
+      "CONCLUSION: C1 (best)", "Rationale: R1", "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A1 contradicts C1 (weak)",
+      "MAP: A2 contradicts C1 (weak)",
+      "MAP: A1 supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    const errs = errors(report);
+    expect(errs.some((e) => /already paired with it/i.test(e.message))).toBe(true);
+    const cfg = config as { expertMap: Array<{ artifactId: string; conclusionId: string; role: string }> };
+    expect(cfg.expertMap).toHaveLength(3); // unchanged -- no invalid entry was pushed
+  });
+
+  // NOTE on the third case named by the review ("at the 96-entry MAX_MAP cap
+  // ⇒ distinct error, no push"): MAX_ARTIFACTS (16) x MAX_CONCLUSIONS (6) ==
+  // MAX_MAP (96) exactly. Since expertMap can only grow via unique
+  // (artifactId, conclusionId) pairs, reaching exactly 96 entries is only
+  // possible by exhausting literally every (artifact, conclusion)
+  // combination -- which means, by construction, every artifact is ALREADY
+  // paired with any conclusion the floor might target, so `floorArtifact`
+  // is never found and the "every artifact already paired" branch (tested
+  // above) fires first. The at-cap branch is still implemented (defense in
+  // depth against a future change to any one of these three constants) but
+  // is unreachable through the public parser API under the CURRENT
+  // constants, so it is not exercised via `parseCaseCompanionDoc` here.
+});
+
+describe("capRichHtml — result never exceeds max, including the closing tag (review item 2)", () => {
+  it("caps an oversized artifact body to at most MAX_ARTIFACT_BODY (3000)", () => {
+    const longBody = "x".repeat(3000);
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A (text)", longBody,
+      "ARTIFACT: B (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)", "Rationale: R1", "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A supports C1 (strong)", "MAP: B supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(warnings(report).some((w) => /longer than 3000/.test(w.message))).toBe(true);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const a = r.config.artifacts.find((x) => x.title === "A")!;
+    expect(a.body!.length).toBeLessThanOrEqual(3000);
+  });
+
+  it("caps an oversized expert rationale to at most MAX_EXPERT_RATIONALE (3000)", () => {
+    const longRationale = "y".repeat(3000);
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A (text)", "Body.", "ARTIFACT: B (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)", `Rationale: ${longRationale}`, "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A supports C1 (strong)", "MAP: B supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(warnings(report).some((w) => /longer than 3000/.test(w.message))).toBe(true);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const c1 = r.config.conclusions.find((c) => c.label === "C1")!;
+    expect(c1.expertRationale.length).toBeLessThanOrEqual(3000);
+  });
+
+  it("caps an oversized conclusion body (no Rationale: found) to at most 2000 characters", () => {
+    const longBody = "w".repeat(2000);
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A (text)", "Body.", "ARTIFACT: B (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)", longBody, "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A supports C1 (strong)", "MAP: B supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(warnings(report).some((w) => /longer than 2000/.test(w.message))).toBe(true);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const c1 = r.config.conclusions.find((c) => c.label === "C1")!;
+    expect(c1.body!.length).toBeLessThanOrEqual(2000);
+  });
+
+  it("caps an oversized INTRO to at most MAX_INTRO (5000)", () => {
+    const longIntro = "z".repeat(5000);
+    const doc = ["TITLE: T", `INTRO: ${longIntro}`, "MODE: best-supported"].join("\n");
+    const { config, report } = parseCaseCompanionDoc(doc);
+    expect(warnings(report).some((w) => /longer than 5000/.test(w.message))).toBe(true);
+    const r = validateCaseConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+    expect((config as { intro: string }).intro.length).toBeLessThanOrEqual(5000);
+  });
+});
+
+describe("capRichHtml + escaping — caps the POST-escape length, not the pre-escape length (review item 3)", () => {
+  it("a 700-'&'-character artifact body (3500 chars once escaped) is truncated and still validates", () => {
+    const body700 = "&".repeat(700);
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A (text)", body700,
+      "ARTIFACT: B (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)", "Rationale: R1", "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A supports C1 (strong)", "MAP: B supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(warnings(report).some((w) => /longer than 3000/.test(w.message) && /body/i.test(w.message))).toBe(true);
+    const r = validateCaseConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+});
+
+describe("parseTableRow — fenced vs unfenced, empty-cell round trip (review item 4)", () => {
+  it("round-trips a table with empty cells at either end unchanged, with an empty report", () => {
+    const cfg: CaseConfigLike = {
+      title: "T", intro: "<p>I</p>", scoringMode: "best-supported",
+      artifacts: [
+        { id: "a", title: "A", kind: "text", body: "<p>B</p>" },
+        { id: "t", title: "Tbl", kind: "table", table: { headers: ["H1", "H2"], rows: [["", "x"], ["y", ""], ["", ""]] } },
+      ],
+      conclusions: [
+        { id: "c1", label: "C1", credit: "full", expertRationale: "<p>R</p>", reasons: [{ id: "r1", text: "T1", sound: true }, { id: "r2", text: "T2", sound: true }] },
+        { id: "c2", label: "C2", credit: "none", expertRationale: "<p>R</p>", reasons: [{ id: "r3", text: "T3", sound: true }, { id: "r4", text: "T4", sound: true }] },
+      ],
+      expertMap: [
+        { artifactId: "a", conclusionId: "c1", role: "supports", strength: "weak" },
+        { artifactId: "t", conclusionId: "c2", role: "supports", strength: "weak" },
+      ],
+    };
+    const doc = serializeCaseCompanionDoc(cfg);
+    const { config, report } = parseCaseCompanionDoc(doc);
+    expect(errors(report), JSON.stringify(report)).toHaveLength(0);
+    expect(warnings(report), JSON.stringify(report)).toHaveLength(0);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const tbl = r.config.artifacts.find((x) => x.title === "Tbl")!;
+    expect(tbl.table!.rows).toEqual([["", "x"], ["y", ""], ["", ""]]);
+  });
+});
+
+describe("parseCaseCompanionDoc / serializeCaseCompanionDoc — leading-dash rationale ambiguity (review item 5)", () => {
+  it("round-trips a rationale whose second paragraph begins with '-' via the serializer's dash-escape", () => {
+    const cfg: CaseConfigLike = {
+      title: "T", intro: "<p>I</p>", scoringMode: "best-supported",
+      artifacts: [
+        { id: "a", title: "A", kind: "text", body: "<p>B</p>" },
+        { id: "b", title: "B", kind: "text", body: "<p>B2</p>" },
+      ],
+      conclusions: [
+        {
+          id: "c1", label: "C1", credit: "full",
+          expertRationale: "<p>First paragraph.</p><p>- This paragraph happens to start with a dash but is prose.</p>",
+          reasons: [{ id: "r1", text: "T1", sound: true }, { id: "r2", text: "T2", sound: true }],
+        },
+        { id: "c2", label: "C2", credit: "none", expertRationale: "<p>R</p>", reasons: [{ id: "r3", text: "T3", sound: true }, { id: "r4", text: "T4", sound: true }] },
+      ],
+      expertMap: [
+        { artifactId: "a", conclusionId: "c1", role: "supports", strength: "weak" },
+        { artifactId: "b", conclusionId: "c2", role: "supports", strength: "weak" },
+      ],
+    };
+    const doc = serializeCaseCompanionDoc(cfg);
+    expect(doc).toContain("\\- This paragraph happens to start with a dash but is prose.");
+    const { config, report } = parseCaseCompanionDoc(doc);
+    expect(errors(report), JSON.stringify(report)).toHaveLength(0);
+    expect(warnings(report), JSON.stringify(report)).toHaveLength(0);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const c1 = r.config.conclusions.find((c) => c.label === "C1")!;
+    expect(c1.expertRationale).toBe("<p>First paragraph.</p><p>- This paragraph happens to start with a dash but is prose.</p>");
+    expect(c1.reasons).toHaveLength(2);
+  });
+
+  it("a HAND-typed rationale continuation line beginning with '-' and no marker is fail-visibly treated as an attempted reason, not silently swallowed as prose", () => {
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A (text)", "Body.", "ARTIFACT: B (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)",
+      "Rationale: First paragraph.",
+      "",
+      "- This looks like prose but has no marker.",
+      "- Reason one. (SOUND)",
+      "- Reason two. (SOUND)",
+      "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A supports C1 (strong)", "MAP: B supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    const errs = errors(report);
+    expect(errs.some((e) => /missing "\(SOUND\)"/i.test(e.message))).toBe(true);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const c1 = r.config.conclusions.find((c) => c.label === "C1")!;
+    expect(c1.reasons.some((rs) => rs.text.includes("This looks like prose"))).toBe(true);
+  });
+});
+
+describe("serializeCaseCompanionDoc — rich-text markup loss header warning (review item 6)", () => {
+  it("flags an artifact body containing <ul>/<li> markup in the '# Note:' header line", () => {
+    const cfg: CaseConfigLike = {
+      title: "T", intro: "<p>I</p>", scoringMode: "best-supported",
+      artifacts: [
+        { id: "a", title: "Listy", kind: "text", body: "<p>Intro</p><ul><li>One</li><li>Two</li></ul>" },
+        { id: "b", title: "Plain", kind: "text", body: "<p>Nothing special.</p>" },
+      ],
+      conclusions: [
+        { id: "c1", label: "C1", credit: "full", expertRationale: "<p>R</p>", reasons: [{ id: "r1", text: "T1", sound: true }, { id: "r2", text: "T2", sound: true }] },
+        { id: "c2", label: "C2", credit: "none", expertRationale: "<p>R</p>", reasons: [{ id: "r3", text: "T3", sound: true }, { id: "r4", text: "T4", sound: true }] },
+      ],
+      expertMap: [
+        { artifactId: "a", conclusionId: "c1", role: "supports", strength: "weak" },
+        { artifactId: "b", conclusionId: "c2", role: "supports", strength: "weak" },
+      ],
+    };
+    const doc = serializeCaseCompanionDoc(cfg);
+    const noteLine = doc.split("\n").find((l) => l.startsWith("# Note:"));
+    expect(noteLine, doc).toBeDefined();
+    expect(noteLine).toContain("markup");
+    expect(noteLine).toContain("Listy");
+    expect(noteLine).not.toContain("Plain");
+  });
+});
+
+describe("parseCaseCompanionDoc — Source:/Caption:/Rationale: lookahead skips a comment line (review item 7)", () => {
+  it("finds Source: even with a '#' comment line in between", () => {
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: Memo (text)",
+      "# a faculty note, not part of the artifact",
+      "Source: X",
+      "Body text.",
+      "ARTIFACT: Second (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)", "Rationale: R1", "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: Memo supports C1 (strong)", "MAP: Second supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(errors(report), JSON.stringify(report)).toHaveLength(0);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const memo = r.config.artifacts.find((a) => a.title === "Memo")!;
+    expect(memo.sourceLine).toBe("X");
+  });
+
+  it("finds Rationale: even with a '#' comment line in between", () => {
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A (text)", "Body.", "ARTIFACT: B (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)",
+      "# a faculty note",
+      "Rationale: R1",
+      "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A supports C1 (strong)", "MAP: B supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(errors(report), JSON.stringify(report)).toHaveLength(0);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const c1 = r.config.conclusions.find((c) => c.label === "C1")!;
+    expect(c1.expertRationale).toContain("R1");
+  });
+});
+
+describe("parseCaseCompanionDoc — empty reason text (review item 8)", () => {
+  it("synthesizes a placeholder reason text (with a warning) when the marker is present but the text before it is empty", () => {
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A (text)", "Body.", "ARTIFACT: B (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)", "Rationale: R1", "- (SOUND)", "- Reason two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A supports C1 (strong)", "MAP: B supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(errors(report), JSON.stringify(report)).toHaveLength(0);
+    expect(warnings(report).some((w) => /empty text/i.test(w.message))).toBe(true);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const c1 = r.config.conclusions.find((c) => c.label === "C1")!;
+    expect(c1.reasons.some((rs) => rs.text.length > 0)).toBe(true);
+  });
+});
+
+describe("collectArtifactTitles / collectConclusionTitles — capped-out declarations never shadow a later duplicate (review item 9)", () => {
+  it("a title repeated only AFTER the artifact cap gets 'too many artifacts' both times, never a misleading 'duplicate' message", () => {
+    const lines: string[] = ["TITLE: T", "INTRO: I", "MODE: best-supported", ""];
+    for (let n = 1; n <= 16; n++) lines.push(`ARTIFACT: Filler ${n} (text)`, `Body ${n}.`);
+    lines.push("ARTIFACT: Extra (text)", "Extra body one.");
+    lines.push("ARTIFACT: Extra (text)", "Extra body two.");
+    lines.push(
+      "",
+      "CONCLUSION: C1 (best)", "Rationale: R1", "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: Filler 1 supports C1 (strong)", "MAP: Filler 2 supports C2 (strong)",
+    );
+    const { report } = parseCaseCompanionDoc(lines.join("\n"));
+    const extraErrs = errors(report).filter((e) => /"Extra"/.test(e.message));
+    expect(extraErrs, JSON.stringify(extraErrs)).toHaveLength(2);
+    expect(extraErrs.every((e) => /too many artifacts/i.test(e.message))).toBe(true);
+    expect(extraErrs.some((e) => /duplicate/i.test(e.message))).toBe(false);
+  });
+
+  it("a title repeated only AFTER the conclusion cap gets 'too many conclusions' both times, never a misleading 'duplicate' message", () => {
+    const lines: string[] = ["TITLE: T", "INTRO: I", "MODE: best-supported", "", "ARTIFACT: A (text)", "Body.", "ARTIFACT: B (text)", "Body two.", ""];
+    for (let n = 1; n <= 6; n++) lines.push(`CONCLUSION: Filler ${n}${n === 1 ? " (best)" : ""}`, `Rationale: R${n}`, "- One. (SOUND)", "- Two. (SOUND)", "");
+    lines.push("CONCLUSION: Extra", "Rationale: Extra one.", "- One. (SOUND)", "- Two. (SOUND)", "");
+    lines.push("CONCLUSION: Extra", "Rationale: Extra two.", "- One. (SOUND)", "- Two. (SOUND)", "");
+    lines.push("MAP: A supports Filler 1 (strong)", "MAP: B supports Filler 2 (strong)");
+    const { report } = parseCaseCompanionDoc(lines.join("\n"));
+    const extraErrs = errors(report).filter((e) => /"Extra"/.test(e.message));
+    expect(extraErrs, JSON.stringify(extraErrs)).toHaveLength(2);
+    expect(extraErrs.every((e) => /too many conclusions/i.test(e.message))).toBe(true);
+    expect(extraErrs.some((e) => /duplicate/i.test(e.message))).toBe(false);
+  });
+});
+
+describe("parseCaseCompanionDoc — cap overflows and table column overflow (review item 11 coverage)", () => {
+  it("errors and caps the 7th reason in a single conclusion (max 6)", () => {
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: A (text)", "Body.", "ARTIFACT: B (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)", "Rationale: R1",
+      "- One. (SOUND)", "- Two. (SOUND)", "- Three. (SOUND)", "- Four. (SOUND)", "- Five. (SOUND)", "- Six. (SOUND)", "- Seven. (SOUND)",
+      "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: A supports C1 (strong)", "MAP: B supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(errors(report).some((e) => /too many reasons/i.test(e.message))).toBe(true);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const c1 = r.config.conclusions.find((c) => c.label === "C1")!;
+    expect(c1.reasons).toHaveLength(6);
+  });
+
+  it("errors and skips a MAP line once the map is already at its cap (96 = 16 artifacts x 6 conclusions)", () => {
+    const lines: string[] = ["TITLE: T", "INTRO: I", "MODE: best-supported", ""];
+    for (let n = 1; n <= 16; n++) lines.push(`ARTIFACT: A${n} (text)`, `Body ${n}.`);
+    lines.push("");
+    for (let c = 1; c <= 6; c++) {
+      lines.push(`CONCLUSION: C${c}${c === 1 ? " (best)" : ""}`, `Rationale: R${c}`, "- One. (SOUND)", "- Two. (SOUND)", "");
+    }
+    for (let a = 1; a <= 16; a++) {
+      for (let c = 1; c <= 6; c++) lines.push(`MAP: A${a} supports C${c} (weak)`);
+    }
+    lines.push("MAP: A1 contradicts C1 (weak)"); // the 97th entry attempt -- map already at the 96 cap
+    const { report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(errors(report).some((e) => /too many expert map entries/i.test(e.message))).toBe(true);
+  });
+
+  it("errors and drops extra columns when a table header row declares more than 5 columns", () => {
+    const lines = [
+      "TITLE: T", "INTRO: I", "MODE: best-supported", "",
+      "ARTIFACT: Tbl (table)",
+      "| A | B | C | D | E | F |",
+      "| 1 | 2 | 3 | 4 | 5 | 6 |",
+      "",
+      "ARTIFACT: Second (text)", "Body two.", "",
+      "CONCLUSION: C1 (best)", "Rationale: R1", "- One. (SOUND)", "- Two. (SOUND)", "",
+      "CONCLUSION: C2", "Rationale: R2", "- A. (SOUND)", "- B. (SOUND)", "",
+      "MAP: Tbl supports C1 (strong)", "MAP: Second supports C2 (strong)",
+    ];
+    const { config, report } = parseCaseCompanionDoc(lines.join("\n"));
+    expect(errors(report).some((e) => /more than 5 columns/i.test(e.message))).toBe(true);
+    const r = validateCaseConfig(config) as { ok: true; config: CaseConfig };
+    const tbl = r.config.artifacts.find((a) => a.title === "Tbl")!;
+    expect(tbl.table!.headers).toEqual(["A", "B", "C", "D", "E"]);
+    expect(tbl.table!.rows[0]).toEqual(["1", "2", "3", "4", "5"]);
+  });
+});
+
+describe("serializeCaseCompanionDoc — idempotent across a second parse -> serialize cycle (review item 11 coverage)", () => {
+  it("produces byte-identical output when re-serializing a re-parsed max-feature doc", () => {
+    const doc1 = serializeCaseCompanionDoc(MAX_FEATURE_CONFIG);
+    const { config: config1 } = parseCaseCompanionDoc(doc1);
+    const validated1 = validateCaseConfig(config1) as { ok: true; config: CaseConfig };
+    const doc2 = serializeCaseCompanionDoc(validated1.config);
+    const { config: config2 } = parseCaseCompanionDoc(doc2);
+    const validated2 = validateCaseConfig(config2) as { ok: true; config: CaseConfig };
+    const doc3 = serializeCaseCompanionDoc(validated2.config);
+    expect(doc3).toBe(doc2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The committed template (public/companion-doc-case-template.txt)
 // ---------------------------------------------------------------------------
 
@@ -1038,10 +1443,10 @@ describe("companion-doc-case-template.txt (public/, faculty-facing, serializer-g
     "# appear above. Mark the one credited conclusion with (best); mark",
     "# others (defensible) or (unsupported). MODE controls scoring:",
     "# single, best-supported, or argument-quality. A table artifact",
-    "# uses a header row and rows of cells separated by \"|\", for example:",
+    "# uses a header row and rows of cells fenced with \"|\", for example:",
     "#   ARTIFACT: Inspection Table (table)",
-    "#   Date | Result",
-    "#   March 3 | Flagged, cracked rung",
+    "#   | Date | Result |",
+    "#   | March 3 | Flagged, cracked rung |",
     "# Keep artifact/conclusion titles plain: a title containing \"(\",",
     "# \"->\", \" supports \", or \" contradicts \" can confuse this format",
     "# when it is read back in.",

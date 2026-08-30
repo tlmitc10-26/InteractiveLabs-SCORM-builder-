@@ -25,10 +25,10 @@
 # appear above. Mark the one credited conclusion with (best); mark
 # others (defensible) or (unsupported). MODE controls scoring:
 # single, best-supported, or argument-quality. A table artifact
-# uses a header row and rows of cells separated by "|", for example:
+# uses a header row and rows of cells fenced with "|", for example:
 #   ARTIFACT: Inspection Table (table)
-#   Date | Result
-#   March 3 | Flagged, cracked rung
+#   | Date | Result |
+#   | March 3 | Flagged, cracked rung |
 # Keep artifact/conclusion titles plain: a title containing "(",
 # "->", " supports ", or " contradicts " can confuse this format
 # when it is read back in.
@@ -47,9 +47,9 @@ The till was counted twice by two different staff members.
 
 ARTIFACT: Shift Schedule (table)
 Caption: Closing shift, Tuesday
-Time | Staff on register
-6:00-8:00 | Priya
-8:00-10:00 | Jordan
+| Time | Staff on register |
+| 6:00-8:00 | Priya |
+| 8:00-10:00 | Jordan |
 
 CONCLUSION: The till was miscounted (best)
 Rationale: A single register error of this size is common and does not require assuming misconduct.

@@ -55,6 +55,31 @@
  *   - a table cell containing literal "|" is documented lossiness (the cell
  *     splits into extra columns on reimport, causing a row/header count
  *     mismatch that the parser then pads/truncates, flagged).
+ *   - rich-text markup a config might carry in a body/rationale field
+ *     (lists, bold/italic, links, sub/sup, line breaks) is NOT preserved —
+ *     `bodyToParagraphs` keeps only plain paragraph text, same as both
+ *     siblings. The serializer flags this the same way it flags a dropped
+ *     image artifact, in a `#` header comment, whenever a field actually
+ *     contains one of these tags. No attempt is made to preserve the
+ *     markup itself (out of scope).
+ *   - a conclusion's rationale/body PROSE line that begins with a literal
+ *     "-" is grammatically ambiguous with a REASON line (which also begins
+ *     with "-"): the serializer escapes such a line as "\-..." on the way
+ *     out, and the parser reverses that escape on the way back in. A
+ *     HAND-typed line that begins "- " remains, by design, parsed as an
+ *     attempted reason — it either succeeds as a real reason or fails
+ *     visibly (a "missing marker" error) rather than being silently
+ *     swallowed as prose.
+ *
+ * RULING (spec §6, hardening round): artifact bodies, conclusion bodies,
+ * and expertRationale are now HTML-escaped at parse time exactly like
+ * INTRO always was (`escapeHtml` before the `<p>` wrap; the serializer
+ * reverses it with `unescapeHtml`, so the round trip is stable). This
+ * closes the same pre-save-preview window INTRO already closed: the
+ * un-sandboxed same-origin preview renders an unvalidated draft, so
+ * nothing doc-authored may carry live markup — a hand-typed "<b>" or
+ * "<img onerror=...>" in a body line is stored as inert escaped text, not
+ * live HTML, exactly like INTRO.
  */
 
 import type { ImportIssue } from "@/lib/engines/branching-scenario/companion-doc";
@@ -116,6 +141,15 @@ const REASON_MARKER_RE = /^(.*?)\s*\(\s*(SOUND|FLAWED\s*:\s*(.*))\)\s*$/i;
 // keywords).
 const RISKY_LABEL_RE = /\(|->| supports | contradicts /i;
 
+// Detects any of the rich-text tags `sanitizeRichText` allows through
+// (src/lib/sanitize.ts's RICH_TEXT_OPTIONS.allowedTags) — used ONLY by the
+// serializer to flag, in a header comment, that a body/rationale field
+// actually carries markup this text format cannot represent (module doc
+// comment's markup-loss bullet). Never used by the parser: doc-authored
+// text is escaped verbatim (RULING above), so this format never produces
+// these tags itself.
+const MARKUP_RE = /<ul|<ol|<li|<b|<strong|<i|<em|<a |<sub|<sup|<br/i;
+
 const MIN_ARTIFACTS = 2;
 const MAX_ARTIFACTS = 16;
 const MIN_CONCLUSIONS = 2;
@@ -170,6 +204,26 @@ function unescapeHtml(s: string): string {
   return s.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&");
 }
 
+/** Reverses a serializer-applied leading-dash escape (see `escapeLeadingDash`
+ *  and the module doc comment's dash-ambiguity bullet): a standalone
+ *  CONCLUSION prose line whose real text begins with "-" is emitted as
+ *  "\-..." so it doesn't collide with `REASON_PREFIX_RE`; this undoes that
+ *  on the way back in. A line that was never escaped (no leading "\-") is
+ *  returned unchanged. */
+function unescapeLeadingDash(line: string): string {
+  return line.startsWith("\\-") ? line.slice(1) : line;
+}
+
+/** Escapes a literal leading "-" in an emitted CONCLUSION prose line so it
+ *  cannot be mistaken for a REASON line on reimport — see
+ *  `unescapeLeadingDash` and the module doc comment. Only ever applied to
+ *  a STANDALONE prose line (never the inline text right after `Rationale:`,
+ *  which can't collide since that whole line starts with `Rationale:`, not
+ *  `-`). */
+function escapeLeadingDash(line: string): string {
+  return line.startsWith("-") ? `\\${line}` : line;
+}
+
 function stripTags(html: string | undefined): string {
   return (html ?? "").replace(/<[^>]+>/g, "").trim();
 }
@@ -186,8 +240,12 @@ function bodyToParagraphs(html: string | undefined): string[] {
   return matches.map((m) => stripTags(m[1]));
 }
 
+/** Escapes each paragraph before wrapping (RULING above): the returned
+ *  string is the final, stored, post-escape HTML — callers cap THIS string
+ *  (see `capRichHtml`), never the pre-escape paragraph text, so a cap
+ *  applied here is measuring the same length the schema will re-check. */
 function toBody(paragraphs: string[]): string {
-  return paragraphs.map((p) => `<p>${p}</p>`).join("");
+  return paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("");
 }
 
 /** Plain-text field cap: truncates and reports a line-numbered warning when
@@ -206,18 +264,45 @@ function capText(value: string, max: number, fieldLabel: string, lineNo: number,
 function capRichHtml(html: string, max: number, fieldLabel: string, lineNo: number, issues: ImportIssue[]): string {
   if (html.length <= max) return html;
   issues.push({ line: lineNo, severity: "warning", message: `${fieldLabel} is longer than ${max} characters — truncated` });
-  let truncated = html.slice(0, max);
+  const CLOSE = "</p>";
+  // Reserve room for the closing tag we may re-append below, so the FINAL
+  // result (after that append) is never longer than `max` — slicing at
+  // `max` itself and then appending 4 more characters could overshoot by
+  // up to `CLOSE.length`.
+  let truncated = html.slice(0, Math.max(0, max - CLOSE.length));
   const lastGt = truncated.lastIndexOf(">");
   const lastLt = truncated.lastIndexOf("<");
   if (lastLt > lastGt) truncated = truncated.slice(0, lastLt);
-  if (!truncated.endsWith("</p>")) truncated += "</p>";
+  // Also back up over a dangling, cut-off HTML entity (e.g. slicing
+  // "&amp;" right down the middle leaves "&am"): `sanitizeRichText`
+  // re-encodes any lone "&" it finds in a text node when it re-serializes,
+  // which would silently grow the string back past `max` on the schema's
+  // OWN re-check (schema.ts's `rich()` pipes the sanitized output through
+  // its own `.max()` a second time) — an entity-unsafe cut here would
+  // reintroduce exactly the overshoot this function exists to prevent.
+  const lastAmp = truncated.lastIndexOf("&");
+  if (lastAmp !== -1 && !truncated.slice(lastAmp).includes(";")) {
+    truncated = truncated.slice(0, lastAmp);
+  }
+  if (!truncated.endsWith(CLOSE)) truncated += CLOSE;
   return truncated;
 }
 
+/** Strips a leading+trailing fence pipe ONLY when both are present (the
+ *  serializer always emits `| a | b |`, fully fenced) — stripping either
+ *  end independently (the old bug) mis-parses an UNFENCED row whose first
+ *  or last cell happens to be empty (e.g. `" | x"` for cells `["", "x"]`):
+ *  it starts with `|` but does NOT end with one, so treating that as "the"
+ *  fence ate real content. Requiring BOTH ends, plus at least 2 `|`
+ *  characters total (guards the degenerate single-character `"|"` line,
+ *  where the same character can't be both a distinct opening and closing
+ *  fence), makes fence-detection unambiguous. */
 function parseTableRow(raw: string): string[] {
   let s = raw.trim();
-  if (s.startsWith("|")) s = s.slice(1);
-  if (s.endsWith("|")) s = s.slice(0, -1);
+  const pipeCount = (s.match(/\|/g) ?? []).length;
+  if (s.length > 1 && s.startsWith("|") && s.endsWith("|") && pipeCount >= 2) {
+    s = s.slice(1, -1);
+  }
   return s.split("|").map((c) => c.trim());
 }
 
@@ -304,12 +389,18 @@ function collectArtifactTitles(lines: string[], issues: ImportIssue[]): Artifact
       entries.push({ id: "", title, line: lineNo, skip: true, kind: kindToken });
       return;
     }
-    seenTitles.set(key, lineNo);
     if (acceptedCount >= MAX_ARTIFACTS) {
       issues.push({ line: lineNo, severity: "error", message: `too many artifacts (max ${MAX_ARTIFACTS}) — "${title}" was skipped` });
       entries.push({ id: "", title, line: lineNo, skip: true, kind: kindToken });
       return;
     }
+    // Registered only NOW that this declaration is actually accepted — a
+    // capped-out declaration must never claim `seenTitles` for its title,
+    // or a LATER same-titled line would wrongly be reported as a
+    // "duplicate ... already declared on line N" pointing at a line that
+    // was itself never accepted (it should get its own "too many" error
+    // instead, same as this one).
+    seenTitles.set(key, lineNo);
     const id = uniqueSlug(title, usedIds, "artifact");
     usedIds.add(id);
     acceptedCount++;
@@ -355,12 +446,14 @@ function collectConclusionTitles(lines: string[], issues: ImportIssue[]): Conclu
       entries.push({ id: "", title: label, line: lineNo, skip: true, marker });
       return;
     }
-    seenTitles.set(key, lineNo);
     if (acceptedCount >= MAX_CONCLUSIONS) {
       issues.push({ line: lineNo, severity: "error", message: `too many conclusions (max ${MAX_CONCLUSIONS}) — "${label}" was skipped` });
       entries.push({ id: "", title: label, line: lineNo, skip: true, marker });
       return;
     }
+    // See the matching comment in collectArtifactTitles: registered only
+    // once this declaration is actually accepted.
+    seenTitles.set(key, lineNo);
     const id = uniqueSlug(label, usedIds, "conclusion");
     usedIds.add(id);
     acceptedCount++;
@@ -371,9 +464,15 @@ function collectConclusionTitles(lines: string[], issues: ImportIssue[]): Conclu
 }
 
 /** First-occurrence-wins, case-insensitive title lookup — mirrors
- *  branching's sceneByTitle/endingByTitle. Skip entries are never the first
- *  occurrence for their key by construction (pass 1 only marks the SECOND+
- *  occurrence as skip), so they're harmless here even if ever passed in. */
+ *  branching's sceneByTitle/endingByTitle. The `skip` guard below is
+ *  LOAD-BEARING, not defensive: a skip entry CAN be the first (and only)
+ *  occurrence for its key — an `(image)`/missing-kind/invalid-kind
+ *  artifact, or a title that lost the race against the artifact/conclusion
+ *  cap, is skip:true from the moment it's created and never gets a second,
+ *  accepted entry for the same title. Without this guard such a title
+ *  would resolve to an empty id (`entries.push({ id: "", ... })`), letting
+ *  a MAP line naming it silently "resolve" instead of erroring — exactly
+ *  the pruning bug spec §6 requires we not have. */
 function toTitleMap(entries: Array<{ id: string; title: string; skip?: boolean }>): Map<string, string> {
   const map = new Map<string, string>();
   for (const e of entries) {
@@ -550,6 +649,18 @@ export function parseCaseCompanionDoc(text: string): { config: unknown; report: 
     sectionState.current = null;
   }
 
+  // Skips over any `#` comment line(s) sitting between a block-opening line
+  // and the fixed Source:/Caption:/Rationale: lookahead line, so a comment
+  // dropped in between (faculty annotation, editor artifact) doesn't hide
+  // the real lookahead line from view — comments are otherwise invisible
+  // to the parser everywhere else, and this lookahead shouldn't be an
+  // exception.
+  function nextNonCommentIndex(from: number): number {
+    let idx = from;
+    while (idx < lines.length && COMMENT_RE.test(lines[idx])) idx++;
+    return idx;
+  }
+
   function openArtifactBlock(lineNo: number, i: number): void {
     const entry = artifactTitleList[artifactPtr++];
     if (entry.skip) {
@@ -557,13 +668,13 @@ export function parseCaseCompanionDoc(text: string): { config: unknown; report: 
       return;
     }
     let sourceLine: string | undefined;
-    let cursor = i + 1;
+    let cursor = nextNonCommentIndex(i + 1);
     if (cursor < lines.length) {
       const sm = lines[cursor].match(SOURCE_LINE_RE);
       if (sm) {
         sourceLine = capText(sm[1].trim(), MAX_SOURCE_LINE, `artifact "${entry.title}" source line`, lineNo, issues);
         consumedLines.add(cursor);
-        cursor++;
+        cursor = nextNonCommentIndex(cursor + 1);
       }
     }
     let caption: string | undefined;
@@ -598,12 +709,13 @@ export function parseCaseCompanionDoc(text: string): { config: unknown; report: 
     }
     let rationaleMode = false;
     let firstRationaleText: string | undefined;
-    if (i + 1 < lines.length) {
-      const rm = lines[i + 1].match(RATIONALE_LINE_RE);
+    const cursor = nextNonCommentIndex(i + 1);
+    if (cursor < lines.length) {
+      const rm = lines[cursor].match(RATIONALE_LINE_RE);
       if (rm) {
         rationaleMode = true;
         firstRationaleText = rm[1].trim();
-        consumedLines.add(i + 1);
+        consumedLines.add(cursor);
       }
     }
     sectionState.current = {
@@ -650,7 +762,11 @@ export function parseCaseCompanionDoc(text: string): { config: unknown; report: 
         flawNote = capText(note, MAX_FLAW_NOTE, "flaw note", lineNo, issues);
       }
     }
-    text = capText(text || "A reason.", MAX_REASON_TEXT, "reason text", lineNo, issues);
+    if (text === "") {
+      issues.push({ line: lineNo, severity: "warning", message: `reason has empty text — a placeholder was inserted` });
+      text = "A reason.";
+    }
+    text = capText(text, MAX_REASON_TEXT, "reason text", lineNo, issues);
     const id = uniqueSlug(text, b.usedReasonIds, "reason");
     b.usedReasonIds.add(id);
     b.reasons.push({ id, text, sound, ...(flawNote ? { flawNote } : {}) });
@@ -767,7 +883,7 @@ export function parseCaseCompanionDoc(text: string): { config: unknown; report: 
         else b.tableRows.push({ line: lineNo, text: line });
       }
     } else if (sectionState.current.kind === "conclusion") {
-      if (sectionState.current.ref) sectionState.current.ref.currentParagraph.push(line.trim());
+      if (sectionState.current.ref) sectionState.current.ref.currentParagraph.push(unescapeLeadingDash(line.trim()));
     }
   }
   flushCurrentParagraph();
@@ -835,15 +951,37 @@ export function parseCaseCompanionDoc(text: string): { config: unknown; report: 
   }
 
   // Every-conclusion floor: >=1 "supports" map entry (spec §2 — review #19).
+  // The synthesized link must land on an artifact NOT already paired with
+  // this conclusion (any role) — schema.ts's dupe check keys a pair purely
+  // on (artifactId, conclusionId), ignoring role, so blindly always using
+  // artifacts[0] can synthesize a "supports" pair that DUPLICATES an
+  // existing "contradicts" pair for that same (artifact, conclusion) and
+  // make the floor-padded config fail validation instead of salvaging it.
   for (const c of conclusions) {
     const hasSupport = expertMap.some((m) => m.conclusionId === c.id && m.role === "supports");
     if (!hasSupport) {
-      issues.push({
-        line: 1,
-        severity: "error",
-        message: `conclusion "${c.label}": needs at least one supporting artifact in the expert map — a weak supporting link from "${artifacts[0].title}" was added automatically`,
-      });
-      expertMap.push({ artifactId: artifacts[0].id, conclusionId: c.id, role: "supports", strength: "weak" });
+      const floorArtifact = artifacts.find((a) => !seenMapPairs.has(`${a.id}::${c.id}`));
+      if (!floorArtifact) {
+        issues.push({
+          line: 1,
+          severity: "error",
+          message: `conclusion "${c.label}": needs at least one supporting artifact in the expert map, but every artifact is already paired with it — none could be added automatically without creating a duplicate map entry`,
+        });
+      } else if (expertMap.length >= MAX_MAP) {
+        issues.push({
+          line: 1,
+          severity: "error",
+          message: `conclusion "${c.label}": needs at least one supporting artifact in the expert map, but the map is already at the maximum of ${MAX_MAP} entries — none could be added automatically`,
+        });
+      } else {
+        issues.push({
+          line: 1,
+          severity: "error",
+          message: `conclusion "${c.label}": needs at least one supporting artifact in the expert map — a weak supporting link from "${floorArtifact.title}" was added automatically`,
+        });
+        expertMap.push({ artifactId: floorArtifact.id, conclusionId: c.id, role: "supports", strength: "weak" });
+        seenMapPairs.add(`${floorArtifact.id}::${c.id}`);
+      }
     }
   }
 
@@ -964,6 +1102,18 @@ export function serializeCaseCompanionDoc(config: CaseConfigLike): string {
   if (conclusionsWithBody.length) {
     lossyFeatures.push(`the separate conclusion body on ${conclusionsWithBody.map((c) => c.label).join(", ")} — this format has room for expert rationale only`);
   }
+  // Rich-text markup loss (module doc comment): bodyToParagraphs keeps only
+  // plain paragraph text, so any list/inline-markup a field actually
+  // carries never makes it into the emitted text — named here the same way
+  // a dropped image artifact is named above, rather than silently
+  // disappearing.
+  const markupBearingNames = [
+    ...config.artifacts.filter((a) => a.kind === "text" && a.body && MARKUP_RE.test(a.body)).map((a) => a.title),
+    ...config.conclusions.filter((c) => (c.body && MARKUP_RE.test(c.body)) || MARKUP_RE.test(c.expertRationale)).map((c) => c.label),
+  ];
+  if (markupBearingNames.length) {
+    lossyFeatures.push(`rich-text markup (lists, bold/italic, links, etc.) in ${markupBearingNames.join(", ")} — this text format keeps plain paragraphs only`);
+  }
   if (lossyFeatures.length) {
     lines.push(`# Note: this config uses features this text format cannot represent, so they are left out below: ${lossyFeatures.join("; ")}. Edit those in the app instead.`);
   }
@@ -998,13 +1148,16 @@ export function serializeCaseCompanionDoc(config: CaseConfigLike): string {
         lines.push("");
       } else {
         for (const p of paragraphs) {
-          lines.push(p);
+          lines.push(unescapeHtml(p));
           lines.push("");
         }
       }
     } else if (a.kind === "table" && a.table) {
-      lines.push(a.table.headers.join(" | "));
-      for (const row of a.table.rows) lines.push(row.join(" | "));
+      // Always fully fenced (`| a | b |`) — see parseTableRow's doc
+      // comment: an unfenced row whose first/last cell is empty is
+      // otherwise ambiguous with a fence on reimport.
+      lines.push(`| ${a.table.headers.join(" | ")} |`);
+      for (const row of a.table.rows) lines.push(`| ${row.join(" | ")} |`);
       lines.push("");
     }
   }
@@ -1014,10 +1167,18 @@ export function serializeCaseCompanionDoc(config: CaseConfigLike): string {
     const marker = c.credit === "full" ? "best" : c.credit === "partial" ? "defensible" : "unsupported";
     lines.push(`CONCLUSION: ${c.label} (${marker})`);
     const rationaleParagraphs = bodyToParagraphs(c.expertRationale);
-    lines.push(`Rationale: ${rationaleParagraphs[0] ?? ""}`);
+    // The first paragraph is inline after "Rationale:" — that line can
+    // never be confused with a REASON line (it starts with "Rationale:",
+    // not "-"), so it needs no dash-escaping, only the same HTML-unescape
+    // every other emitted paragraph gets.
+    lines.push(`Rationale: ${unescapeHtml(rationaleParagraphs[0] ?? "")}`);
     for (const p of rationaleParagraphs.slice(1)) {
       lines.push("");
-      lines.push(p);
+      // A standalone continuation paragraph DOES collide with
+      // REASON_PREFIX_RE if its own text happens to start with "-" — see
+      // escapeLeadingDash's doc comment and the module doc comment's
+      // dash-ambiguity bullet.
+      lines.push(escapeLeadingDash(unescapeHtml(p)));
     }
     lines.push("");
     for (const r of c.reasons) {
