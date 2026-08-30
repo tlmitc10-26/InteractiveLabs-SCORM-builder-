@@ -5,6 +5,10 @@ import { validateBranchingConfig } from "@/lib/engines/branching-scenario/schema
 import * as branchingRuntime from "@/lib/engines/branching-scenario/runtime-config";
 import type { BranchingConfigLike } from "@/lib/engines/branching-scenario/runtime-config";
 import { BRANCHING_STARTERS, branchingStarterConfig } from "@/lib/engines/branching-scenario/starters";
+import { validateCaseConfig } from "@/lib/engines/case-workspace/schema";
+import * as caseRuntime from "@/lib/engines/case-workspace/runtime-config";
+import type { CaseWorkspaceConfigLike } from "@/lib/engines/case-workspace/runtime-config";
+import { CASE_STARTERS, caseStarterConfig } from "@/lib/engines/case-workspace/starters";
 
 export interface StarterMeta {
   id: string;
@@ -82,6 +86,27 @@ export const ENGINE_ADAPTERS: Record<string, EngineAdapter> = {
     },
     starterConfig: (starterId, title) => branchingStarterConfig(starterId, title),
     starters: Object.entries(BRANCHING_STARTERS).map(([id, s]) => ({ id, label: s.label, description: s.description, group: s.group })),
+  },
+  "case-workspace": {
+    engineId: "case-workspace",
+    version: "1.0.0",
+    label: "Case / Evidence Workspace",
+    blurb: "Learners examine evidence and defend a conclusion.",
+    validate: (raw) => validateCaseConfig(raw),
+    toRuntimeConfig: (c, u) => caseRuntime.toCaseRuntimeConfig(c as CaseWorkspaceConfigLike, u),
+    collectAssetIds: (c) => caseRuntime.collectCaseAssetIds(c as CaseWorkspaceConfigLike),
+    richTextValues: (c) => {
+      const config = c as { intro: string; artifacts: Array<{ body?: string }>; conclusions: Array<{ body?: string; expertRationale: string }> };
+      const values: string[] = [config.intro];
+      for (const artifact of config.artifacts) if (artifact.body) values.push(artifact.body);
+      for (const conclusion of config.conclusions) {
+        if (conclusion.body) values.push(conclusion.body);
+        values.push(conclusion.expertRationale);
+      }
+      return values;
+    },
+    starterConfig: (starterId, title) => caseStarterConfig(starterId, title),
+    starters: Object.entries(CASE_STARTERS).map(([id, s]) => ({ id, label: s.label, description: s.description, group: s.group })),
   },
 };
 
