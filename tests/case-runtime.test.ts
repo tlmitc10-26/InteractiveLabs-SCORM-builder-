@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { mountCaseWorkspace, type RuntimeCaseConfig } from "@/engine-runtime/case-workspace/main";
 import { caseStarterConfig } from "@/lib/engines/case-workspace/starters";
 import { toCaseRuntimeConfig } from "@/lib/engines/case-workspace/runtime-config";
 import type { ScormSession } from "@/engine-runtime/scorm-adapter";
+
+const ENGINE_CSS_PATH = path.resolve(__dirname, "../src/engine-runtime/case-workspace/engine.css");
 
 const noAssets = () => { throw new Error("no assets in this config"); };
 
@@ -718,6 +722,42 @@ describe("mountCaseWorkspace", () => {
       expect(scorm.setCompleted).toHaveBeenCalledTimes(1);
       // Positionally fresh: back at the brief step, not stuck on the stale payload.
       expect(h2().textContent).toBe("The Equipment Failure Case");
+    });
+  });
+
+  describe("engine.css source rules (audited-pattern parity with branching-scenario/param-sandbox)", () => {
+    const css = readFileSync(ENGINE_CSS_PATH, "utf8");
+
+    it("defines a 24px minimum height for buttons", () => {
+      expect(css).toMatch(/\.ilb-case button[^{]*\{[^}]*min-height:\s*24px/);
+    });
+
+    it("defines focus-visible outline styles using --rds-primary", () => {
+      expect(css).toMatch(/button:focus-visible[^{]*\{[^}]*outline:\s*3px solid var\(--rds-primary\)[^}]*outline-offset:\s*2px/);
+    });
+
+    it("defines the sr-only utility class", () => {
+      expect(css).toMatch(/\.ilb-sr-only\s*\{/);
+    });
+
+    it("defines a reduced-motion override", () => {
+      expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
+    });
+
+    describe("reduced-motion neutralizes the step-transition animation (plan Task 7)", () => {
+      // Isolate the @media block's own body so a match here can only come
+      // from INSIDE the reduced-motion override, never from the unguarded
+      // @keyframes/.ilb-enter rule elsewhere in the file that defines the
+      // animation in the first place.
+      const reducedMotionBlock = css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/)?.[1];
+
+      it("has a reduced-motion block to inspect", () => {
+        expect(reducedMotionBlock).toBeDefined();
+      });
+
+      it("neutralizes the .ilb-enter step-transition animation", () => {
+        expect(reducedMotionBlock).toMatch(/\.ilb-enter\s*\{[^}]*animation:\s*none/);
+      });
     });
   });
 });

@@ -2,6 +2,7 @@
  * Generates the per-engine NVDA verification scripts:
  *   - docs/a11y/nvda-check-param-sandbox.md   (Parameter Sandbox / Buoyancy Explorer)
  *   - docs/a11y/nvda-check-branching-scenario.md (Branching Scenario / Jury Deliberation)
+ *   - docs/a11y/nvda-check-case-workspace.md  (Case / Evidence Workspace / blank starter)
  *
  * Both are derived from the SAME spec-determined expectations encoded in
  * src/lib/a11y/transcript.ts and locked by tests/sr-transcript.test.ts and
@@ -63,6 +64,7 @@ const NVDA_ROLE_WORD = {
   slider: "slider",
   spinbutton: "spin button",
   checkbox: "check box",
+  radio: "radio button",
   combobox: "combo box",
   listbox: "list box",
   button: "button",
@@ -289,8 +291,8 @@ async function generateBranchingDoc() {
   // ==================== 3. Walk the best path to an ending, one Enter at a time ====================
   // first_vote -(speak_up)-> timeline -(walk_through)-> holdout -(invite_reasons)-> ending.
   const bestPathLabels = [
-    "Raise your doubts about the timeline before anyone votes",
-    "Walk the group through the conflict step by step",
+    "Raise your doubts before the room votes",
+    "Walk the group through the conflict",
     "Ask them to explain what evidence would change their mind",
   ];
   const pathSteps = [];
@@ -461,10 +463,264 @@ async function generateBranchingDoc() {
   return { outPath: path.join(DOCS_DIR, "nvda-check-branching-scenario.md"), text: lines.join("\n") + "\n" };
 }
 
+// ==================== Case / Evidence Workspace doc ====================
+
+async function generateCaseWorkspaceDoc() {
+  const { mountCaseWorkspace } = await import("@/engine-runtime/case-workspace/main");
+  const { caseStarterConfig } = await import("@/lib/engines/case-workspace/starters");
+  const { toCaseRuntimeConfig } = await import("@/lib/engines/case-workspace/runtime-config");
+
+  const noAssets = () => { throw new Error("the blank case starter has no assets"); };
+  const config = caseStarterConfig("blank", "Blank Case");
+  const runtimeConfig = toCaseRuntimeConfig(config, noAssets);
+  const root = freshRoot("root-case");
+  mountCaseWorkspace(root, runtimeConfig);
+
+  const clickByText = (selector, text) => {
+    const btn = Array.from(root.querySelectorAll(selector)).find((b) => b.textContent === text);
+    if (!btn) throw new Error(`no ${selector} with text "${text}"`);
+    btn.click();
+  };
+
+  // ==================== 1. Brief: live region, heading, Open button ====================
+  const briefReading = readingOrderTranscript(root);
+  const briefStatus = briefReading.find((e) => e.role === "status");
+  const briefHeading = briefReading.find((e) => e.role.startsWith("heading"));
+  const briefFocus = focusOrderTranscript(root);
+
+  // ==================== 2. Workspace: artifact list, select + add to case file ====================
+  clickByText(".ilb-btn-pill", "Open the case file.");
+  const workspaceReading = readingOrderTranscript(root);
+  const workspaceHeading = workspaceReading.find((e) => e.role.startsWith("heading level 2"));
+  const artifactButtons = workspaceReading.filter((e) => e.role === "button" && e.name.endsWith("Text"));
+  const caseFileHeading = workspaceReading.find((e) => e.role === "heading level 3");
+
+  const firstArtifactBtn = root.querySelector(".ilb-artifact-btn");
+  firstArtifactBtn.click();
+  const viewerReading = readingOrderTranscript(root);
+  const viewerHeading = viewerReading.find((e) => e.role === "heading level 3" && e.name !== caseFileHeading?.name);
+  const addButtons = viewerReading.filter((e) => e.role === "button" && e.name.startsWith("Add as"));
+
+  clickByText(".ilb-viewer-actions .ilb-btn", "Add as strong support");
+  const afterAddReading = readingOrderTranscript(root);
+  const afterAddStatus = afterAddReading.find((e) => e.role === "status");
+  const strengthEntry = afterAddReading.find((e) => e.role === "text");
+  const removeButton = afterAddReading.find((e) => e.role === "button" && e.name.startsWith("Remove "));
+
+  // ==================== 3. Conclude: radio cards, reason checkboxes, legend focus ====================
+  clickByText(".ilb-btn-pill", "Ready to conclude");
+  const concludeBeforeReading = readingOrderTranscript(root);
+  const concludeHeading = concludeBeforeReading.find((e) => e.role.startsWith("heading"));
+  const radios = concludeBeforeReading.filter((e) => e.role === "radio");
+  const submitBeforeReading = concludeBeforeReading.find((e) => e.name === "Submit conclusion");
+
+  const firstRadio = root.querySelector('input[type="radio"]');
+  const firstRadioLabel = readingOrderTranscript(root).find((e) => e.role === "radio")?.name;
+  firstRadio.checked = true;
+  firstRadio.dispatchEvent(new window.Event("change", { bubbles: true }));
+  const afterChooseReading = readingOrderTranscript(root);
+  const checkedRadio = afterChooseReading.find((e) => e.role === "radio" && e.states?.includes("checked"));
+  const reasonCheckboxes = afterChooseReading.filter((e) => e.role === "checkbox");
+  const legendText = document.activeElement?.tagName === "LEGEND" ? document.activeElement.textContent : null;
+
+  const firstCheckbox = root.querySelector('input[type="checkbox"]');
+  firstCheckbox.checked = true;
+  firstCheckbox.dispatchEvent(new window.Event("change", { bubbles: true }));
+  const afterCheckReading = readingOrderTranscript(root);
+  const checkedReasonEntry = afterCheckReading.find((e) => e.role === "checkbox" && e.states?.includes("checked"));
+  const submitAfterReading = afterCheckReading.find((e) => e.name === "Submit conclusion");
+
+  // ==================== 4. Debrief: eyebrow, score, comparison + reason review ====================
+  clickByText(".ilb-btn-pill", "Submit conclusion");
+  const debriefReading = readingOrderTranscript(root);
+  const debriefStatus = debriefReading.find((e) => e.role === "status");
+  const eyebrow = debriefReading.find((e) => e.role === "text");
+  const debriefHeading = debriefReading.find((e) => e.role === "heading level 2");
+  const scoreLine = debriefReading.find((e) => e.role === "text" && e !== eyebrow && /Score:/.test(e.name));
+  const comparisonHeading = debriefReading.find((e) => e.role === "heading level 3" && /compares/.test(e.name));
+  const comparisonText = debriefReading.find((e) => e.role === "text" && e !== eyebrow && e !== scoreLine && /included|left out/.test(e.name));
+  const reasoningHeading = debriefReading.find((e) => e.role === "heading level 3" && /reasoning/i.test(e.name));
+  const reasonReviewText = debriefReading.find((e) => e.role === "text" && e !== eyebrow && e !== scoreLine && e !== comparisonText);
+  const rationaleHeading = debriefReading.find((e) => e.role === "heading level 3" && /rationale/i.test(e.name));
+  const startOverButton = debriefReading.find((e) => e.role === "button");
+
+  // ==================== Emit markdown ====================
+  const lines = [];
+  const push = (s = "") => lines.push(s);
+
+  push("# NVDA verification script: Case / Evidence Workspace (Blank starter)");
+  push();
+  push("_Generated by `scripts/emit-nvda-script.mjs` from the same spec-determined transcript");
+  push("data locked in `tests/sr-transcript-case.test.ts` (see `src/lib/a11y/transcript.ts`).");
+  push("Do not hand-edit this file -- rerun `npm run a11y:script` to regenerate it after any");
+  push("change to the runtime's markup or to the blank case starter config._");
+  push();
+  push("## Assumptions");
+  push();
+  push("- NVDA with **default settings** (default speech verbosity: roles and states announced).");
+  push("- Latest Chrome or Firefox -- accname computation and live-region processing are the");
+  push("  browser's job; NVDA reads whatever the browser exposes via the accessibility tree.");
+  push("- Open **NVDA's Speech Viewer** before starting, so you can log/copy exactly what NVDA");
+  push("  says as you go, and compare it word-for-word against the \"NVDA should say\" lines below.");
+  push("- Load the Blank Case starter fresh (no prior SCORM resume/suspend data) before beginning");
+  push("  at step 1.");
+  push();
+  push("## 1. Brief: live region, heading, Open button");
+  push();
+  let n = 1;
+  if (briefStatus) {
+    push(`${n}. Read the first line → NVDA should say: **"${briefStatus.name}"**`);
+    n++;
+  }
+  push(`${n}. Press H → NVDA should say: **"${headingUtterance(briefHeading)}"**`);
+  n++;
+  for (const s of briefFocus) {
+    push(`${n}. Press Tab → NVDA should say: **"${nvdaFocusUtterance(s)}"**`);
+    n++;
+  }
+  push();
+  push("## 2. Workspace: open the case file, review an artifact, add it");
+  push();
+  push(`${n}. Press Enter on the Open button → NVDA should say the new heading: **"${headingUtterance(workspaceHeading)}"**`);
+  n++;
+  for (const btn of artifactButtons) {
+    push(`${n}. Press Tab to the next artifact button → NVDA should say: **"${nvdaFocusUtterance(btn)}"**`);
+    n++;
+  }
+  if (caseFileHeading) {
+    push(`${n}. Continue reading → NVDA should say: **"${headingUtterance(caseFileHeading)}"**`);
+    n++;
+  }
+  push(`${n}. Press Enter on the first artifact button ("${artifactButtons[0]?.name}") → NVDA should say the new heading:`);
+  push(`   **"${headingUtterance(viewerHeading)}"**`);
+  n++;
+  for (const btn of addButtons) {
+    push(`${n}. Continue reading (or Tab) → NVDA should say: **"${nvdaFocusUtterance(btn)}"**`);
+    n++;
+  }
+  push(`${n}. Press Enter on "${addButtons[0]?.name}" → the live region updates: NVDA should say:`);
+  push(`   **"${afterAddStatus?.name}"**`);
+  n++;
+  if (strengthEntry) {
+    push(`${n}. Continue reading the case-file panel → NVDA should say the strength text: **"${strengthEntry.name}"**`);
+    n++;
+  }
+  if (removeButton) {
+    push(`${n}. Continue reading (or Tab) → NVDA should say: **"${nvdaFocusUtterance(removeButton)}"**`);
+    n++;
+  }
+  push();
+  push("## 3. Conclude: choose a conclusion, select a reason");
+  push();
+  push(`${n}. Press Enter on "Ready to conclude" → NVDA should say the new heading:`);
+  push(`   **"${headingUtterance(concludeHeading)}"**`);
+  n++;
+  push("The two conclusion radio buttons follow, initially unchecked:");
+  push();
+  for (const r of radios) {
+    push(`${n}. Continue reading (or Tab) → NVDA should say: **"${nvdaFocusUtterance(r)}"**`);
+    n++;
+  }
+  if (submitBeforeReading) {
+    push(`${n}. Continue reading → NVDA should say: **"${nvdaFocusUtterance(submitBeforeReading)}"**`);
+    n++;
+  }
+  push(`${n}. Press Space/Enter on "${firstRadioLabel}" → NVDA should say it flip to checked:`);
+  push(`   **"${nvdaFocusUtterance(checkedRadio)}"**`);
+  n++;
+  push(`${n}. Focus moves automatically to the newly revealed reason group's legend (NOT announced`);
+  push("   via the live region -- spec §3's aria-describedby doctrine) → NVDA should say:");
+  push(`   **"${legendText}"**`);
+  n++;
+  for (const c of reasonCheckboxes) {
+    push(`${n}. Continue reading (or Tab) → NVDA should say: **"${nvdaFocusUtterance(c)}"**`);
+    n++;
+  }
+  push(`${n}. Press Space on the first reason checkbox → NVDA should say it flip to checked:`);
+  push(`   **"${nvdaFocusUtterance(checkedReasonEntry)}"**`);
+  n++;
+  if (submitAfterReading) {
+    push(`${n}. Continue reading → the Submit button is no longer disabled: NVDA should say just:`);
+    push(`   **"${nvdaFocusUtterance(submitAfterReading)}"**`);
+    n++;
+  }
+  push();
+  push("## 4. Debrief: score, case-file comparison, reason review");
+  push();
+  push(`${n}. Press Enter on "Submit conclusion" → the live region reflects the final case file:`);
+  push(`   NVDA should say: **"${debriefStatus?.name}"**`);
+  n++;
+  if (eyebrow) {
+    push(`${n}. Move the browse cursor to the top of the debrief → NVDA should say: **"${eyebrow.name}"**`);
+    n++;
+  }
+  push(`${n}. Focus lands on the result heading (the chosen conclusion's label) → NVDA should say:`);
+  push(`   **"${headingUtterance(debriefHeading)}"**`);
+  n++;
+  if (scoreLine) {
+    push(`${n}. Continue reading → NVDA should say the score line: **"${scoreLine.name}"**`);
+    n++;
+  }
+  if (comparisonHeading) {
+    push(`${n}. Press H → NVDA should say: **"${headingUtterance(comparisonHeading)}"**`);
+    n++;
+  }
+  if (comparisonText) {
+    push(`${n}. Continue reading the comparison list (bundled as ONE reading-order entry) → NVDA`);
+    push("   should say, verbatim:");
+    push(`   **"${comparisonText.name}"**`);
+    n++;
+  }
+  if (reasoningHeading) {
+    push(`${n}. Press H → NVDA should say: **"${headingUtterance(reasoningHeading)}"**`);
+    n++;
+  }
+  if (reasonReviewText) {
+    push(`${n}. Continue reading the reason-review list (bundled as ONE reading-order entry,`);
+    push("   including the flaw note for any flawed reason the learner selected) → NVDA should say,");
+    push("   verbatim:");
+    push(`   **"${reasonReviewText.name}"**`);
+    n++;
+  }
+  if (rationaleHeading) {
+    push(`${n}. Press H → NVDA should say: **"${headingUtterance(rationaleHeading)}"**`);
+    n++;
+  }
+  if (startOverButton) {
+    push(`${n}. Continue reading (or Tab; this is the only focusable control at debrief) → NVDA`);
+    push(`   should say: **"${nvdaFocusUtterance(startOverButton)}"**`);
+    n++;
+  }
+  push();
+  push("## What you should NOT hear");
+  push();
+  push("- **No double announcement** of a conclusion's checked state or the case-file status --");
+  push("  each change updates the DOM exactly once (main.ts's churn guard on the one live region),");
+  push("  so NVDA has nothing to re-announce on a no-op re-render.");
+  push("- **No live-region announcement of the reason group appearing** -- choosing a conclusion");
+  push("  moves focus directly to the reason group's legend (see step 3 above); the case-file");
+  push("  status live region is untouched by conclusion/reason selection at all");
+  push("  (`tests/sr-transcript-case.test.ts`'s \"exactly one live region\" contract).");
+  push("- **Nothing announced as \"blank\"** -- every artifact button, radio, and checkbox has a");
+  push("  non-empty accessible name (the artifact title + kind, the conclusion label, the reason");
+  push("  text), never an empty or icon-only label.");
+  push("- **Nothing announced as \"clickable\"** -- every control is a native form element (button/");
+  push("  radio/checkbox), never a generic `<div>`/`<span>` with a click handler bolted on.");
+  push("- **No stray reading of the decorative reviewed glyph** (the artifact list's ●/○ mark) --");
+  push("  it is `aria-hidden=\"true\"` and excluded from the reading order; only the case-file");
+  push("  status live region ever reports how many artifacts have been reviewed/added.");
+  push("- **No flaw note read aloud before submission** -- a flawed reason's explanation only");
+  push("  appears in the debrief's reason-review list, never as part of the Conclude-step");
+  push("  checkbox's own accessible name.");
+  push();
+
+  return { outPath: path.join(DOCS_DIR, "nvda-check-case-workspace.md"), text: lines.join("\n") + "\n" };
+}
+
 // ==================== Write both docs ====================
 
 mkdirSync(DOCS_DIR, { recursive: true });
-const outputs = [await generateParamSandboxDoc(), await generateBranchingDoc()];
+const outputs = [await generateParamSandboxDoc(), await generateBranchingDoc(), await generateCaseWorkspaceDoc()];
 for (const { outPath, text } of outputs) {
   writeFileSync(outPath, text);
   console.log(`Wrote ${path.relative(ROOT, outPath)}`);
