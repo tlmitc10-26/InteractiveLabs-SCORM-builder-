@@ -79,6 +79,7 @@ Same doctrine as both existing formats (never-throws, line-numbered ImportIssue 
 - **Reason lines**: `-` starts a reason ONLY inside a CONCLUSION block; a conclusion body line may not start with `-` (documented lossiness, branching-style). Marker anchored at end of line — `(SOUND)` / `(FLAWED: <note>)` with the note allowed any chars except a trailing `)`. Missing marker ⇒ error + imported as SOUND (mirrors branching's OK default).
 - **Tables**: `|`-delimited rows, first row headers; `|` inside cell text = documented lossiness; row/header count mismatch ⇒ error + row padded/truncated to fit; caption via optional `Caption:` line.
 - MAP lines resolve titles case-insensitively; strength defaults weak with info note if absent.
+- All doc-authored prose (intro, artifact bodies, conclusion bodies, expert rationales) is HTML-escaped at parse time — the un-sandboxed same-origin preview renders drafts pre-validation, so nothing doc-authored may carry live markup.
 
 ## 7. Exemplar — M3
 
