@@ -246,6 +246,16 @@ export function restoreState(config: CaseStateConfigLike, payload: unknown): Cas
     }
     const selectedReasons = new Set(selRaw);
 
+    // Review F1/F3 (hostile suspend data): a step:"debrief" payload can only
+    // ever have been produced by a real submit() call, which enforces the
+    // submit gate (a chosen conclusion AND at least one selected reason,
+    // spec §3 review #17) before transitioning there. A debrief payload
+    // missing either half is therefore necessarily forged/corrupted, not a
+    // legitimately-reachable resume state -- reject it here rather than
+    // handing the runtime a debrief render with no chosen conclusion to
+    // score/display.
+    if (step === "debrief" && (!chosen || selRaw.length === 0)) return null;
+
     if (typeof p.b !== "number" || !Number.isFinite(p.b)) return null;
     const bestPct = Math.min(100, Math.max(0, p.b));
 

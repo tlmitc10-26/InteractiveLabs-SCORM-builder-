@@ -193,6 +193,7 @@
         if (!selRaw.every((id) => reasonIds.has(id))) return null;
       }
       const selectedReasons = new Set(selRaw);
+      if (step === "debrief" && (!chosen || selRaw.length === 0)) return null;
       if (typeof p.b !== "number" || !Number.isFinite(p.b)) return null;
       const bestPct = Math.min(100, Math.max(0, p.b));
       if (typeof p.c !== "boolean") return null;
@@ -291,6 +292,14 @@
     let currentArtifactId = null;
     let reasonSection;
     let submitBtn;
+    let submitHint;
+    function updateSubmitDisabledUI() {
+      const disabled = !state.chosen || state.selectedReasons.size === 0;
+      submitBtn.disabled = disabled;
+      submitHint.hidden = !disabled;
+      if (disabled) submitBtn.setAttribute("aria-describedby", submitHint.id);
+      else submitBtn.removeAttribute("aria-describedby");
+    }
     function persistSuspend() {
       if (!scorm || scorm.mode !== "scorm") return;
       const ok = scorm.saveSuspendData(suspendPayload(state));
@@ -304,6 +313,7 @@
     }
     function renderBrief(focusHeading) {
       var _a;
+      updateCaseFileStatus();
       stepContainer.innerHTML = "";
       retriggerEnter(stepContainer);
       const header = el("div", "ilb-case-header ilb-case-header--band");
@@ -517,7 +527,11 @@
           const li = document.createElement("li");
           li.className = "ilb-case-file-row";
           const label = document.createElement("span");
-          label.textContent = `${artifact.title}: ${strength === "strong" ? "Strong support" : "Weak support"}`;
+          label.textContent = `${artifact.title}: `;
+          const strengthSpan = document.createElement("span");
+          strengthSpan.className = "ilb-case-file-strength";
+          strengthSpan.textContent = strength === "strong" ? "Strong support" : "Weak support";
+          label.appendChild(strengthSpan);
           li.appendChild(label);
           const removeBtn = document.createElement("button");
           removeBtn.type = "button";
@@ -577,7 +591,7 @@
       stepContainer.appendChild(fieldset);
       reasonSection = el("div", "ilb-reason-section");
       stepContainer.appendChild(reasonSection);
-      const submitHint = el("p", "ilb-submit-hint");
+      submitHint = el("p", "ilb-submit-hint");
       submitHint.id = `${mountId}-submit-hint`;
       submitHint.textContent = "Select at least one reason before you can submit.";
       stepContainer.appendChild(submitHint);
@@ -585,7 +599,6 @@
       submitBtn.type = "button";
       submitBtn.className = "ilb-btn ilb-btn-pill";
       submitBtn.textContent = "Submit conclusion";
-      submitBtn.setAttribute("aria-describedby", submitHint.id);
       submitBtn.addEventListener("click", () => {
         if (state.step !== "conclude" || !state.chosen || state.selectedReasons.size === 0) return;
         handleSubmit();
@@ -607,7 +620,7 @@
     }
     function renderReasonSection(focusLegend) {
       reasonSection.innerHTML = "";
-      submitBtn.disabled = state.selectedReasons.size === 0;
+      updateSubmitDisabledUI();
       if (!state.chosen) return;
       const conclusion = config.conclusions.find((c) => c.id === state.chosen);
       const conclusionIdAtRender = state.chosen;
@@ -627,7 +640,7 @@
           if (state.step !== "conclude" || state.chosen !== conclusionIdAtRender) return;
           state = toggleReason(config, state, reason.id);
           persistSuspend();
-          submitBtn.disabled = state.selectedReasons.size === 0;
+          updateSubmitDisabledUI();
         });
         label.appendChild(checkbox);
         const text = document.createElement("span");
@@ -649,9 +662,14 @@
       renderDebrief(true);
     }
     function renderDebrief(focusHeading) {
+      const conclusion = config.conclusions.find((c) => c.id === state.chosen);
+      if (!state.chosen || !conclusion) {
+        state = initialState();
+        renderBrief(true);
+        return;
+      }
       stepContainer.innerHTML = "";
       retriggerEnter(stepContainer);
-      const conclusion = config.conclusions.find((c) => c.id === state.chosen);
       const includedIds = state.caseFile.map(([id]) => id);
       const score = scoreCase(config, state.chosen, includedIds, [...state.selectedReasons]);
       const resultHead = el("div", "ilb-result-head");

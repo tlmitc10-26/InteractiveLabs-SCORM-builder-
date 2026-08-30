@@ -374,6 +374,26 @@ describe("mountCaseWorkspace", () => {
       expect(submitBtn.disabled).toBe(true);
     });
 
+    // F4 (review): the disabled explanation (visible hint paragraph +
+    // aria-describedby) must not go stale once Submit becomes enabled --
+    // both toggle in lockstep with submitBtn.disabled everywhere it changes.
+    it("submit hint and aria-describedby hide/clear once enabled, and restore once reasons deselect back to zero", () => {
+      openConclude();
+      chooseConclusionRadio("Equipment failure");
+      const submitBtn = Array.from(document.querySelectorAll<HTMLButtonElement>(".ilb-btn-pill")).find((b) => b.textContent === "Submit conclusion")!;
+      const hint = document.querySelector(".ilb-submit-hint") as HTMLElement;
+
+      toggleReasonCheckbox("The lift had unresolved service flags.");
+      expect(submitBtn.disabled).toBe(false);
+      expect(submitBtn.hasAttribute("aria-describedby")).toBe(false);
+      expect(hint.hidden).toBe(true);
+
+      toggleReasonCheckbox("The lift had unresolved service flags."); // deselect back to zero
+      expect(submitBtn.disabled).toBe(true);
+      expect(submitBtn.getAttribute("aria-describedby")).toBe(hint.id);
+      expect(hint.hidden).toBe(false);
+    });
+
     it("\"Back to the case file\" returns to Workspace, preserving the case file, and focuses its h2", () => {
       mountCaseWorkspace(root(), richConfig);
       clickByText(".ilb-btn-pill", "Open the case file.");
@@ -520,6 +540,10 @@ describe("mountCaseWorkspace", () => {
       clickByText(".ilb-btn-pill", "Start over");
       expect(h2().textContent).toBe("The Equipment Failure Case");
       expect(document.activeElement).toBe(h2());
+      // F2 (review): the live region must not read the stale pre-reset case
+      // file count -- checked IMMEDIATELY after Start over, before Open the
+      // case file re-enters Workspace (which was already updating it).
+      expect(document.querySelector(".ilb-case-status")!.textContent).toBe("Case file: 0 of 4 artifacts");
       clickByText(".ilb-btn-pill", "Open the case file.");
       expect(document.querySelector(".ilb-case-status")!.textContent).toBe("Case file: 0 of 4 artifacts");
     });
@@ -651,6 +675,35 @@ describe("mountCaseWorkspace", () => {
       expect(document.querySelector(".ilb-score-line")!.textContent).toBe(originalScoreLine);
       expect(scorm2.setScore).toHaveBeenCalledWith(100);
       expect(scorm2.setCompleted).toHaveBeenCalledTimes(1);
+    });
+
+    // F1/F3 (review, hostile suspend data): a step:"debrief" payload missing
+    // a chosen conclusion, or one with an empty reason selection, now fails
+    // restoreState's structural validation (tests/case-state.test.ts) --
+    // this is the runtime-level half of that fix, confirming the fallback
+    // path (salvageBestAndCompleted) kicks in cleanly with no throw.
+    it("mounts usable at Brief (no throw) for a debrief payload with NO chosen conclusion, salvaging b/c", () => {
+      const scorm = createScormMock({ v: 1, step: "debrief", cf: [], rv: [], sel: [], b: 42, c: true });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).ILBScorm = scorm as unknown as ScormSession;
+
+      expect(() => mountCaseWorkspace(root(), richConfig)).not.toThrow();
+      expect(h2().textContent).toBe("The Equipment Failure Case"); // Brief renders
+      expect(scorm.setScore).toHaveBeenCalledWith(42);
+      expect(scorm.setCompleted).toHaveBeenCalledTimes(1);
+    });
+
+    it("mounts usable at Brief (no throw) for a debrief payload with a valid chosen conclusion but an EMPTY reason selection, salvaging b/c", () => {
+      const scorm = createScormMock({
+        v: 1, step: "debrief", cf: [], rv: [], ch: "equipment_failure", sel: [], b: 55, c: true,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).ILBScorm = scorm as unknown as ScormSession;
+
+      expect(() => mountCaseWorkspace(root(), richConfig)).not.toThrow();
+      expect(h2().textContent).toBe("The Equipment Failure Case"); // Brief renders
+      expect(scorm.setScore).toHaveBeenCalledWith(55);
+      expect(scorm.setCompleted).toHaveBeenCalledTimes(1);
     });
 
     it("salvages best score and completion from a payload that fails full restore (stale artifact id) but carries well-formed b/c", () => {

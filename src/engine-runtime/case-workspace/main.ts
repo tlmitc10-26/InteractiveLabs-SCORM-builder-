@@ -197,6 +197,21 @@ export function mountCaseWorkspace(root: HTMLElement, config: RuntimeCaseConfig)
   // every entry into the step.
   let reasonSection!: HTMLElement;
   let submitBtn!: HTMLButtonElement;
+  let submitHint!: HTMLElement;
+
+  /** Keeps submitBtn's disabled state, its visible hint paragraph's
+   *  [hidden], and its aria-describedby IN LOCKSTEP everywhere the disabled
+   *  condition can change (review F4) -- both the visible and programmatic
+   *  halves of the disabled explanation must appear/disappear together, or
+   *  a screen-reader user hears a stale "select at least one reason"
+   *  description on an already-enabled button. */
+  function updateSubmitDisabledUI(): void {
+    const disabled = !state.chosen || state.selectedReasons.size === 0;
+    submitBtn.disabled = disabled;
+    submitHint.hidden = !disabled;
+    if (disabled) submitBtn.setAttribute("aria-describedby", submitHint.id);
+    else submitBtn.removeAttribute("aria-describedby");
+  }
 
   // ---------- shared helpers ----------
 
@@ -216,6 +231,12 @@ export function mountCaseWorkspace(root: HTMLElement, config: RuntimeCaseConfig)
   // ---------- Step 1: Brief ----------
 
   function renderBrief(focusHeading: boolean): void {
+    // F2 (review): keeps the live region in sync uniformly on every path
+    // into Brief -- initial mount AND "Start over" (whose case-file reset
+    // would otherwise leave the region reading the pre-reset count until
+    // something else happened to touch it, e.g. re-entering Workspace).
+    updateCaseFileStatus();
+
     stepContainer.innerHTML = "";
     retriggerEnter(stepContainer);
 
@@ -475,7 +496,15 @@ export function mountCaseWorkspace(root: HTMLElement, config: RuntimeCaseConfig)
         const li = document.createElement("li");
         li.className = "ilb-case-file-row";
         const label = document.createElement("span");
-        label.textContent = `${artifact.title}: ${strength === "strong" ? "Strong support" : "Weak support"}`;
+        label.textContent = `${artifact.title}: `;
+        // Review F5: the strength is its OWN tracked text-carrier
+        // (transcript.ts's TEXT_CARRIER_CLASSES) so a screen-reader user
+        // gets a reading-order confirmation of which strength they assigned
+        // -- previously this whole row was untracked prose.
+        const strengthSpan = document.createElement("span");
+        strengthSpan.className = "ilb-case-file-strength";
+        strengthSpan.textContent = strength === "strong" ? "Strong support" : "Weak support";
+        label.appendChild(strengthSpan);
         li.appendChild(label);
         const removeBtn = document.createElement("button");
         removeBtn.type = "button";
@@ -556,7 +585,7 @@ export function mountCaseWorkspace(root: HTMLElement, config: RuntimeCaseConfig)
     reasonSection = el("div", "ilb-reason-section");
     stepContainer.appendChild(reasonSection);
 
-    const submitHint = el("p", "ilb-submit-hint");
+    submitHint = el("p", "ilb-submit-hint");
     submitHint.id = `${mountId}-submit-hint`;
     submitHint.textContent = "Select at least one reason before you can submit.";
     stepContainer.appendChild(submitHint);
@@ -567,8 +596,10 @@ export function mountCaseWorkspace(root: HTMLElement, config: RuntimeCaseConfig)
     submitBtn.textContent = "Submit conclusion";
     // Visible (the hint paragraph above) + programmatic (aria-describedby)
     // explanation for the disabled state (spec §3 review #17), mirroring
-    // branching's aria-describedby doctrine for its Continue button.
-    submitBtn.setAttribute("aria-describedby", submitHint.id);
+    // branching's aria-describedby doctrine for its Continue button --
+    // updateSubmitDisabledUI() (review F4) keeps both in lockstep with
+    // submitBtn.disabled everywhere it changes, so the initial state is set
+    // there too (via renderReasonSection(false) below), not here.
     submitBtn.addEventListener("click", () => {
       if (state.step !== "conclude" || !state.chosen || state.selectedReasons.size === 0) return;
       handleSubmit();
@@ -599,7 +630,7 @@ export function mountCaseWorkspace(root: HTMLElement, config: RuntimeCaseConfig)
    *  step transition (spec §3). */
   function renderReasonSection(focusLegend: boolean): void {
     reasonSection.innerHTML = "";
-    submitBtn.disabled = state.selectedReasons.size === 0;
+    updateSubmitDisabledUI();
     if (!state.chosen) return;
     const conclusion = config.conclusions.find((c) => c.id === state.chosen) as RuntimeConclusion;
     const conclusionIdAtRender = state.chosen; // stale-closure guard: captured once per render
@@ -621,7 +652,7 @@ export function mountCaseWorkspace(root: HTMLElement, config: RuntimeCaseConfig)
         if (state.step !== "conclude" || state.chosen !== conclusionIdAtRender) return; // stale-closure guard
         state = toggleReason(config, state, reason.id);
         persistSuspend();
-        submitBtn.disabled = state.selectedReasons.size === 0;
+        updateSubmitDisabledUI();
       });
       label.appendChild(checkbox);
       const text = document.createElement("span");
@@ -651,10 +682,22 @@ export function mountCaseWorkspace(root: HTMLElement, config: RuntimeCaseConfig)
   // ---------- Step 4: Debrief ----------
 
   function renderDebrief(focusHeading: boolean): void {
+    // Belt-and-braces (review F3): restoreState (state.ts) already rejects
+    // any step:"debrief" payload missing a chosen conclusion, so this
+    // should be unreachable through a normal resume -- but a debrief render
+    // must never dereference an absent/no-longer-existing conclusion no
+    // matter how `state` got here. Treat it as corrupted, exactly like a
+    // fresh mount, rather than throwing.
+    const conclusion = config.conclusions.find((c) => c.id === state.chosen);
+    if (!state.chosen || !conclusion) {
+      state = initialState();
+      renderBrief(true);
+      return;
+    }
+
     stepContainer.innerHTML = "";
     retriggerEnter(stepContainer);
 
-    const conclusion = config.conclusions.find((c) => c.id === state.chosen) as RuntimeConclusion;
     const includedIds = state.caseFile.map(([id]) => id);
     // Recomputed directly rather than carried over from handleSubmit's
     // result: on a resume that restores straight into the debrief step, no

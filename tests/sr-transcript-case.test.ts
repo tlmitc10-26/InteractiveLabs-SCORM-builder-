@@ -111,6 +111,12 @@ describe("screen-reader announcement contract (blank starter, case workspace)", 
         { role: "heading level 3", name: "Artifact One" },
         { role: "button", name: "Remove from case file" },
         { role: "heading level 3", name: "Your case file" },
+        // F5 (review): the case-file row's strength ("Strong support" /
+        // "Weak support") is now its own tracked text-carrier
+        // (.ilb-case-file-strength, TEXT_CARRIER_CLASSES) -- previously this
+        // whole row was untracked prose, so a screen-reader user had no
+        // reading-order confirmation of which strength they'd assigned.
+        { role: "text", name: "Strong support" },
         { role: "button", name: "Remove Artifact One from case file" },
         { role: "button", name: "Ready to conclude" },
       ]);

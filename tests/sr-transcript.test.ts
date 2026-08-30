@@ -175,6 +175,39 @@ describe("screen-reader announcement contract (buoyancy starter)", () => {
       expect(textEntries).toHaveLength(2); // score-status + one challenge row
     });
 
+    // F9 (review, pre-existing coverage gap): none of the built-in
+    // param-sandbox starters use a "toggle" input, so the real
+    // <input type="checkbox"> path in main.ts (~:281) had never actually
+    // been exercised by this contract -- only param-sandbox's OTHER
+    // checkbox-shaped control (none) or the case-workspace runtime's
+    // checkbox path were locked. This locks its checked/not-checked tokens.
+    // Zero param-sandbox source changes -- this only locks EXISTING behavior.
+    it("locks the checked-state tokens for a real checkbox (toggle input), never previously exercised by any starter", () => {
+      document.body.innerHTML = '<div id="root"></div>';
+      const config: RuntimeSandboxConfig = {
+        title: "Toggle test",
+        inputs: [{ id: "on", label: "Powered on", type: "toggle", defaultValue: 1 }],
+        outputs: [{ id: "y", label: "Y", formula: "on * 2" }],
+        charts: [],
+        challenges: [],
+      };
+      const root = document.getElementById("root")!;
+      mountSandbox(root, config);
+
+      const checkbox = root.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      expect(checkbox).toBeTruthy();
+      expect(focusOrderTranscript(root)).toEqual([
+        { role: "checkbox", name: "Powered on", states: ["checked"] },
+      ]);
+
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+      expect(focusOrderTranscript(root)).toEqual([
+        { role: "checkbox", name: "Powered on", states: ["not checked"] },
+      ]);
+    });
+
     it("excludes a decorative stage background image and a decorative transform-overlay image (both alt=\"\")", () => {
       document.body.innerHTML = '<div id="root"></div>';
       const config: RuntimeSandboxConfig = {

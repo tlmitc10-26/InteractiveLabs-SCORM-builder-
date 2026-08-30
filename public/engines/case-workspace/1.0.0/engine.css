@@ -241,8 +241,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ilb-case .ilb-btn { transition: none; }
-  .ilb-case .ilb-artifact-btn { transition: none; }
-  .ilb-case .ilb-conclusion-card { transition: none; }
+  /* F7 (review): the three transition:none selectors that used to sit here
+     (.ilb-btn / .ilb-artifact-btn / .ilb-conclusion-card) were dead -- none
+     of those selectors carry a base `transition` property anywhere else in
+     this file, so overriding it to `none` here changed nothing. Only the
+     step-transition animation below is real. */
   .ilb-enter { animation: none; }
 }

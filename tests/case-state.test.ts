@@ -376,6 +376,29 @@ describe("suspendPayload / restoreState round trip", () => {
     expect(restoreState(config, payload)).toBeNull();
   });
 
+  // F1/F3 (review, hostile suspend data): the submit gate (a chosen
+  // conclusion AND at least one selected reason, enforced by submit() above)
+  // must also hold on RESTORE — a step:"debrief" payload can only ever have
+  // been produced by a real submit() call, so one missing either half is
+  // necessarily forged/corrupted, not a legitimately-reachable resume state.
+  it("returns null for step:debrief with NO chosen conclusion at all", () => {
+    const payload = { v: 1, cf: [], rv: [], sel: [], b: 0, c: false, step: "debrief" };
+    expect(restoreState(config, payload)).toBeNull();
+  });
+
+  it("returns null for step:debrief with a valid chosen conclusion but an EMPTY reason selection", () => {
+    const payload = { v: 1, cf: [], rv: [], ch: "equipment_failure", sel: [], b: 0, c: false, step: "debrief" };
+    expect(restoreState(config, payload)).toBeNull();
+  });
+
+  it("still accepts step:debrief with a valid chosen conclusion AND a non-empty reason selection", () => {
+    const payload = { v: 1, cf: [], rv: [], ch: "equipment_failure", sel: ["r_sound1"], b: 40, c: true, step: "debrief" };
+    const restored = restoreState(config, payload);
+    expect(restored).not.toBeNull();
+    expect(restored?.step).toBe("debrief");
+    expect(restored?.chosen).toBe("equipment_failure");
+  });
+
   it("clamps a restored best score (b) above 100 down to 100", () => {
     const payload = { v: 1, cf: [], rv: [], sel: [], b: 150, c: false, step: "brief" };
     const restored = restoreState(config, payload);
