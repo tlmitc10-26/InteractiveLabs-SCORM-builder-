@@ -19,6 +19,7 @@ const DEFAULT_OUT = path.join(ROOT, "public", "engines");
 const ENGINES = [
   { id: "param-sandbox", title: "Parameter Sandbox" },
   { id: "branching-scenario", title: "Branching Scenario" },
+  { id: "case-workspace", title: "Case / Evidence Workspace" },
 ];
 
 // Mirrors src/lib/design/tokens.ts's GENERATED marker + emitters exactly.

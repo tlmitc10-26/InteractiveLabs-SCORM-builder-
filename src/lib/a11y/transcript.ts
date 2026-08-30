@@ -227,9 +227,20 @@ type Category = "heading" | "control" | "img" | "status" | "text-carrier";
  *  The runtime visual pass (2026-08-28) adds one more: the ending's
  *  "Scenario complete" eyebrow -- the ONE deliberate new visible/announced
  *  text that pass introduces (see src/engine-runtime/branching-scenario/
- *  main.ts's renderEnding). */
+ *  main.ts's renderEnding). Case workspace (M1) reuses "ilb-score-line" and
+ *  "ilb-eyebrow" as-is (both are generic, not namespaced per engine -- the
+ *  "ilb-" convention is shared vocabulary across runtimes) and adds its own
+ *  two PURE-TEXT lists (no interactive controls inside either <li>, same
+ *  shape as "ilb-debrief-list" above): the debrief's per-artifact
+ *  comparison list and its reason-review list -- both are graded feedback
+ *  a screen-reader user must be able to confirm reads correctly, so they
+ *  get the same whole-list-as-one-entry treatment rather than being left
+ *  untracked like ordinary prose (e.g. an artifact's own body text, or the
+ *  expert-rationale block, which stay untracked exactly like branching's
+ *  scene/ending body copy). */
 const TEXT_CARRIER_CLASSES = [
   "ilb-score-status", "ilb-challenge", "ilb-role", "ilb-score-line", "ilb-debrief-list", "ilb-eyebrow",
+  "ilb-comparison-list", "ilb-reason-review-list",
 ];
 
 function categoryOf(el: Element): Category | null {

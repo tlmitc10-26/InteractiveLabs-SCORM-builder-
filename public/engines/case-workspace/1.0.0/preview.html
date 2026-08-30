@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview</title>
+  <link rel="stylesheet" href="engine.css" />
+</head>
+<body>
+  <div id="ilb-root"></div>
+  <script src="engine.js"></script>
+  <script>
+    window.addEventListener("message", function (ev) {
+      if (!ev.data || ev.data.type !== "ilb-config") return;
+      // Cross-origin injection guard: the editor iframe is always same-origin
+      // with this preview page, so pin both the message origin and the
+      // source window to the parent frame. This is defense in depth — full
+      // Zod revalidation of the config isn't available in this static page.
+      // If the preview is ever served from a separate origin from the
+      // editor, both this check and the location.origin used below for the
+      // ready-ping target must be revisited (a cross-origin editor would
+      // need an explicit allowlisted origin instead of location.origin).
+      if (ev.origin !== location.origin) return;
+      if (ev.source !== window.parent) return;
+      var root = document.getElementById("ilb-root");
+      try {
+        if (!window.ILBEngine) throw new Error("engine runtime not loaded");
+        window.ILBEngine.mount(root, ev.data.config);
+      } catch (err) {
+        root.textContent = "Preview error: " + (err && err.message ? err.message : String(err));
+      }
+    });
+    window.parent.postMessage({ type: "ilb-preview-ready" }, location.origin);
+  </script>
+</body>
+</html>
