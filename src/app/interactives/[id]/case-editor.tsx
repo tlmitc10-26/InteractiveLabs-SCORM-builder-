@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   useDraftEditor, Section, Row, Field, TextField, SelectField, IdAdvanced, useRowKeys, inputCls,
-  ExportButton, type AssetRef,
+  ExportButton, ImportPanel, type AssetRef,
 } from "./editor-shared";
 // Light import (mirrors branching-editor.tsx's own rationale for
 // runtime-config.ts): no zod/sanitize-html in this client bundle -- the
@@ -11,6 +11,14 @@ import {
 // happens server-side in saveInteractiveConfig (via adapterFor), and its
 // errors flow back through useDraftEditor's `errors`.
 import { toCaseRuntimeConfig, type CaseWorkspaceConfigLike } from "@/lib/engines/case-workspace/runtime-config";
+// Light import (companion-doc.ts's own file comment: zero heavy deps, no
+// zod/sanitize-html -- same discipline as runtime-config.ts/rename.ts
+// below). The parser's returned config is still just handed to setConfig
+// like any hand-authored draft: validation happens the same server-side
+// way, via saveInteractiveConfig's adapterFor call, on the very next
+// debounced save. Mirrors param-sandbox-editor.tsx/branching-editor.tsx's
+// own identical import of their sibling module.
+import { parseCaseCompanionDoc, serializeCaseCompanionDoc, type CaseConfigLike as CompanionCaseConfigLike } from "@/lib/engines/case-workspace/companion-doc";
 // Light import (no zod/sanitize-html -- see rename.ts's own file comment):
 // pure structural reference rewrites for the per-row "Rename to match label"
 // Advanced affordance, and the destructive-but-consistent reference strip
@@ -90,6 +98,22 @@ export function CaseEditor({ interactiveId, initialTitle, initialConfig, assets 
   const { title, config, setConfig, errors, saveState, iframeRef, handleTitleChange, patch, markSaving, onIframeLoad } =
     useDraftEditor<ECaseConfig>({ interactiveId, initialTitle, initialConfig, toPreviewRuntime: postPreview });
 
+  // Bumped once per companion-doc import (never on ordinary edits) -- same
+  // rowKeys-trap fix as branching-editor.tsx's/param-sandbox-editor.tsx's
+  // own importGeneration (see their comments for the full mechanism):
+  // useRowKeys seeds each row's stable key from the row array's length only
+  // in its useState initializer, so a setConfig that wholesale-replaces
+  // artifacts/conclusions/expertMap arrays (this import) would otherwise
+  // leave stale keys paired with unrelated new row data. Passed as the
+  // `key` on those three sections below to force a full remount on import.
+  const [importGeneration, setImportGeneration] = useState(0);
+
+  const handleImport = useCallback((parsed: ECaseConfig) => {
+    setConfig(parsed);
+    setImportGeneration((g) => g + 1);
+    markSaving();
+  }, [setConfig, markSaving]);
+
   // Backs each row's "Rename to match label" Advanced affordance for
   // artifacts/conclusions/reasons (the ids expertMap actually references --
   // see rename.ts). Rewrites every reference atomically in one setConfig
@@ -162,18 +186,26 @@ export function CaseEditor({ interactiveId, initialTitle, initialConfig, assets 
           </div>
         )}
 
-        <CaseSection config={config} onChange={patch} />
+        <CaseSection config={config} onChange={patch} onImport={handleImport} />
+        {/* Distinctly-prefixed keys (not just the bare generation number),
+            same rationale as branching-editor.tsx's/param-sandbox-editor.tsx's
+            own comment on importGeneration: these are siblings in the same
+            children array, and React requires keys unique among siblings
+            regardless of element type. */}
         <ArtifactsSection
+          key={`artifacts-${importGeneration}`}
           artifacts={config.artifacts} assets={assets}
           onChange={(artifacts) => patch({ artifacts })}
           onRenameId={renameArtifact} onRemove={removeArtifact}
         />
         <ConclusionsSection
+          key={`conclusions-${importGeneration}`}
           conclusions={config.conclusions} scoringMode={config.scoringMode}
           onChange={(conclusions) => patch({ conclusions })}
           onRenameId={renameConclusion} onRenameReasonId={renameReason} onRemove={removeConclusion}
         />
         <ExpertMapSection
+          key={`map-${importGeneration}`}
           artifacts={config.artifacts} conclusions={config.conclusions} expertMap={config.expertMap}
           onChange={(expertMap) => patch({ expertMap })}
         />
@@ -212,7 +244,9 @@ export function CaseEditor({ interactiveId, initialTitle, initialConfig, assets 
 
 /* ---------- Case section ---------- */
 
-function CaseSection({ config, onChange }: { config: ECaseConfig; onChange: (p: Partial<ECaseConfig>) => void }) {
+function CaseSection({ config, onChange, onImport }: {
+  config: ECaseConfig; onChange: (p: Partial<ECaseConfig>) => void; onImport: (config: ECaseConfig) => void;
+}) {
   return (
     <Section title="Case">
       <Field label="Intro (basic formatting allowed; the learning objective lives here, learner-visible)">
@@ -234,6 +268,19 @@ function CaseSection({ config, onChange }: { config: ECaseConfig; onChange: (p: 
       <SelectField label="Header color (brief step brand band)" value={config.headerColor ?? "primary"}
         options={HEADER_COLOR_OPTIONS}
         onChange={(headerColor) => onChange({ headerColor: headerColor as TokenName })} />
+      {/* ImportPanel renders its own "Import report" <h3> once a report
+          exists -- this card's <Section>-provided <h2>("Case") already
+          precedes it, so the heading order is h1 -> h2 -> h3 (the same
+          lesson param-sandbox-editor.tsx had to add an explicit <h2> for;
+          here the shared Section component already supplies it). */}
+      <ImportPanel<ECaseConfig>
+        config={config}
+        parse={parseCaseCompanionDoc}
+        serialize={(c) => serializeCaseCompanionDoc(c as unknown as CompanionCaseConfigLike)}
+        templateHref="/companion-doc-case-template.txt"
+        confirmText="This replaces everything in this interactive. The current draft cannot be recovered. Continue?"
+        onApply={onImport}
+      />
     </Section>
   );
 }
