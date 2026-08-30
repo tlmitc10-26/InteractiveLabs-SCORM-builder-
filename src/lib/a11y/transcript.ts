@@ -23,9 +23,13 @@ import { computeAccessibleName } from "dom-accessibility-api";
  * sandbox's score/challenge strips; the branching runtime's role line,
  * score line, and path-debrief list). `controlRoleOf` below throws on any
  * focusable element shape it doesn't recognize, on purpose: if engine work
- * ever adds a new focusable control kind (a radio group, a new link shape),
- * this module MUST be extended consciously rather than silently mis-mapping
- * (or silently omitting) its announcement.
+ * ever adds a new focusable control kind (a new link shape, say), this
+ * module MUST be extended consciously rather than silently mis-mapping (or
+ * silently omitting) its announcement. Native `<input type="radio">` and its
+ * checked state (spec docs/superpowers/specs/2026-08-28-case-workspace-
+ * design.md §8) is one such conscious extension, added for the case-
+ * workspace runtime's Conclude step -- mirrors the pre-existing checkbox
+ * checked-state path exactly.
  */
 
 export interface TranscriptEntry {
@@ -49,7 +53,7 @@ export interface TranscriptEntry {
   live?: "polite" | "assertive";
 }
 
-type ControlRole = "slider" | "spinbutton" | "checkbox" | "combobox" | "listbox" | "button" | "link";
+type ControlRole = "slider" | "spinbutton" | "checkbox" | "radio" | "combobox" | "listbox" | "button" | "link";
 
 /** Tags this module knows how to treat as a keyboard-focusable control. Any
  *  OTHER element that is (per the DOM) focusable is not walked as a control
@@ -148,7 +152,7 @@ function closestLive(el: Element, root: Element): "polite" | "assertive" | undef
 function controlRoleOf(el: Element): ControlRole {
   const explicit = el.getAttribute("role");
   if (explicit) {
-    if (explicit === "slider" || explicit === "spinbutton" || explicit === "checkbox"
+    if (explicit === "slider" || explicit === "spinbutton" || explicit === "checkbox" || explicit === "radio"
       || explicit === "combobox" || explicit === "listbox" || explicit === "button" || explicit === "link") {
       return explicit;
     }
@@ -160,6 +164,7 @@ function controlRoleOf(el: Element): ControlRole {
     if (type === "range") return "slider";
     if (type === "number") return "spinbutton";
     if (type === "checkbox") return "checkbox";
+    if (type === "radio") return "radio";
     throw new Error(`readingOrderTranscript: unmapped focusable element <input type="${type}"> -- extend controlRoleOf`);
   }
   if (tag === "select") {
@@ -188,7 +193,7 @@ function describeControl(el: Element, root: Element): TranscriptEntry {
     const value = (el as HTMLInputElement).value;
     return { role, name, value, ...(states.length ? { states } : {}), ...(live ? { live } : {}) };
   }
-  if (role === "checkbox") {
+  if (role === "checkbox" || role === "radio") {
     const checked = (el as HTMLInputElement).checked;
     states.unshift(checked ? "checked" : "not checked");
     return { role, name, states, ...(live ? { live } : {}) };
