@@ -15,6 +15,11 @@ import { parseCaseCompanionDoc, serializeCaseCompanionDoc } from "@/lib/engines/
 import { validateCaseConfig, type CaseConfig } from "@/lib/engines/case-workspace/schema";
 import { CASE_STARTERS, caseStarterConfig } from "@/lib/engines/case-workspace/starters";
 import { scoreCase, evidenceRatio, reasonRatio } from "@/lib/engines/case-workspace/scoring";
+import { parseProcessCompanionDoc, serializeProcessCompanionDoc } from "@/lib/engines/process-simulator/companion-doc";
+import { validateProcessConfig, type ProcessConfig } from "@/lib/engines/process-simulator/schema";
+import { PROCESS_STARTERS, processStarterConfig } from "@/lib/engines/process-simulator/starters";
+import { beginProcedure, initialState, attemptAction, type ProcessState } from "@/lib/engines/process-simulator/state";
+import { scoreProcess } from "@/lib/engines/process-simulator/scoring";
 
 /**
  * Content-quality gates for the Sierra Vista arc (Task 5 of the exemplar
@@ -930,6 +935,326 @@ describe("The Ladder Incident — export package budget", () => {
       config,
       runtime: { toRuntimeConfig: adapter.toRuntimeConfig, collectAssetIds: adapter.collectAssetIds },
       resolveAsset: async () => { throw new Error('starter "ladder-incident" has no assets'); },
+    });
+
+    const zip = await zipPackage(assembled.files);
+    expect(zip.length).toBeLessThan(40 * 1024);
+  });
+});
+
+/**
+ * Evidence Intake (process-simulator M3, Task 2 of the exemplar plan): the
+ * process-simulator engine's first exemplar, authored THROUGH the process
+ * companion-doc format from docs/exemplars/brief-evidence-intake.md. As with
+ * the param-sandbox pair and The Ladder Incident above, the DOC is the
+ * source of truth: the committed doc is the brief's §5 fenced block
+ * verbatim, and the starter in starters.ts (group "exemplar") is a verbatim
+ * transcription of parseProcessCompanionDoc(doc).config. Every number below
+ * — the witness/flawless/messy scoring fixtures, the 8-legal-orders count,
+ * the no-giveaway gates — is computed through the REAL parser, validator,
+ * state machine and scoring functions, exactly as the brief's §6 requires,
+ * not re-derived by hand here.
+ */
+describe("Evidence Intake — companion doc is the source of truth (stress test)", () => {
+  const docPath = join(process.cwd(), "docs", "exemplars", "evidence-intake.companion.txt");
+  const docText = readFileSync(docPath, "utf8");
+  const { config: starterConfig, label: starterLabel } = PROCESS_STARTERS["evidence-intake"];
+
+  it("parses with zero issues of any severity (not merely zero errors)", () => {
+    const { report } = parseProcessCompanionDoc(docText);
+    expect(report, JSON.stringify(report)).toHaveLength(0);
+  });
+
+  it("validates via validateProcessConfig", () => {
+    const { config } = parseProcessCompanionDoc(docText);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("carries the real, faculty-facing TITLE (not the starter's placeholder \"\")", () => {
+    const { config } = parseProcessCompanionDoc(docText);
+    expect((config as { title: string }).title).toBe(starterLabel);
+    expect(starterConfig.title).toBe("");
+  });
+
+  it("is byte-for-byte serializeProcessCompanionDoc({ ...starter.config, title: starter.label })", () => {
+    const expected = serializeProcessCompanionDoc({ ...starterConfig, title: starterLabel });
+    expect(
+      docText,
+      'docs/exemplars/evidence-intake.companion.txt is stale — regenerate it from the starter with serializeProcessCompanionDoc({ ...PROCESS_STARTERS["evidence-intake"].config, title: PROCESS_STARTERS["evidence-intake"].label })',
+    ).toBe(expected);
+  });
+
+  it("the starter config is structurally equal to parse(doc), title normalized", () => {
+    const { config } = parseProcessCompanionDoc(docText);
+    const validated = validateProcessConfig(config);
+    expect(validated.ok, !validated.ok ? validated.errors.join("; ") : "").toBe(true);
+    if (!validated.ok) return;
+    expect({ ...validated.config, title: starterConfig.title }).toEqual(starterConfig);
+  });
+
+  it("is grouped as an exemplar with a description naming the pattern", () => {
+    expect(PROCESS_STARTERS["evidence-intake"].group).toBe("exemplar");
+    expect(PROCESS_STARTERS["evidence-intake"].description.length).toBeGreaterThan(0);
+    expect(PROCESS_STARTERS["evidence-intake"].description).toContain("chain of custody");
+  });
+
+  it("has 13 actions (9 required, 4 distractors) and 9 prerequisite edges", () => {
+    expect(starterConfig.actions).toHaveLength(13);
+    expect(starterConfig.actions.filter((a) => a.required)).toHaveLength(9);
+    expect(starterConfig.actions.filter((a) => !a.required)).toHaveLength(4);
+    const edgeCount = starterConfig.actions.reduce((n, a) => n + (a.requires?.length ?? 0), 0);
+    expect(edgeCount).toBe(9);
+  });
+
+  /**
+   * Counts the number of distinct legal completion orders of the required
+   * actions (a brute-force topological-order count over the small 9-node
+   * graph — feasible since the graph never exceeds ~a few thousand orders
+   * for this shape). Used to lock the brief's "8 legal orders" claim and to
+   * assert the load-bearing non-edge between photograph and sketch.
+   */
+  function countLegalOrders(actions: ProcessConfig["actions"]): number {
+    const required = actions.filter((a) => a.required);
+    const byId = new Map(required.map((a) => [a.id, a] as const));
+    const ids = required.map((a) => a.id);
+    const memo = new Map<string, number>();
+    function count(doneMask: Set<string>, remaining: string[]): number {
+      if (remaining.length === 0) return 1;
+      const key = [...doneMask].sort().join(",") + "|" + [...remaining].sort().join(",");
+      if (memo.has(key)) return memo.get(key)!;
+      let total = 0;
+      for (const id of remaining) {
+        const action = byId.get(id)!;
+        const reqs = action.requires ?? [];
+        if (reqs.every((r) => doneMask.has(r))) {
+          const nextDone = new Set(doneMask);
+          nextDone.add(id);
+          total += count(nextDone, remaining.filter((x) => x !== id));
+        }
+      }
+      memo.set(key, total);
+      return total;
+    }
+    return count(new Set(), ids);
+  }
+
+  it("has exactly 8 legal orders of the 9 required actions", () => {
+    expect(countLegalOrders(starterConfig.actions)).toBe(8);
+  });
+
+  it("the load-bearing non-edge: photograph and sketch carry no prerequisite on each other, in either direction", () => {
+    const photograph = starterConfig.actions.find((a) => a.id === "photograph_the_item_where_it_lie")!;
+    const sketch = starterConfig.actions.find((a) => a.id === "sketch_the_room_and_measure_the")!;
+    expect(photograph.requires ?? []).not.toContain(sketch.id);
+    expect(sketch.requires ?? []).not.toContain(photograph.id);
+    // Both are gated only on "secure the scene" (the graph's genuine sibling pair).
+    expect(photograph.requires).toEqual(["secure_the_scene_and_control_who"]);
+    expect(sketch.requires).toEqual(["secure_the_scene_and_control_who"]);
+  });
+
+  function idFor(config: ProcessConfig, label: string): string {
+    const action = config.actions.find((a) => a.label.toLowerCase() === label.toLowerCase());
+    if (!action) throw new Error(`no action with label "${label}"`);
+    return action.id;
+  }
+
+  function runClicks(config: ProcessConfig, labels: string[]): { state: ProcessState; score: ReturnType<typeof scoreProcess> | undefined } {
+    let state = beginProcedure(initialState());
+    let score: ReturnType<typeof scoreProcess> | undefined;
+    for (const label of labels) {
+      const result = attemptAction(config, state, idFor(config, label));
+      state = result.state;
+      score = result.score ?? score;
+    }
+    return { state, score };
+  }
+
+  /**
+   * The witness path — "the eager collector" (brief §6): sixteen clicks,
+   * seven of them illegal, locked exactly on the brief's numbers (including
+   * the deliberate .5-boundary round to 63, which would regress to 62 under
+   * banker's rounding).
+   */
+  describe("the witness path — locked through the real state machine and scoring", () => {
+    const witnessClicks = [
+      "Photograph the item where it lies",
+      "Secure the scene and control who enters it",
+      "Photograph the item where it lies",
+      "Collect the item and place it in an evidence bag",
+      "Move the item into better light before photographing it",
+      "Sketch the room and measure the item's position",
+      "Collect the item and place it in an evidence bag",
+      "Put on a fresh pair of examination gloves",
+      "Collect the item and place it in an evidence bag",
+      "Seal the bag with office tape from the drawer",
+      "Seal the evidence bag with tamper-evident tape",
+      "Record the item on the agency evidence log",
+      "Label the sealed bag and initial across the seal",
+      "Fill in the evidence log at shift end",
+      "Record the item on the agency evidence log",
+      "Transfer the sealed package to the evidence custodian",
+    ];
+
+    it("scoreProcess(...).totalPct === 63 (the deliberate .5-boundary round-half-up fixture), cleanCount 6, totalAttempts 16", () => {
+      const { state, score } = runClicks(starterConfig, witnessClicks);
+      expect(state.attempts.get(idFor(starterConfig, "Photograph the item where it lies"))).toBe(1);
+      expect(state.attempts.get(idFor(starterConfig, "Collect the item and place it in an evidence bag"))).toBe(2);
+      expect(state.attempts.get(idFor(starterConfig, "Move the item into better light before photographing it"))).toBe(1);
+      expect(state.attempts.get(idFor(starterConfig, "Seal the bag with office tape from the drawer"))).toBe(1);
+      expect(state.attempts.get(idFor(starterConfig, "Record the item on the agency evidence log"))).toBe(1);
+      expect(state.attempts.get(idFor(starterConfig, "Fill in the evidence log at shift end"))).toBe(1);
+      expect(state.attempts.get(idFor(starterConfig, "Hand the item to the reporting party to hold"))).toBeUndefined();
+
+      expect(score).toBeDefined();
+      expect(score!.correctness).toEqual({ num: 6, den: 9 });
+      expect(score!.efficiency).toEqual({ num: 9, den: 16 });
+      expect(score!.totalPct).toBe(63);
+    });
+  });
+
+  it("the flawless run (9 clicks, non-obvious order: sketch before gloves) scores 100", () => {
+    const flawlessClicks = [
+      "Secure the scene and control who enters it",
+      "Photograph the item where it lies",
+      "Sketch the room and measure the item's position",
+      "Put on a fresh pair of examination gloves",
+      "Collect the item and place it in an evidence bag",
+      "Seal the evidence bag with tamper-evident tape",
+      "Label the sealed bag and initial across the seal",
+      "Record the item on the agency evidence log",
+      "Transfer the sealed package to the evidence custodian",
+    ];
+    const { score } = runClicks(starterConfig, flawlessClicks);
+    expect(score).toBeDefined();
+    expect(score!.correctness).toEqual({ num: 9, den: 9 });
+    expect(score!.efficiency).toEqual({ num: 9, den: 9 });
+    expect(score!.totalPct).toBe(100);
+  });
+
+  it("a messy 19-click run (clean 5/9, totalAttempts 19) scores 52 (8940/171, floored)", () => {
+    const messyClicks = [
+      "Collect the item and place it in an evidence bag",
+      "Secure the scene and control who enters it",
+      "Collect the item and place it in an evidence bag",
+      "Move the item into better light before photographing it",
+      "Photograph the item where it lies",
+      "Collect the item and place it in an evidence bag",
+      "Hand the item to the reporting party to hold",
+      "Sketch the room and measure the item's position",
+      "Seal the bag with office tape from the drawer",
+      "Put on a fresh pair of examination gloves",
+      "Collect the item and place it in an evidence bag",
+      "Label the sealed bag and initial across the seal",
+      "Seal the evidence bag with tamper-evident tape",
+      "Record the item on the agency evidence log",
+      "Label the sealed bag and initial across the seal",
+      "Transfer the sealed package to the evidence custodian",
+      "Fill in the evidence log at shift end",
+      "Record the item on the agency evidence log",
+      "Transfer the sealed package to the evidence custodian",
+    ];
+    const { score } = runClicks(starterConfig, messyClicks);
+    expect(score).toBeDefined();
+    expect(score!.correctness).toEqual({ num: 5, den: 9 });
+    expect(score!.efficiency).toEqual({ num: 9, den: 19 });
+    expect(score!.totalPct).toBe(52);
+  });
+
+  /**
+   * No-giveaway gates (spec §7's pooled formulation, per the brief's §6
+   * measurement): word count is label.trim().split(/\s+/).length on the
+   * parsed label.
+   */
+  describe("no-giveaway gates — label length is not a quality cue", () => {
+    const wordCount = (label: string): number => label.trim().split(/\s+/).length;
+
+    it("pooled mean band holds: |mean(required) - mean(distractor)| <= 0.15 * mean(all) (0.7500 <= 1.2346)", () => {
+      const required = starterConfig.actions.filter((a) => a.required).map((a) => wordCount(a.label));
+      const distractor = starterConfig.actions.filter((a) => !a.required).map((a) => wordCount(a.label));
+      const all = starterConfig.actions.map((a) => wordCount(a.label));
+      const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+      const band = Math.abs(mean(required) - mean(distractor));
+      expect(band).toBeLessThanOrEqual(0.15 * mean(all));
+      expect(band).toBeCloseTo(0.75, 4);
+    });
+
+    it("no distractor is the uniquely longest or uniquely shortest label in the pool", () => {
+      const withCounts = starterConfig.actions.map((a) => ({ id: a.id, required: a.required, words: wordCount(a.label) }));
+      const longest = Math.max(...withCounts.map((a) => a.words));
+      const shortest = Math.min(...withCounts.map((a) => a.words));
+      const atLongest = withCounts.filter((a) => a.words === longest);
+      const atShortest = withCounts.filter((a) => a.words === shortest);
+      const uniquelyLongestIsDistractor = atLongest.length === 1 && !atLongest[0].required;
+      const uniquelyShortestIsDistractor = atShortest.length === 1 && !atShortest[0].required;
+      expect(uniquelyLongestIsDistractor).toBe(false);
+      expect(uniquelyShortestIsDistractor).toBe(false);
+      // Locked to the brief's exact measurement (§6): both extremes (10 and
+      // 6 words) are held uniquely by required actions.
+      expect(longest).toBe(10);
+      expect(atLongest).toHaveLength(1);
+      expect(atLongest[0].required).toBe(true);
+      expect(shortest).toBe(6);
+      expect(atShortest).toHaveLength(1);
+      expect(atShortest[0].required).toBe(true);
+    });
+  });
+
+  it('banned words ("admissible", "thrown out") are absent from every learner-visible string', () => {
+    const strings: string[] = [starterConfig.title, starterConfig.intro, starterConfig.opening, starterConfig.expertNote ?? ""];
+    for (const a of starterConfig.actions) {
+      strings.push(a.label, a.outcome ?? "", a.consequence ?? "", a.consequenceNote ?? "");
+    }
+    const joined = strings.join(" \n ").toLowerCase();
+    expect(joined).not.toContain("admissible");
+    expect(joined).not.toContain("thrown out");
+  });
+
+  it("the scope statement appears verbatim in the intro", () => {
+    expect(starterConfig.intro).toContain(
+      "Ashmoor County, its sheriff's office, its evidence manual and everyone named here are fictional. What follows is one fictional agency's standard operating procedure, written to teach the reasoning behind evidence handling; it is not a standard, and the policy of the agency you work for governs how you actually do this work.",
+    );
+  });
+});
+
+describe("Evidence Intake — PROCESS_STARTERS / dispatch registration (generic loops pick it up automatically)", () => {
+  it("is registered in PROCESS_STARTERS and validates via validateProcessConfig", () => {
+    expect(PROCESS_STARTERS["evidence-intake"]).toBeTruthy();
+    const r = validateProcessConfig(PROCESS_STARTERS["evidence-intake"].config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("processStarterConfig stamps a fresh title onto a fresh object tree", () => {
+    const a = processStarterConfig("evidence-intake", "Title A");
+    const b = processStarterConfig("evidence-intake", "Title B");
+    expect(a.title).toBe("Title A");
+    expect(b.title).toBe("Title B");
+    expect(a.actions).not.toBe(b.actions);
+    const r = validateProcessConfig(a);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("is listed in the engine dispatch table's starters list", () => {
+    const adapter = adapterFor("process-simulator");
+    const listed = adapter.starters.find((s) => s.id === "evidence-intake");
+    expect(listed).toBeTruthy();
+    expect(listed?.label).toBe("Evidence Intake");
+    expect(listed?.group).toBe("exemplar");
+  });
+});
+
+describe("Evidence Intake — export package budget", () => {
+  it('starter "evidence-intake" exports a zip under 40KB', async () => {
+    const adapter = adapterFor("process-simulator");
+    const config = processStarterConfig("evidence-intake", "Exemplar Test: evidence-intake");
+
+    const assembled = await assemblePackage({
+      identifier: "ILB-exemplar-evidence-intake",
+      title: config.title,
+      engineId: "process-simulator",
+      config,
+      runtime: { toRuntimeConfig: adapter.toRuntimeConfig, collectAssetIds: adapter.collectAssetIds },
+      resolveAsset: async () => { throw new Error('starter "evidence-intake" has no assets'); },
     });
 
     const zip = await zipPackage(assembled.files);
