@@ -259,10 +259,21 @@ type Category = "heading" | "control" | "img" | "status" | "text-carrier";
  *  artifact-title text (which stays untracked prose exactly like the debrief
  *  carriers' own untracked neighbors above), so a screen-reader user gets an
  *  explicit reading-order confirmation of which strength they assigned to
- *  an artifact, not just a sighted-only cue. */
+ *  an artifact, not just a sighted-only cue.
+ *
+ * Process simulator (M1, engine 4, spec docs/superpowers/specs/2026-09-04-
+ * process-simulator-design.md §3 review #20) adds "ilb-log-entry": the
+ * situation log's running record of each legally-performed required
+ * action's `outcome`, appended as the procedure progresses. Unlike every
+ * carrier above -- which tracks a WHOLE list as one entry -- this one is
+ * per-`<li>` (one TranscriptEntry per log entry, not per list), because the
+ * log grows live across a run and a whole-list carrier would force every
+ * locked transcript fixture to be rewritten each time a new outcome is
+ * appended; tracking per-entry keeps a fixture legible and stable as the
+ * log grows. */
 const TEXT_CARRIER_CLASSES = [
   "ilb-score-status", "ilb-challenge", "ilb-role", "ilb-score-line", "ilb-debrief-list", "ilb-eyebrow",
-  "ilb-comparison-list", "ilb-reason-review-list", "ilb-case-file-strength",
+  "ilb-comparison-list", "ilb-reason-review-list", "ilb-case-file-strength", "ilb-log-entry",
 ];
 
 function categoryOf(el: Element): Category | null {

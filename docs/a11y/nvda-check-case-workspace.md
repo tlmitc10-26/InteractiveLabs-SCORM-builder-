@@ -44,7 +44,7 @@ The two conclusion radio buttons follow, initially unchecked:
 
 15. Continue reading (or Tab) → NVDA should say: **"Conclusion A, radio button, not checked"**
 16. Continue reading (or Tab) → NVDA should say: **"Conclusion B, radio button, not checked"**
-17. Continue reading → NVDA should say: **"Submit conclusion, button, disabled"**
+17. Continue reading → NVDA should say: **"Submit conclusion, button, unavailable"**
 18. Press Space/Enter on "Conclusion A" → NVDA should say it flip to checked:
    **"Conclusion A, radio button, checked"**
 19. Focus moves automatically to the newly revealed reason group's legend (NOT announced

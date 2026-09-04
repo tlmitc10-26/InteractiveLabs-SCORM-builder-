@@ -12,6 +12,8 @@ import { branchingConfigSchema } from "@/lib/engines/branching-scenario/schema";
 import { mountCaseWorkspace, type RuntimeCaseConfig } from "@/engine-runtime/case-workspace/main";
 import { CASE_STARTERS, caseStarterConfig } from "@/lib/engines/case-workspace/starters";
 import { toCaseRuntimeConfig } from "@/lib/engines/case-workspace/runtime-config";
+import { mountProcessSimulator, type RuntimeProcessConfig } from "@/engine-runtime/process-simulator/main";
+import { PROCESS_STARTERS, processStarterConfig } from "@/lib/engines/process-simulator/starters";
 
 /** Renders every violation (id, impact, help, and each offending node's
  *  outerHTML) so a failure tells you exactly what to fix without re-running
@@ -377,6 +379,105 @@ describe("axe-core accessibility gate: case workspace", () => {
       document.body.innerHTML = '<div id="root"></div>';
       const config = toCaseRuntimeConfig(caseStarterConfig(id, `Starter check: ${id}`), noAssets) as unknown as RuntimeCaseConfig;
       mountCaseWorkspace(document.getElementById("root")!, config);
+
+      const results = await auditBody();
+      expect(results.violations, `starter "${id}": ${describeViolations(results.violations)}`).toEqual([]);
+    }
+  });
+});
+
+describe("axe-core accessibility gate: process simulator", () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="root"></div>';
+  });
+
+  /** Three required actions, the third conjunctively gated on the first
+   *  two, plus one distractor — see tests/process-runtime.test.ts's
+   *  richConfig for the same shape, kept independent here so this file's
+   *  fixtures don't depend on another test file's exports. */
+  const richConfig: RuntimeProcessConfig = {
+    title: "Evidence Intake Drill",
+    intro: "<p>Learn the procedure, then perform it.</p>",
+    opening: "<p>You arrive at a sealed scene with one item to collect.</p>",
+    expertNote: "<p>The order that survives review is the one where nothing touches the item before it's documented.</p>",
+    actions: [
+      { id: "photograph", label: "Photograph the item", required: true, outcome: "<p>The item's position is recorded.</p>" },
+      { id: "gloves", label: "Put on gloves", required: true, outcome: "<p>Hands are protected; the item won't be contaminated.</p>" },
+      {
+        id: "collect",
+        label: "Collect the item",
+        required: true,
+        requires: ["photograph", "gloves"],
+        outcome: "<p>The item is bagged.</p>",
+        consequence: "<p>The item moved before it was fully documented.</p>",
+        consequenceNote: "Collection requires both photographing and gloving up first.",
+      },
+      {
+        id: "move_early",
+        label: "Ask someone to move the item",
+        required: false,
+        consequence: "<p>The chain of custody now starts with an undocumented move.</p>",
+        consequenceNote: "Convenience is not a custody procedure.",
+      },
+    ],
+  };
+
+  function clickByText(selector: string, text: string): void {
+    const btn = Array.from(document.querySelectorAll<HTMLButtonElement>(selector)).find((b) => b.textContent === text);
+    if (!btn) throw new Error(`no ${selector} with text "${text}"`);
+    btn.click();
+  }
+
+  function clickAction(label: string): void {
+    const btn = Array.from(document.querySelectorAll<HTMLButtonElement>(".ilb-action-btn")).find(
+      (b) => b.querySelector(".ilb-action-label")?.textContent === label,
+    );
+    if (!btn) throw new Error(`no action button labeled "${label}"`);
+    btn.click();
+  }
+
+  it("has zero violations at the brief step", async () => {
+    mountProcessSimulator(document.getElementById("root")!, richConfig);
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations at the procedure step's action menu, with one action already done", async () => {
+    mountProcessSimulator(document.getElementById("root")!, richConfig);
+    clickByText(".ilb-btn-pill", "Begin the procedure.");
+    clickAction("Photograph the item");
+    expect(document.querySelector(".ilb-action-btn:disabled")).not.toBeNull(); // sanity
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations while the consequence panel is open", async () => {
+    mountProcessSimulator(document.getElementById("root")!, richConfig);
+    clickByText(".ilb-btn-pill", "Begin the procedure.");
+    clickAction("Collect the item"); // premature
+    expect(document.querySelector(".ilb-consequence-text")).not.toBeNull(); // sanity
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations at the debrief step, with a full log read-back and step review rendered", async () => {
+    mountProcessSimulator(document.getElementById("root")!, richConfig);
+    clickByText(".ilb-btn-pill", "Begin the procedure.");
+    clickAction("Ask someone to move the item"); // distractor hit, for a poor row in the review
+    clickByText(".ilb-btn-pill", "Continue");
+    clickAction("Photograph the item");
+    clickAction("Put on gloves");
+    clickAction("Collect the item");
+    expect(document.querySelector(".ilb-eyebrow")).not.toBeNull(); // sanity
+    const results = await auditBody();
+    expect(results.violations).toEqual([]);
+  });
+
+  it("has zero violations for every process-simulator starter's brief step (incl. the blank starter, mounted directly)", async () => {
+    for (const id of Object.keys(PROCESS_STARTERS)) {
+      document.body.innerHTML = '<div id="root"></div>';
+      const config = processStarterConfig(id, `Starter check: ${id}`);
+      mountProcessSimulator(document.getElementById("root")!, config);
 
       const results = await auditBody();
       expect(results.violations, `starter "${id}": ${describeViolations(results.violations)}`).toEqual([]);

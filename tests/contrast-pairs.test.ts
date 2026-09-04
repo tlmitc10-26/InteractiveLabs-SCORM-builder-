@@ -258,3 +258,21 @@ describe("contrast-pairs: case workspace engine.css -- zero new color pairs (pla
     expect(found).toEqual(APPROVED_HEX_LITERALS);
   });
 });
+
+describe("contrast-pairs: process simulator engine.css -- zero new color pairs (plan Task 5)", () => {
+  // Same machine-enforced check as the case-workspace block above, over the
+  // fourth engine's own engine.css -- process-simulator's own header comment
+  // claims it reuses the exact same approved chip literals (best/ok/poor)
+  // plus plain white, ported from case-workspace's engine.css (spec §3:
+  // "engine.css ported from case"). Same approved set, same assertion.
+  const APPROVED_HEX_LITERALS = new Set([
+    "#365409", "#644a00", "#7a5a00", "#8b1f1f", "#f2f7ec", "#fbeeee", "#fff", "#fff8e1",
+  ]);
+
+  it("every hex literal in process-simulator/engine.css is in the approved set (no new pairs)", () => {
+    const cssPath = path.resolve(__dirname, "../src/engine-runtime/process-simulator/engine.css");
+    const css = readFileSync(cssPath, "utf8");
+    const found = new Set((css.match(/#[0-9a-fA-F]{3,8}/g) ?? []).map((h) => h.toLowerCase()));
+    expect(found).toEqual(APPROVED_HEX_LITERALS);
+  });
+});

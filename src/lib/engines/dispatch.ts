@@ -9,6 +9,10 @@ import { validateCaseConfig } from "@/lib/engines/case-workspace/schema";
 import * as caseRuntime from "@/lib/engines/case-workspace/runtime-config";
 import type { CaseWorkspaceConfigLike } from "@/lib/engines/case-workspace/runtime-config";
 import { CASE_STARTERS, caseStarterConfig } from "@/lib/engines/case-workspace/starters";
+import { validateProcessConfig } from "@/lib/engines/process-simulator/schema";
+import * as processRuntime from "@/lib/engines/process-simulator/runtime-config";
+import type { ProcessRuntimeConfigLike } from "@/lib/engines/process-simulator/runtime-config";
+import { PROCESS_STARTERS, processStarterConfig } from "@/lib/engines/process-simulator/starters";
 
 export interface StarterMeta {
   id: string;
@@ -107,6 +111,27 @@ export const ENGINE_ADAPTERS: Record<string, EngineAdapter> = {
     },
     starterConfig: (starterId, title) => caseStarterConfig(starterId, title),
     starters: Object.entries(CASE_STARTERS).map(([id, s]) => ({ id, label: s.label, description: s.description, group: s.group })),
+  },
+  "process-simulator": {
+    engineId: "process-simulator",
+    version: "1.0.0",
+    label: "Process Simulator",
+    blurb: "Learners perform a multi-step procedure and live with the consequences of a wrong or premature action.",
+    validate: (raw) => validateProcessConfig(raw),
+    toRuntimeConfig: (c, u) => processRuntime.toProcessRuntimeConfig(c as ProcessRuntimeConfigLike, u),
+    collectAssetIds: (c) => processRuntime.collectProcessAssetIds(c as ProcessRuntimeConfigLike),
+    richTextValues: (c) => {
+      const config = c as { intro: string; opening: string; expertNote?: string; actions: Array<{ outcome?: string; consequence?: string }> };
+      const values: string[] = [config.intro, config.opening];
+      if (config.expertNote) values.push(config.expertNote);
+      for (const action of config.actions) {
+        if (action.outcome) values.push(action.outcome);
+        if (action.consequence) values.push(action.consequence);
+      }
+      return values;
+    },
+    starterConfig: (starterId, title) => processStarterConfig(starterId, title),
+    starters: Object.entries(PROCESS_STARTERS).map(([id, s]) => ({ id, label: s.label, description: s.description, group: s.group })),
   },
 };
 

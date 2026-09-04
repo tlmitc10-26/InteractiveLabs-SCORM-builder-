@@ -14,12 +14,13 @@ const DEFAULT_OUT = path.join(ROOT, "public", "engines");
 // public/engines/<id>/<version>/ with the same file shape, and one entry in
 // engines.manifest.json's `engines` array (in this order — order matters
 // only for readability/diffing, not behavior; engineEntry() looks entries up
-// by id). Adding a third engine is: add its src/engine-runtime/<id> files,
+// by id). Adding another engine is: add its src/engine-runtime/<id> files,
 // add one entry here.
 const ENGINES = [
   { id: "param-sandbox", title: "Parameter Sandbox" },
   { id: "branching-scenario", title: "Branching Scenario" },
   { id: "case-workspace", title: "Case / Evidence Workspace" },
+  { id: "process-simulator", title: "Process Simulator" },
 ];
 
 // Mirrors src/lib/design/tokens.ts's GENERATED marker + emitters exactly.

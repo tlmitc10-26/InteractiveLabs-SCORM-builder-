@@ -8,6 +8,8 @@ import { branchingStarterConfig } from "@/lib/engines/branching-scenario/starter
 import { validateBranchingConfig } from "@/lib/engines/branching-scenario/schema";
 import { caseStarterConfig } from "@/lib/engines/case-workspace/starters";
 import { validateCaseConfig } from "@/lib/engines/case-workspace/schema";
+import { processStarterConfig } from "@/lib/engines/process-simulator/starters";
+import { validateProcessConfig } from "@/lib/engines/process-simulator/schema";
 
 describe("engineEntry", () => {
   it("returns the matching engine entry from the manifest", () => {
@@ -78,6 +80,29 @@ describe("adapterFor", () => {
     if (viaAdapter.ok && direct.ok) expect(viaAdapter.config).toEqual(direct.config);
   });
 
+  it("dispatches the process-simulator adapter by engineId (fourth engine, plan Task 4)", () => {
+    const adapter = adapterFor("process-simulator");
+    expect(adapter.engineId).toBe("process-simulator");
+    expect(adapter.version).toBe("1.0.0");
+    expect(adapter.label).toBe("Process Simulator");
+    expect(adapter).toBe(ENGINE_ADAPTERS["process-simulator"]);
+  });
+
+  it("validates through the process-simulator adapter identically to validateProcessConfig", () => {
+    const adapter = adapterFor("process-simulator");
+    const config = processStarterConfig("blank", "Adapter Test");
+    const direct = validateProcessConfig(config);
+    const viaAdapter = adapter.validate(config);
+    expect(viaAdapter.ok).toBe(direct.ok);
+    if (viaAdapter.ok && direct.ok) expect(viaAdapter.config).toEqual(direct.config);
+  });
+
+  it("collectAssetIds always returns empty for process-simulator (no assets in v1)", () => {
+    const adapter = adapterFor("process-simulator");
+    const config = processStarterConfig("blank", "Adapter Test");
+    expect(adapter.collectAssetIds(config)).toEqual([]);
+  });
+
   it("builds a title-stamped starter config per engine via adapter.starterConfig", () => {
     const ps = adapterFor("param-sandbox").starterConfig("blank", "My Sandbox") as { title: string };
     expect(ps.title).toBe("My Sandbox");
@@ -85,12 +110,15 @@ describe("adapterFor", () => {
     expect(branching.title).toBe("My Scenario");
     const caseWorkspace = adapterFor("case-workspace").starterConfig("blank", "My Case") as { title: string };
     expect(caseWorkspace.title).toBe("My Case");
+    const process = adapterFor("process-simulator").starterConfig("blank", "My Procedure") as { title: string };
+    expect(process.title).toBe("My Procedure");
   });
 
   it("falls back to each engine's default starter for an unknown starter id, rather than throwing", () => {
     expect(() => adapterFor("param-sandbox").starterConfig("no-such-starter", "T")).not.toThrow();
     expect(() => adapterFor("branching-scenario").starterConfig("no-such-starter", "T")).not.toThrow();
     expect(() => adapterFor("case-workspace").starterConfig("no-such-starter", "T")).not.toThrow();
+    expect(() => adapterFor("process-simulator").starterConfig("no-such-starter", "T")).not.toThrow();
   });
 
   it("exposes starters metadata (id/label/description) for each engine, for uniform UI dispatch", () => {
@@ -99,7 +127,7 @@ describe("adapterFor", () => {
     // every starter must carry a non-empty id/label/description and a valid
     // group, ids must be unique, and the "blank" starter must exist so the
     // picker always has a from-scratch option.
-    for (const engineId of ["param-sandbox", "branching-scenario", "case-workspace"] as const) {
+    for (const engineId of ["param-sandbox", "branching-scenario", "case-workspace", "process-simulator"] as const) {
       const starters = adapterFor(engineId).starters;
       const ids = starters.map((s) => s.id);
       expect(new Set(ids).size, `${engineId} starter ids should be unique`).toBe(ids.length);
@@ -137,6 +165,19 @@ describe("adapterFor", () => {
     for (const conclusion of config.conclusions) {
       if (conclusion.body) expect(values).toContain(conclusion.body);
       expect(values).toContain(conclusion.expertRationale);
+    }
+  });
+
+  it("richTextValues walks the process-simulator config's intro + opening + expertNote + every action's outcome + consequence (not just intro)", () => {
+    const adapter = adapterFor("process-simulator");
+    const config = processStarterConfig("blank", "RichText Test");
+    const values = adapter.richTextValues(config);
+    expect(values).toContain(config.intro);
+    expect(values).toContain(config.opening);
+    if (config.expertNote) expect(values).toContain(config.expertNote);
+    for (const action of config.actions) {
+      if (action.outcome) expect(values).toContain(action.outcome);
+      if (action.consequence) expect(values).toContain(action.consequence);
     }
   });
 });
@@ -314,6 +355,61 @@ describe("engine #3 golden path: blank starter (case-workspace) end-to-end", () 
     // Same invariant as engine #2's golden test: assemblePackage emits
     // engine/engine.js + engine/scorm-adapter.js for ANY engine, so this
     // proves that holds for engine #3 too, not just by inspection of
+    // package.ts.
+    expect(Object.keys(a.engineChecksums)).toEqual(
+      expect.arrayContaining(["engine/engine.js", "engine/scorm-adapter.js"]),
+    );
+    const paths = [...a.files.keys()].sort();
+    expect(paths).toEqual([
+      "content/config.json",
+      "engine/engine.css",
+      "engine/engine.js",
+      "engine/scorm-adapter.js",
+      "imsmanifest.xml",
+      "index.html",
+    ]);
+
+    const report = scanPackage(a.files, {
+      engineChecksums: a.engineChecksums,
+      urlAllowlist: [],
+      authoringConfig: config,
+      validate: adapter.validate,
+      richTextFields: adapter.richTextValues,
+      expectedIndexHtml: a.indexHtml,
+    });
+    expect(report.violations).toEqual([]);
+    expect(report.passed).toBe(true);
+
+    const zip1 = await zipPackage(a.files);
+    const zip2 = await zipPackage((await build()).files);
+    expect(zip1.equals(zip2)).toBe(true); // byte-stable
+
+    // Package budget (spec/plan): every engine zip must stay under 40KB.
+    expect(zip1.length).toBeLessThan(40 * 1024);
+  });
+});
+
+describe("engine #4 golden path: blank starter (process-simulator) end-to-end", () => {
+  it("assembles, scans clean, and zips deterministically — the fixture-free golden test for the fourth engine", async () => {
+    const adapter = adapterFor("process-simulator");
+    expect(adapter.engineId).toBe("process-simulator");
+    const config = processStarterConfig("blank", "Blank Procedure");
+
+    const build = () =>
+      assemblePackage({
+        identifier: "ILB-process",
+        title: config.title,
+        engineId: "process-simulator",
+        config,
+        runtime: { toRuntimeConfig: adapter.toRuntimeConfig, collectAssetIds: adapter.collectAssetIds },
+        resolveAsset: async () => { throw new Error("the blank process starter has no assets"); },
+      });
+
+    const a = await build();
+
+    // Same invariant as engines #2/#3's golden tests: assemblePackage emits
+    // engine/engine.js + engine/scorm-adapter.js for ANY engine, so this
+    // proves that holds for engine #4 too, not just by inspection of
     // package.ts.
     expect(Object.keys(a.engineChecksums)).toEqual(
       expect.arrayContaining(["engine/engine.js", "engine/scorm-adapter.js"]),
