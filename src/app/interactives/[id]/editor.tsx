@@ -7,6 +7,7 @@
 import { ParamSandboxEditor, type EConfig as ParamSandboxConfig } from "./param-sandbox-editor";
 import { BranchingEditor, type EBranchingConfig } from "./branching-editor";
 import { CaseEditor, type ECaseConfig } from "./case-editor";
+import { ProcessEditor, type EProcessConfig } from "./process-editor";
 import type { AssetRef } from "./editor-shared";
 
 export function Editor({ engineId, interactiveId, initialTitle, initialConfig, assets }: {
@@ -38,6 +39,16 @@ export function Editor({ engineId, interactiveId, initialTitle, initialConfig, a
         interactiveId={interactiveId}
         initialTitle={initialTitle}
         initialConfig={initialConfig as ECaseConfig}
+        assets={assets}
+      />
+    );
+  }
+  if (engineId === "process-simulator") {
+    return (
+      <ProcessEditor
+        interactiveId={interactiveId}
+        initialTitle={initialTitle}
+        initialConfig={initialConfig as EProcessConfig}
         assets={assets}
       />
     );
