@@ -204,6 +204,17 @@ function unescapeHtml(s: string): string {
   return s.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&");
 }
 
+/** Collapses any run of newlines to a single space — applied to TITLE/INTRO
+ *  below since both are emitted as ONE physical line in this format. A
+ *  value carrying an embedded newline (most plausibly INTRO, typed into
+ *  the editor's multi-line textarea) would otherwise split across two
+ *  physical lines on serialize, corrupting this format's line-oriented
+ *  grammar (process-simulator companion-doc.ts precedent, spec-review
+ *  fix — same class of bug, same fix, applied here too). */
+function flattenLine(s: string): string {
+  return s.replace(/\r?\n+/g, " ");
+}
+
 /** Reverses a serializer-applied leading-dash escape (see `escapeLeadingDash`
  *  and the module doc comment's dash-ambiguity bullet): a standalone
  *  CONCLUSION prose line whose real text begins with "-" is emitted as
@@ -1127,11 +1138,11 @@ export function serializeCaseCompanionDoc(config: CaseConfigLike): string {
   if (lossyFeatures.length || riskyTitles.length) lines.push("");
 
   // -- Top matter -----------------------------------------------------------
-  lines.push(`TITLE: ${config.title}`);
+  lines.push(`TITLE: ${flattenLine(config.title)}`);
   {
     const paragraphs = bodyToParagraphs(config.intro);
     const introText = paragraphs.filter(Boolean).join(" ");
-    lines.push(`INTRO: ${unescapeHtml(introText)}`);
+    lines.push(`INTRO: ${flattenLine(unescapeHtml(introText))}`);
   }
   lines.push(`MODE: ${config.scoringMode}`);
   lines.push("");

@@ -197,24 +197,77 @@ describe("parseProcessCompanionDoc — ACTION marker grammar", () => {
 });
 
 // ---------------------------------------------------------------------------
+// after: resolution — whole-clause match attempted first, ambiguity errors
+// ---------------------------------------------------------------------------
+
+describe("parseProcessCompanionDoc — after: whole-clause-first resolution (spec §6 review #9, restored)", () => {
+  it("a comma-label after:-target resolves via whole-clause match, but the label-has-comma error keeps it fail-VISIBLE (never a silently-wrong edge)", () => {
+    // "Second, Gated" is declared as a REQUIRED label containing a comma --
+    // a hard parser error on its own declaration line (restored ruling).
+    // "Third"'s after: clause names it verbatim; the whole (unsplit) clause
+    // matches that exact required label, so the edge itself resolves
+    // correctly -- but the comma-in-a-required-label error is still
+    // present, so this is never a silent, unflagged success.
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: Second, Gated (required)\nOutcome: A.\n\nACTION: Third (required, after: Second, Gated)\nOutcome: B.\nConsequence: C.\nNote: N.\n`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    const gated = c.actions.find((a) => a.label === "Second, Gated")!;
+    const third = c.actions.find((a) => a.label === "Third")!;
+    expect(third.requires).toEqual([gated.id]);
+    expect(errors(report).some((e) => /required action labels must not contain/.test(e.message))).toBe(true);
+  });
+
+  it("an after: clause that is genuinely ambiguous (matches both a single literally-comma'd label and a valid multi-target split) errors on the referencing line and drops the prerequisite", () => {
+    // Alpha, Beta, and "Alpha, Beta" are ALL declared as required labels --
+    // "after: Alpha, Beta" on Gamma could mean the single action literally
+    // labeled "Alpha, Beta" OR the two actions Alpha and Beta. Both
+    // readings fully resolve, so this is genuinely ambiguous and must be
+    // rejected rather than silently picking one.
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: Alpha (required)\nOutcome: A.\n\nACTION: Beta (required)\nOutcome: B.\n\nACTION: Alpha, Beta (required)\nOutcome: C.\n\nACTION: Gamma (required, after: Alpha, Beta)\nOutcome: D.\nConsequence: E.\nNote: F.\n`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    const gamma = c.actions.find((a) => a.label === "Gamma")!;
+    expect(gamma.requires).toBeUndefined();
+    const gammaLine = doc.split("\n").findIndex((l) => l.includes("ACTION: Gamma")) + 1;
+    expect(errors(report).some((e) => e.line === gammaLine && /is ambiguous/.test(e.message))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Label risk + duplicates
 // ---------------------------------------------------------------------------
 
 describe("parseProcessCompanionDoc — risky labels and duplicates", () => {
-  it("warns on a label containing '(' ')' or ',', naming the label (does not error -- the shipped blank starter itself uses a comma in a label)", () => {
+  it("errors (not warns) on a REQUIRED label containing '(' ')' or ',' -- spec §6's original ruling, restored now that the shipped blank starter no longer uses a comma in a required label", () => {
     const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: Do the (thing) (required)\nOutcome: O.\n`;
     const { report } = parseProcessCompanionDoc(doc);
-    expect(warnings(report).some((w) => /label contains/.test(w.message))).toBe(true);
+    expect(errors(report).some((e) => /required action labels must not contain/.test(e.message))).toBe(true);
+    expect(warnings(report).some((w) => /label contains/.test(w.message))).toBe(false);
   });
 
-  it("duplicate required labels: both lines error, the second is skipped and pruned from after: resolution", () => {
+  it("still only warns (never errors) on a DISTRACTOR label containing '(' ')' or ',' -- a distractor label is never a legal after: target", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: Do the (thing) (distractor)\nConsequence: C.\nNote: N.\n`;
+    const { report } = parseProcessCompanionDoc(doc);
+    expect(warnings(report).some((w) => /label contains/.test(w.message))).toBe(true);
+    expect(errors(report).some((e) => /must not contain/.test(e.message))).toBe(false);
+  });
+
+  it("duplicate required labels: only the second (later) line errors -- the first declaration is kept and never flagged", () => {
     const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: Same name (required)\nOutcome: First.\n\nACTION: Same name (required)\nOutcome: Second.\n\nACTION: Third (required, after: Same name)\nOutcome: T.\nConsequence: C.\nNote: N.\n`;
     const { config, report } = parseProcessCompanionDoc(doc);
     const c = config as ProcessConfig;
     const sameNames = c.actions.filter((a) => a.label === "Same name");
     expect(sameNames).toHaveLength(1);
     expect(stripTags(sameNames[0].outcome)).toBe("First.");
-    expect(errors(report).some((e) => /duplicate required action label/.test(e.message))).toBe(true);
+    const dupErrors = errors(report).filter((e) => /duplicate required action label/.test(e.message));
+    expect(dupErrors).toHaveLength(1);
+    const lines = doc.split("\n");
+    const actionLineNos = lines
+      .map((l, i) => ({ l, lineNo: i + 1 }))
+      .filter(({ l }) => l.startsWith("ACTION: Same name"))
+      .map(({ lineNo }) => lineNo);
+    expect(actionLineNos).toHaveLength(2);
+    expect(dupErrors[0].line).toBe(actionLineNos[1]);
   });
 
   it("duplicate distractor labels are tolerated with a warning, both kept", () => {
@@ -224,6 +277,16 @@ describe("parseProcessCompanionDoc — risky labels and duplicates", () => {
     expect(c.actions.filter((a) => a.label === "Same wrong move")).toHaveLength(2);
     expect(warnings(report).some((w) => /duplicate distractor label/.test(w.message))).toBe(true);
     expect(errors(report).some((e) => /duplicate distractor/.test(e.message))).toBe(false);
+  });
+
+  it("dedup is normalization-consistent: '<b>Step</b>' and 'Step' collide as the same required label (what the schema will see)", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: Step (required)\nOutcome: First.\n\nACTION: <b>Step</b> (required)\nOutcome: Second.\n`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    const steps = c.actions.filter((a) => a.label === "Step" || a.label === "<b>Step</b>");
+    expect(steps).toHaveLength(1);
+    const dupErrors = errors(report).filter((e) => /duplicate required action label/.test(e.message));
+    expect(dupErrors).toHaveLength(1);
   });
 });
 
@@ -248,6 +311,37 @@ describe("parseProcessCompanionDoc — cycle breaking (spec §6 review #8)", () 
 
   it("breaks a 3-cycle, leaving an acyclic, validating graph", () => {
     const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: A (required, after: C)\nOutcome: A.\nConsequence: C.\nNote: N.\n\nACTION: B (required, after: A)\nOutcome: B.\nConsequence: C.\nNote: N.\n\nACTION: C (required, after: B)\nOutcome: C.\nConsequence: C.\nNote: N.\n`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    expect(errors(report).some((e) => /creates a prerequisite cycle/.test(e.message))).toBe(true);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  // Cap-aware cycle-guard bound (review blocker): the old `survivors.length
+  // + 5` bound could be exceeded by a dense enough graph, letting a
+  // still-cyclic config escape unbroken. The fixed bound (total edge count
+  // + 1) is proven sufficient (each iteration removes one real cycle edge),
+  // so these dense fixtures — every node after: the 6 (MAX_AFTER) others it
+  // can legally name — must still land fully acyclic.
+  function denseAfterEachOther(nodeCount: number): string {
+    const labels = Array.from({ length: nodeCount }, (_, i) => `N${i}`);
+    const blocks = labels.map((label, i) => {
+      const others = labels.filter((_, j) => j !== i).slice(0, 6);
+      return `ACTION: ${label} (required, after: ${others.join(", ")})\nOutcome: O${i}.\nConsequence: C${i}.\nNote: Note${i}.\n`;
+    });
+    return `TITLE: T\nINTRO: I\nOPENING: O\n\n${blocks.join("\n")}`;
+  }
+
+  it("an 8-node dense graph (each after: six others) is broken fully acyclic and validates", () => {
+    const doc = denseAfterEachOther(8);
+    const { config, report } = parseProcessCompanionDoc(doc);
+    expect(errors(report).some((e) => /creates a prerequisite cycle/.test(e.message))).toBe(true);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("a 12-node dense graph (each after: six others) is broken fully acyclic and validates", () => {
+    const doc = denseAfterEachOther(12);
     const { config, report } = parseProcessCompanionDoc(doc);
     expect(errors(report).some((e) => /creates a prerequisite cycle/.test(e.message))).toBe(true);
     const r = validateProcessConfig(config);
@@ -336,6 +430,43 @@ describe("parseProcessCompanionDoc — field-requirement matrix", () => {
     // OR from being recognized and then flagged as illegal.
     expect(errors(report).some((e) => /must not carry a Consequence: line/.test(e.message))).toBe(true);
   });
+
+  it("an all-markup Note: (no real text once tag-stripped) is coerced to the placeholder note with a line-numbered error", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: Wrong (distractor)\nConsequence: C.\nNote: <b></b>\n`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    const a = c.actions.find((x) => x.label === "Wrong")!;
+    expect(a.consequenceNote).toBe("Note to be written.");
+    const noteLine = doc.split("\n").findIndex((l) => l.startsWith("Note:")) + 1;
+    expect(errors(report).some((e) => e.line === noteLine && /only markup with no real text/.test(e.message))).toBe(true);
+  });
+
+  it("an all-markup ACTION label is loudly coerced to a placeholder label", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: <b></b> (required)\nOutcome: A.\n`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.actions.some((a) => a.label === "Untitled action")).toBe(true);
+    expect(errors(report).some((e) => /contains only markup with no real text/.test(e.message))).toBe(true);
+  });
+
+  it("an empty ACTION label (nothing before the marker) errors and is coerced to a placeholder label", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: (required)\nOutcome: A.\n`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.actions.some((a) => a.label === "Untitled action")).toBe(true);
+    expect(errors(report).some((e) => /ACTION line is missing a label/.test(e.message))).toBe(true);
+  });
+
+  it("a broken marker whose after: clause has its own parens (so ACTION_LINE_RE never matches) gets a specific error, not the generic missing-marker one", () => {
+    // "Nested (Label)" as an after: target breaks the marker's own
+    // trailing-parens grammar, so the WHOLE line is read back as the
+    // label -- detected here via the " after: " tell rather than being
+    // silently miscoercied the same way a genuinely marker-less line is.
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: First (required)\nOutcome: A.\n\nACTION: Do the thing (required, after: Nested (Label))\nOutcome: B.\n`;
+    const { report } = parseProcessCompanionDoc(doc);
+    expect(errors(report).some((e) => /unparsed "after:" clause/.test(e.message))).toBe(true);
+    expect(errors(report).some((e) => /is missing its required/.test(e.message))).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -380,6 +511,102 @@ describe("parseProcessCompanionDoc — floors", () => {
     expect(c.title).toBe("Imported procedure");
     expect(warnings(report).some((w) => /no TITLE given/.test(w.message))).toBe(true);
   });
+
+  it("duplicate top-matter directives (TITLE/INTRO/OPENING/EXPERTNOTE) warn, and the later one wins", () => {
+    const doc = `TITLE: First title\nTITLE: Second title\nINTRO: I\nOPENING: O\n\nACTION: A (required)\nOutcome: A.\n\nACTION: B (required, after: A)\nOutcome: B.\nConsequence: C.\nNote: N.\n\nACTION: C (required)\nOutcome: C.\n\nACTION: D (distractor)\nConsequence: D.\nNote: D.\n`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.title).toBe("Second title");
+    expect(warnings(report).some((w) => /duplicate TITLE directive/.test(w.message))).toBe(true);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  // ---------------------------------------------------------------------
+  // Cap-aware floors (review BLOCKER): never exceed MAX_ACTIONS=24. At the
+  // cap, the <2-required floor PROMOTES existing distractors to required
+  // instead of adding a new action; the >=1-illegally-attemptable floor
+  // DEMOTES the last required action to a distractor instead. Every
+  // resulting config must still validate.
+  // ---------------------------------------------------------------------
+  function distractorLines(count: number): string {
+    return Array.from({ length: count }, (_, i) => `ACTION: D${i} (distractor)\nConsequence: C${i}.\nNote: N${i}.\n`).join("\n");
+  }
+  function requiredNoAfterLines(count: number): string {
+    return Array.from({ length: count }, (_, i) => `ACTION: R${i} (required)\nOutcome: O${i}.\n`).join("\n");
+  }
+
+  it("26 distractors / 0 required: 2 are skipped at the cap, then 2 more are promoted to required at the cap, landing a validating config", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\n${distractorLines(26)}`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.actions.length).toBe(24);
+    expect(c.actions.filter((a) => a.required).length).toBeGreaterThanOrEqual(2);
+    expect(errors(report).some((e) => /promoted to a required/.test(e.message))).toBe(true);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("exactly 24 distractors / 0 required: 2 are promoted to required at the cap, landing a validating config", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\n${distractorLines(24)}`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.actions.length).toBe(24);
+    expect(c.actions.filter((a) => a.required).length).toBeGreaterThanOrEqual(2);
+    expect(errors(report).some((e) => /promoted to a required/.test(e.message))).toBe(true);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("23 distractors / 0 required: pads with 1 new placeholder required (still under the cap) then promotes 1 distractor once the cap is hit, landing a validating config", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\n${distractorLines(23)}`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.actions.length).toBe(24);
+    expect(c.actions.filter((a) => a.required).length).toBeGreaterThanOrEqual(2);
+    expect(warnings(report).some((w) => /added placeholder required action/.test(w.message))).toBe(true);
+    expect(errors(report).some((e) => /promoted to a required/.test(e.message))).toBe(true);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("24 required, no after: edges, no distractors: the last required action is demoted to a distractor placeholder at the cap, landing a validating config", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\n${requiredNoAfterLines(24)}`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.actions.length).toBe(24);
+    expect(c.actions.some((a) => !a.required)).toBe(true);
+    expect(errors(report).some((e) => /demoted to a distractor placeholder/.test(e.message))).toBe(true);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("25 required, no after: edges, no distractors: the 25th is skipped at the cap, then the last surviving required action is demoted to a distractor placeholder, landing a validating config", () => {
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\n${requiredNoAfterLines(25)}`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.actions.length).toBe(24);
+    expect(errors(report).some((e) => /too many actions/.test(e.message))).toBe(true);
+    expect(c.actions.some((a) => !a.required)).toBe(true);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
+
+  it("an after: naming a label that exists in the doc but was dropped beyond the action cap gets a distinct 'beyond the action cap' message, not 'doesn't exist'", () => {
+    // "Referrer" is declared FIRST (so it always survives the cap) and
+    // references "R24" by label; 25 more required actions (R0..R24) follow
+    // it, so only R0..R22 survive alongside Referrer (24 accepted total)
+    // -- R23 and R24 are both skipped purely for being beyond the cap.
+    const reqLines = requiredNoAfterLines(25);
+    const doc = `TITLE: T\nINTRO: I\nOPENING: O\n\nACTION: Referrer (required, after: R24)\nOutcome: X.\nConsequence: Y.\nNote: Z.\n\n${reqLines}`;
+    const { config, report } = parseProcessCompanionDoc(doc);
+    const c = config as ProcessConfig;
+    expect(c.actions.length).toBe(24);
+    expect(errors(report).some((e) => /beyond the action cap/.test(e.message))).toBe(true);
+    expect(errors(report).some((e) => /names "R24".*doesn't exist/.test(e.message))).toBe(false);
+    const r = validateProcessConfig(config);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -416,12 +643,12 @@ describe("parseProcessCompanionDoc — BOM/CRLF/smart-quote tolerance", () => {
 // ---------------------------------------------------------------------------
 
 describe("parseProcessCompanionDoc — report completeness and ordering", () => {
-  it("a doc with 5 seeded flaws yields issues (errors + one warning) at ascending line numbers, at the right lines", () => {
-    // Flaws: (1) missing marker on "Odd one" (line 5, error); (2) label with
-    // a paren on "Bad(label)" (line 8, warning); (3) after: naming a
-    // distractor "Wrong move" (line 11, error); (4) duplicate required
-    // label "First" (lines 14 and 17, error); (5) an unknown line inside a
-    // block (line 20, error).
+  it("a doc with 5 seeded flaws yields issues (all errors) at ascending line numbers, at the right lines", () => {
+    // Flaws: (1) missing marker on "Odd one" (line 5, error); (2) a
+    // REQUIRED label with a paren on "Bad(label)" (line 8, error); (3)
+    // after: naming a distractor "Wrong move" (line 11, error); (4)
+    // duplicate required label "First" (lines 14 and 17, error); (5) an
+    // unknown line inside a block (line 20, error).
     const lines = [
       "TITLE: T",
       "INTRO: I",
@@ -452,7 +679,7 @@ describe("parseProcessCompanionDoc — report completeness and ordering", () => 
     expect(report.map((r) => r.line)).toEqual([...report.map((r) => r.line)].sort((a, b) => a - b));
     const errs = errors(report);
     expect(errs.some((e) => e.line === lineOf(lines, "ACTION: Odd one"))).toBe(true);
-    expect(warnings(report).some((w) => w.line === lineOf(lines, "Bad(label)"))).toBe(true);
+    expect(errs.some((e) => e.line === lineOf(lines, "Bad(label)"))).toBe(true);
     expect(errs.some((e) => e.line === lineOf(lines, "after: Wrong move"))).toBe(true);
     expect(errs.some((e) => e.line === lineOf(lines, "ACTION: First (required)"))).toBe(true);
     expect(errs.some((e) => e.line === lineOf(lines, "stray line with no meaning"))).toBe(true);
@@ -526,6 +753,69 @@ describe("serializeProcessCompanionDoc — lossy-feature header block content", 
     expect(text).toContain('the header color ("primary")');
     expect(text).toContain("multi-paragraph text collapsed to one line in INTRO");
   });
+
+  it("drops an after: edge naming a required target label with a comma/paren, names it in a lossy header line, and still warns on the risky label", () => {
+    const cfg: ProcessConfigLike = {
+      title: "T", intro: "<p>I</p>", opening: "<p>O</p>",
+      actions: [
+        { id: "a", label: "Second, Gated", required: true, outcome: "<p>A</p>" },
+        { id: "b", label: "Third", required: true, requires: ["a"], outcome: "<p>B</p>", consequence: "<p>C</p>", consequenceNote: "N" },
+      ],
+    };
+    const text = serializeProcessCompanionDoc(cfg);
+    expect(text).not.toContain("after: Second, Gated");
+    expect(text).toContain('"Third"\'s prerequisite on "Second, Gated"');
+    expect(text).toContain('"Second, Gated"');
+  });
+
+  it("names an orphaned requires list on a distractor (never legal, editor-bug data) in a lossy header line rather than silently dropping it", () => {
+    const cfg: ProcessConfigLike = {
+      title: "T", intro: "<p>I</p>", opening: "<p>O</p>",
+      actions: [
+        { id: "a", label: "First", required: true, outcome: "<p>A</p>" },
+        { id: "b", label: "Orphaned distractor", required: false, requires: ["a"], consequence: "<p>C</p>", consequenceNote: "N" },
+      ],
+    };
+    const text = serializeProcessCompanionDoc(cfg);
+    expect(text).toContain("the requires (prerequisite) list on Orphaned distractor");
+    expect(text).not.toMatch(/ACTION: Orphaned distractor \(distractor, after:/);
+  });
+});
+
+describe("serializeProcessCompanionDoc — newline flattening", () => {
+  it("flattens an embedded newline in every single-line-emitted value to a space", () => {
+    const cfg: ProcessConfigLike = {
+      title: "T", intro: "<p>Line one.\nLine two.</p>", opening: "<p>O</p>", expertNote: "<p>Expert\nnote.</p>",
+      actions: [
+        { id: "a", label: "First\nlabel", required: true, outcome: "<p>Outcome\ntext.</p>" },
+        {
+          id: "b", label: "Second", required: true, requires: ["a"],
+          outcome: "<p>B</p>", consequence: "<p>Consequence\ntext.</p>", consequenceNote: "Note\ntext.",
+        },
+      ],
+    };
+    const text = serializeProcessCompanionDoc(cfg);
+    expect(text).toContain("INTRO: Line one. Line two.");
+    expect(text).toContain("EXPERTNOTE: Expert note.");
+    expect(text).toContain("ACTION: First label (required)");
+    expect(text).toContain("Outcome: Outcome text.");
+    expect(text).toContain("Consequence: Consequence text.");
+    expect(text).toContain("Note: Note text.");
+  });
+
+  it("a two-line intro authored in the editor round-trips complete (space-joined), not truncated or split", () => {
+    const cfg = processConfigSchema.parse({
+      ...PROCESS_STARTERS.blank.config,
+      title: "T",
+      intro: "<p>First line of the intro.\nSecond line of the intro.</p>",
+    });
+    const text = serializeProcessCompanionDoc(cfg);
+    expect(text).toContain("INTRO: First line of the intro. Second line of the intro.");
+    const { config, report } = parseProcessCompanionDoc(text);
+    expect(errors(report), JSON.stringify(report)).toHaveLength(0);
+    const c = config as ProcessConfig;
+    expect(stripTags(c.intro)).toBe("First line of the intro. Second line of the intro.");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -533,45 +823,85 @@ describe("serializeProcessCompanionDoc — lossy-feature header block content", 
 // ---------------------------------------------------------------------------
 
 describe("serializeProcessCompanionDoc — round-trip", () => {
-  const MAX_FEATURE_CONFIG: ProcessConfig = processConfigSchema.parse({
-    title: "Evidence Intake",
-    intro: "<p>Learn to collect and log evidence in an order that survives cross-examination.</p>",
-    opening: "<p>A sealed scene, one item to collect, and a log that must hold up in court.</p>",
-    expertNote: "<p>The order that survives cross-examination is the one where nothing touched the item before the record existed.</p>",
-    actions: [
-      { id: "photo", label: "Photograph the item in place", required: true, outcome: "<p>The item's position is recorded before anything moves.</p>" },
-      { id: "gloves", label: "Put on gloves", required: true, outcome: "<p>Contamination risk is controlled before contact.</p>" },
-      {
-        id: "collect", label: "Collect the item", required: true, requires: ["photo", "gloves"],
-        outcome: "<p>The item is bagged.</p>",
-        consequence: "<p>The item moved before it was photographed; its position now rests on memory, not the record.</p>",
-        consequenceNote: "Collection has two prerequisites; skipping either compromises the record.",
-      },
-      {
-        id: "ask", label: "Ask the officer to move the item closer", required: false,
-        consequence: "<p>The chain of custody now starts with an undocumented move.</p>",
-        consequenceNote: "Convenience is not a custody procedure.",
-      },
-    ],
+  // Genuinely max-feature (review item 7): 24 actions (the MAX_ACTIONS cap),
+  // a 6-deep prerequisite chain (c1 -> c2 -> ... -> c6), and one 6-wide
+  // after: list (a single action requiring all 6 chain steps at once) --
+  // not just "uses a few features", but sits at this format's own
+  // documented limits so a regression there is caught here too.
+  function buildMaxFeatureConfig(): ProcessConfig {
+    const chainIds = ["c1", "c2", "c3", "c4", "c5", "c6"];
+    const actions: ProcessConfig["actions"] = [];
+    chainIds.forEach((id, i) => {
+      const requires = i === 0 ? undefined : [chainIds[i - 1]];
+      actions.push({
+        id, label: `Chain step ${i + 1}`, required: true,
+        ...(requires ? { requires } : {}),
+        outcome: `<p>Chain step ${i + 1} is done.</p>`,
+        ...(requires
+          ? {
+              consequence: `<p>Chain step ${i + 1} was attempted before the one it depends on.</p>`,
+              consequenceNote: `Chain step ${i + 1} depends on the step right before it.`,
+            }
+          : {}),
+      });
+    });
+    actions.push({
+      id: "wide", label: "Wide step needing everything", required: true, requires: [...chainIds],
+      outcome: "<p>The wide step is done.</p>",
+      consequence: "<p>The wide step was attempted before the chain finished.</p>",
+      consequenceNote: "The wide step depends on every chain step.",
+    });
+    for (let i = 1; i <= 12; i++) {
+      actions.push({
+        id: `req${i}`, label: `Independent required action ${i}`, required: true,
+        outcome: `<p>Independent required action ${i} is done.</p>`,
+      });
+    }
+    for (let i = 1; i <= 5; i++) {
+      actions.push({
+        id: `wrong${i}`, label: `Wrong move ${i}`, required: false,
+        consequence: `<p>Wrong move ${i} causes a realistic setback.</p>`,
+        consequenceNote: `Wrong move ${i} is never correct.`,
+      });
+    }
+    return processConfigSchema.parse({
+      title: "Max Feature Procedure",
+      intro: "<p>Exercises every companion-doc feature at once: the 24-action cap, a 6-deep prerequisite chain, and a single 6-wide after: list.</p>",
+      opening: "<p>A procedure built to exercise every corner of this format at once.</p>",
+      expertNote: "<p>This fixture exists to prove the format stays stable at its own documented limits.</p>",
+      actions,
+    });
+  }
+  const MAX_FEATURE_CONFIG: ProcessConfig = buildMaxFeatureConfig();
+
+  it("is genuinely at this format's own limits: 24 actions, a 6-deep chain, one 6-wide after:", () => {
+    expect(MAX_FEATURE_CONFIG.actions).toHaveLength(24);
+    const wide = MAX_FEATURE_CONFIG.actions.find((a) => a.label === "Wide step needing everything")!;
+    expect(wide.requires).toHaveLength(6);
+    const r = validateProcessConfig(MAX_FEATURE_CONFIG);
+    expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
   });
 
   it("round-trips a max-feature fixture: serialize -> parse -> validate ok, structurally equal via labels", () => {
     const text = serializeProcessCompanionDoc(MAX_FEATURE_CONFIG);
     const { config, report } = parseProcessCompanionDoc(text);
     expect(errors(report), JSON.stringify(report)).toHaveLength(0);
+    expect(warnings(report), JSON.stringify(report)).toHaveLength(0);
     const r = validateProcessConfig(config);
     expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
     if (!r.ok) throw new Error("unreachable");
     expect(toLabeledShape(r.config)).toEqual(toLabeledShape(MAX_FEATURE_CONFIG));
   });
 
-  it("round-trips the blank starter too", () => {
+  it("round-trips the blank starter too, structurally equal via labels", () => {
     const starter = processConfigSchema.parse({ ...PROCESS_STARTERS.blank.config, title: "Blank" });
     const text = serializeProcessCompanionDoc(starter);
     const { config, report } = parseProcessCompanionDoc(text);
     expect(errors(report), JSON.stringify(report)).toHaveLength(0);
     const r = validateProcessConfig(config);
     expect(r.ok, !r.ok ? r.errors.join("; ") : "").toBe(true);
+    if (!r.ok) throw new Error("unreachable");
+    expect(toLabeledShape(r.config)).toEqual(toLabeledShape(starter));
   });
 
   it("produces byte-identical output when re-serializing a re-parsed max-feature doc", () => {
