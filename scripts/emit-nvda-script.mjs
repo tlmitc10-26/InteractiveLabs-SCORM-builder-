@@ -3,10 +3,12 @@
  *   - docs/a11y/nvda-check-param-sandbox.md   (Parameter Sandbox / Buoyancy Explorer)
  *   - docs/a11y/nvda-check-branching-scenario.md (Branching Scenario / Jury Deliberation)
  *   - docs/a11y/nvda-check-case-workspace.md  (Case / Evidence Workspace / blank starter)
+ *   - docs/a11y/nvda-check-process-simulator.md (Process Simulator / blank starter)
  *
- * Both are derived from the SAME spec-determined expectations encoded in
- * src/lib/a11y/transcript.ts and locked by tests/sr-transcript.test.ts and
- * tests/sr-transcript-branching.test.ts respectively.
+ * All four are derived from the SAME spec-determined expectations encoded in
+ * src/lib/a11y/transcript.ts and locked by tests/sr-transcript.test.ts,
+ * tests/sr-transcript-branching.test.ts, tests/sr-transcript-case.test.ts,
+ * and tests/sr-transcript-process.test.ts respectively.
  *
  * Doctrine: a screen reader implements W3C specs (accname computation,
  * ARIA/HTML-AAM role mapping, live-region processing), so for conformant
@@ -17,9 +19,9 @@
  * drives the exact same interaction sequences, and prints the exact same
  * computed text into numbered steps a human can follow with NVDA running.
  *
- * Regenerate: `npm run a11y:script` (rerun any time either engine's main.ts
- * markup, or its starter config, changes -- this ALWAYS emits both docs).
- * Commit both resulting docs.
+ * Regenerate: `npm run a11y:script` (rerun any time any engine's main.ts
+ * markup, or its starter config, changes -- this ALWAYS emits all four
+ * docs). Commit all four resulting docs.
  *
  * Run via tsx (not plain node) because it imports the TypeScript engine
  * runtime, schema, and transcript modules directly -- see package.json's
@@ -34,10 +36,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DOCS_DIR = path.join(ROOT, "docs", "a11y");
 
 // ---------- jsdom bootstrap (mirrors vitest's jsdom environment closely
-// enough for both engines' main.ts to mount: they only ever touch
+// enough for all four engines' main.ts to mount: they only ever touch
 // document/window/Image/ResizeObserver (guarded), none of which need a full
-// browser). Shared across both docs below -- each mounts into its own fresh
-// container element, so there's no cross-engine DOM interference. ----------
+// browser). Shared across all four docs below -- each mounts into its own
+// fresh container element, so there's no cross-engine DOM interference. ----------
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
 global.window = dom.window;
 global.document = dom.window.document;
@@ -59,7 +61,7 @@ function freshRoot(id) {
 // strings transcript.ts uses (e.g. "spinbutton" -> "spin button"). This is
 // the ONE place that translation happens, kept small and explicit so it's
 // easy to correct against a real NVDA session if a wording turns out wrong.
-// Shared by both engines' docs below.
+// Shared by all four engines' docs below.
 const NVDA_ROLE_WORD = {
   slider: "slider",
   spinbutton: "spin button",
@@ -72,13 +74,29 @@ const NVDA_ROLE_WORD = {
   img: "graphic",
 };
 
+// NVDA's spoken state words also differ from transcript.ts's own state
+// strings in one case: a disabled control is announced as "unavailable",
+// never the literal word "disabled" (NVDA/JAWS/VoiceOver convention, not an
+// ARIA-spec string) -- process-simulator (spec §3) is the first engine whose
+// walkthrough actually needs to demonstrate this, since it's the first
+// engine whose contract keeps a disabled control in READING order on
+// purpose (a completed action's button). Applied everywhere a state gets
+// printed (nvdaFocusUtterance below, used for both focus-order AND
+// reading-order entries), so regenerating the three PRIOR engines' docs
+// after adding this table changes their disabled-Submit-button lines
+// (case-workspace's Conclude step) from "disabled" to "unavailable" and
+// nothing else -- see this script's own regeneration note in the plan.
+const NVDA_STATE_WORD = {
+  disabled: "unavailable",
+};
+
 /** "<name>, <role>, <value>" -- NVDA's default utterance order (name, then
  *  role, then value/state) when a control receives focus. */
 function nvdaFocusUtterance(entry) {
   const roleWord = NVDA_ROLE_WORD[entry.role] ?? entry.role;
   const parts = [entry.name, roleWord];
   if (entry.value !== undefined) parts.push(entry.value);
-  if (entry.states?.length) parts.push(...entry.states);
+  if (entry.states?.length) parts.push(...entry.states.map((s) => NVDA_STATE_WORD[s] ?? s));
   return parts.join(", ");
 }
 
@@ -717,10 +735,303 @@ async function generateCaseWorkspaceDoc() {
   return { outPath: path.join(DOCS_DIR, "nvda-check-case-workspace.md"), text: lines.join("\n") + "\n" };
 }
 
-// ==================== Write both docs ====================
+// ==================== Process Simulator doc ====================
+
+async function generateProcessSimulatorDoc() {
+  const { mountProcessSimulator } = await import("@/engine-runtime/process-simulator/main");
+  const { processStarterConfig } = await import("@/lib/engines/process-simulator/starters");
+
+  const config = processStarterConfig("blank", "Blank Procedure");
+  const root = freshRoot("root-process");
+  mountProcessSimulator(root, config);
+
+  const clickByText = (selector, text) => {
+    const btn = Array.from(root.querySelectorAll(selector)).find((b) => b.textContent === text);
+    if (!btn) throw new Error(`no ${selector} with text "${text}"`);
+    btn.click();
+  };
+  const clickAction = (label) => {
+    const btn = Array.from(root.querySelectorAll(".ilb-action-btn")).find(
+      (b) => b.querySelector(".ilb-action-label")?.textContent === label,
+    );
+    if (!btn) throw new Error(`no action button labeled "${label}"`);
+    btn.click();
+  };
+
+  // ==================== 1. Brief: live region, h2, Begin button ====================
+  const briefReading = readingOrderTranscript(root);
+  const briefStatus = briefReading.find((e) => e.role === "status");
+  const briefHeading = briefReading.find((e) => e.role.startsWith("heading"));
+  const briefFocus = focusOrderTranscript(root);
+
+  // ==================== 2. Procedure: action menu on entry ====================
+  clickByText(".ilb-btn-pill", "Begin the procedure.");
+  const menuReading = readingOrderTranscript(root);
+  const procedureHeading = menuReading.find((e) => e.role.startsWith("heading level 2"));
+  const situationHeading = menuReading.find((e) => e.role === "heading level 3" && e.name === "Situation");
+  const actionsHeading = menuReading.find((e) => e.role === "heading level 3" && e.name === "Actions");
+  const menuFocus = focusOrderTranscript(root);
+
+  // ==================== 3. A legal action: success-path focus + the log entry ====================
+  clickAction("Describe the first action here");
+  const afterSuccessReading = readingOrderTranscript(root);
+  const logEntry = afterSuccessReading.find((e) => e.role === "text");
+  // The just-completed action's OWN button, still in READING order with its
+  // disabled state (spec §3 review #5) but dropped from FOCUS order below --
+  // this is the walkthrough's demonstration of the NVDA_STATE_WORD
+  // translation ("unavailable", never the literal word "disabled").
+  const disabledButtonReading = afterSuccessReading.find(
+    (e) => e.role === "button" && e.name === "Describe the first action here",
+  );
+  const afterSuccessStatus = afterSuccessReading.find((e) => e.role === "status");
+  const afterSuccessFocus = focusOrderTranscript(root);
+  const focusedHeadingText = document.activeElement?.tagName === "H3" ? document.activeElement.textContent : null;
+
+  // ==================== 4. An illegal attempt: the consequence panel ====================
+  clickAction("Describe a tempting but wrong action here"); // any distractor click is unconditionally illegal
+  const consequenceReading = readingOrderTranscript(root);
+  const consequenceHeading = consequenceReading.find((e) => e.role === "heading level 3" && e.name === "Consequence");
+  const continueButton = consequenceReading.find((e) => e.role === "button" && e.name === "Continue");
+  const focusedConsequenceHeading = document.activeElement?.tagName === "H3" ? document.activeElement.textContent : null;
+
+  // ==================== 5. Continue: menu rebuilds, focus returns BY ID ====================
+  clickByText(".ilb-btn-pill", "Continue");
+  const afterContinueFocusedLabel = document.activeElement?.querySelector?.(".ilb-action-label")?.textContent ?? null;
+  const distractorStillEnabled = document.activeElement?.tagName === "BUTTON" && !document.activeElement.disabled;
+
+  // ==================== 6. Debrief: full read-back + bundled step review ====================
+  clickAction("Describe a second, gated action here");
+  clickAction("Describe a third, independent required action here");
+  const debriefReading = readingOrderTranscript(root);
+  const debriefStatus = debriefReading.find((e) => e.role === "status");
+  const eyebrow = debriefReading.find((e) => e.role === "text" && e.name === "Procedure complete");
+  const debriefHeading = debriefReading.find((e) => e.role === "heading level 2");
+  const scoreLine = debriefReading.find((e) => e.role === "text" && /^Steps:/.test(e.name));
+  const situationReviewHeading = debriefReading.find((e) => e.role === "heading level 3" && e.name === "Situation");
+  const logTexts = debriefReading.filter(
+    (e) => e.role === "text" && e !== eyebrow && e !== scoreLine && !/^Describe .*: completed/.test(e.name),
+  );
+  const stepReviewHeading = debriefReading.find((e) => e.role === "heading level 3" && e.name === "Step review");
+  const stepReviewText = debriefReading.find((e) => e.role === "text" && /: completed on the first try\./.test(e.name));
+  const startOverButton = debriefReading.find((e) => e.role === "button");
+  const debriefFocusedIsHeading = document.activeElement?.tagName === "H2" ? document.activeElement.textContent : null;
+
+  // ==================== Emit markdown ====================
+  const lines = [];
+  const push = (s = "") => lines.push(s);
+
+  push("# NVDA verification script: Process Simulator (Blank starter)");
+  push();
+  push("_Generated by `scripts/emit-nvda-script.mjs` from the same spec-determined transcript");
+  push("data locked in `tests/sr-transcript-process.test.ts` (see `src/lib/a11y/transcript.ts`).");
+  push("Do not hand-edit this file -- rerun `npm run a11y:script` to regenerate it after any");
+  push("change to the runtime's markup or to the blank procedure starter config._");
+  push();
+  push("## Assumptions");
+  push();
+  push("- NVDA with **default settings** (default speech verbosity: roles and states announced).");
+  push("- Latest Chrome or Firefox -- accname computation and live-region processing are the");
+  push("  browser's job; NVDA reads whatever the browser exposes via the accessibility tree.");
+  push("- Open **NVDA's Speech Viewer** before starting, so you can log/copy exactly what NVDA");
+  push("  says as you go, and compare it word-for-word against the \"NVDA should say\" lines below.");
+  push("- Load the Blank Procedure starter fresh (no prior SCORM resume/suspend data) before");
+  push("  beginning at step 1.");
+  push();
+  push("## 1. Brief: live region, heading, Begin button");
+  push();
+  let n = 1;
+  if (briefStatus) {
+    push(`${n}. Read the first line → NVDA should say: **"${briefStatus.name}"**`);
+    n++;
+  }
+  push(`${n}. Press H → NVDA should say: **"${headingUtterance(briefHeading)}"**`);
+  n++;
+  for (const s of briefFocus) {
+    push(`${n}. Press Tab → NVDA should say: **"${nvdaFocusUtterance(s)}"**`);
+    n++;
+  }
+  push();
+  push("## 2. Procedure room: Situation, Actions, and the action menu");
+  push();
+  push(`${n}. Press Enter on "Begin the procedure." → NVDA should say the new heading:`);
+  push(`   **"${headingUtterance(procedureHeading)}"**`);
+  n++;
+  if (situationHeading) {
+    push(`${n}. Continue reading → NVDA should say: **"${headingUtterance(situationHeading)}"**`);
+    n++;
+  }
+  if (actionsHeading) {
+    push(`${n}. Continue reading (the opening situation text comes first) → NVDA should say:`);
+    push(`   **"${headingUtterance(actionsHeading)}"**`);
+    n++;
+  }
+  for (const s of menuFocus) {
+    push(`${n}. Press Tab → NVDA should say: **"${nvdaFocusUtterance(s)}"**`);
+    n++;
+  }
+  push();
+  push("If you hear anything else here -- a different name, a missing \"button\" role word, a");
+  push("stale label -- that's a contract regression: check");
+  push("`tests/sr-transcript-process.test.ts`'s locked reading/focus-order transcripts against");
+  push("what the runtime currently renders.");
+  push();
+  push("## 3. A legal action: the success-path focus contract, and a disabled button");
+  push();
+  push(`${n}. Press Enter on "Describe the first action here" (its prerequisites, if any, are already`);
+  push("   met) → focus moves to the Situation panel's own heading (spec §3 review #1), NOT back to");
+  push("   the action menu → NVDA should say: **\"Situation heading level 3\"**");
+  n++;
+  if (logEntry) {
+    push(`${n}. Continue reading → NVDA should say the new situation-log entry, with its "Latest:"`);
+    push("   prefix (a visually-hidden, non-color-only cue -- spec §3 review #25):");
+    push(`   **"${logEntry.name}"**`);
+    n++;
+  }
+  if (afterSuccessStatus) {
+    push(`${n}. Continue reading (or check the live region directly) → the progress line has already`);
+    push(`   updated in the same beat: NVDA should say: **"${afterSuccessStatus.name}"**`);
+    n++;
+  }
+  if (disabledButtonReading) {
+    push(`${n}. Continue reading down into the Actions menu → the just-completed action's OWN button`);
+    push("   is still in READING order (spec §3 review #5 -- only the TAB order drops it, asserted");
+    push("   next) with its disabled state, which NVDA announces as **\"unavailable,\"** never the");
+    push("   literal word \"disabled\":");
+    push(`   **"${nvdaFocusUtterance(disabledButtonReading)}"**`);
+    n++;
+  }
+  push(`${n}. Press Tab from the Situation heading → the completed action's button is skipped`);
+  push("   entirely (it dropped out of TAB order, though it stayed in reading order above) → NVDA");
+  push("   should land directly on the next action:");
+  push(`   **"${nvdaFocusUtterance(afterSuccessFocus[0])}"**`);
+  n++;
+  push();
+  push("If step 1 above didn't leave focus on the Situation heading -- e.g. NVDA reads the");
+  push(`"${focusedHeadingText ?? "Situation"}" line only when you navigate to it manually -- that's a`);
+  push("focus-management regression: the runtime must move focus there itself on every successful");
+  push("required action, never leave it on the now-disabled button.");
+  push();
+  push("## 4. An illegal attempt: the consequence panel replaces ONLY the action menu");
+  push();
+  push(`${n}. Press Enter on any NOT-yet-done, illegal action (e.g. a distractor, or a required`);
+  push("   action whose prerequisites aren't all met yet) → the Situation panel and progress line");
+  push("   persist untouched; ONLY the Actions sub-container is replaced by a consequence panel,");
+  push("   and focus moves to ITS heading (spec §3 review #21/#26) → NVDA should say:");
+  push(`   **"${headingUtterance(consequenceHeading)}"**`);
+  n++;
+  push(`${n}. Continue reading → NVDA should say the authored consequence text, then:`);
+  if (continueButton) {
+    push(`   **"${nvdaFocusUtterance(continueButton)}"**`);
+    n++;
+  }
+  push();
+  push("The live region is NOT touched by this transition at all (its accessible name carries the");
+  push("announcement instead, via the heading focus above) -- if you hear the progress count");
+  push("re-announced here, that's a regression in the churn guard.");
+  push();
+  if (focusedConsequenceHeading !== "Consequence") {
+    push("(Note: this generation run's focused element was not exactly the Consequence heading --");
+    push("re-verify against the runtime if this doc looks stale.)");
+    push();
+  }
+  push("## 5. Continue: the menu rebuilds, focus returns to the attempted button BY ID");
+  push();
+  push(`${n}. Press Enter on "Continue" → the action menu rebuilds in full, and focus lands back on`);
+  push("   the SAME button you attempted (spec §3 review #26) -- still enabled, since an illegal");
+  push("   attempt never marks anything done → NVDA should say:");
+  push(`   **"${afterContinueFocusedLabel ?? "(the attempted action's own label)"}, button"**`);
+  n++;
+  push();
+  if (!distractorStillEnabled) {
+    push("(Note: this generation run did not find the attempted button re-enabled and focused --");
+    push("re-verify against the runtime if this doc looks stale.)");
+    push();
+  }
+  push("## 6. Debrief: full log read-back, then the bundled step review");
+  push();
+  push(`${n}. Complete every remaining required action in a legal order → the debrief is entered`);
+  push("   automatically, and focus moves to its own heading (no click needed to get there) → NVDA");
+  push("   should say:");
+  if (debriefStatus) {
+    push(`   **"${debriefStatus.name}"**`);
+    n++;
+  }
+  if (eyebrow) {
+    push(`${n}. Move the browse cursor to the top of the debrief → NVDA should say: **"${eyebrow.name}"**`);
+    n++;
+  }
+  push(`${n}. Focus lands directly on the result heading → NVDA should say:`);
+  push(`   **"${headingUtterance(debriefHeading)}"**`);
+  n++;
+  if (scoreLine) {
+    push(`${n}. Continue reading → NVDA should say the score line, the announced source for the`);
+    push(`   score (redundant with the aria-hidden numeral and quality chips above it):`);
+    push(`   **"${scoreLine.name}"**`);
+    n++;
+  }
+  if (situationReviewHeading) {
+    push(`${n}. Press H → NVDA should say: **"${headingUtterance(situationReviewHeading)}"**`);
+    n++;
+  }
+  for (const entry of logTexts) {
+    push(`${n}. Continue reading the full situation log (it survives the transition to debrief in`);
+    push("   full -- spec §3 review #13, every entry re-rendered, not just the newest) → NVDA should");
+    push(`   say: **"${entry.name}"**`);
+    n++;
+  }
+  if (stepReviewHeading) {
+    push(`${n}. Press H → NVDA should say: **"${headingUtterance(stepReviewHeading)}"**`);
+    n++;
+  }
+  if (stepReviewText) {
+    push(`${n}. Continue reading the step review (bundled as ONE reading-order entry, same pattern`);
+    push("   as the other three engines' debrief lists) → NVDA should say, verbatim:");
+    push(`   **"${stepReviewText.name}"**`);
+    n++;
+  }
+  if (startOverButton) {
+    push(`${n}. Continue reading (or Tab; this is the only focusable control at debrief) → NVDA`);
+    push(`   should say: **"${nvdaFocusUtterance(startOverButton)}"**`);
+    n++;
+  }
+  push();
+  if (debriefFocusedIsHeading !== config.title) {
+    push("(Note: this generation run's focused element at debrief was not exactly the result");
+    push("heading -- re-verify against the runtime if this doc looks stale.)");
+    push();
+  }
+  push("## What you should NOT hear");
+  push();
+  push("- **Never the literal word \"disabled\"** -- a completed required action's button, while it");
+  push("  stays in reading order (step 3 above), is announced as **\"unavailable,\"** the actual NVDA");
+  push("  state word (see this script's `NVDA_STATE_WORD` table).");
+  push("- **No re-announcement of the progress live region** when a consequence panel opens or");
+  push("  closes -- its text changes ONLY on a completed required action or a reset (spec §3), never");
+  push("  on an illegal attempt, asserted by `tests/sr-transcript-process.test.ts`'s churn guard.");
+  push("- **No double announcement** of the Situation heading or the new log entry on a single");
+  push("  successful action -- each transition updates the DOM exactly once (main.ts's `setText`");
+  push("  churn guard and per-entry `<li>` append), so NVDA has nothing to re-announce.");
+  push("- **Nothing announced as \"clickable\"** -- every action, Continue, Begin, and Start over is a");
+  push("  native `<button>` element, never a generic `<div>`/`<span>` with a click handler bolted on.");
+  push("- **No stray reading of the decorative done-glyph (✓) or the debrief's quality chips** --");
+  push("  both are `aria-hidden=\"true\"` and fully redundant with adjacent visible/announced text");
+  push("  (the button's own disabled state above; the step review's own counts).");
+  push("- **No terminal/dead-end state ever announced** -- an illegal attempt is always recoverable");
+  push("  via Continue; nothing in this runtime's contract locks the learner out.");
+  push();
+
+  return { outPath: path.join(DOCS_DIR, "nvda-check-process-simulator.md"), text: lines.join("\n") + "\n" };
+}
+
+// ==================== Write all four docs ====================
 
 mkdirSync(DOCS_DIR, { recursive: true });
-const outputs = [await generateParamSandboxDoc(), await generateBranchingDoc(), await generateCaseWorkspaceDoc()];
+const outputs = [
+  await generateParamSandboxDoc(),
+  await generateBranchingDoc(),
+  await generateCaseWorkspaceDoc(),
+  await generateProcessSimulatorDoc(),
+];
 for (const { outPath, text } of outputs) {
   writeFileSync(outPath, text);
   console.log(`Wrote ${path.relative(ROOT, outPath)}`);
