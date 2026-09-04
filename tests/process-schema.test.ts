@@ -171,6 +171,15 @@ describe("validateProcessConfig — requires resolution", () => {
     if (!r.ok) expect(r.errors.join(" ")).toMatch(/duplicate entry "photograph"/);
   });
 
+  it("rejects requires on a DISTRACTOR action itself (a distractor's own prerequisites are never consulted -- state.ts attemptAction never checks them)", () => {
+    const r = validateProcessConfig({
+      ...base,
+      actions: [base.actions[0], base.actions[1], { ...base.actions[2], requires: ["photograph"] }, base.actions[3]],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join(" ")).toMatch(/distractor actions must not carry requires/);
+  });
+
   it("accepts a conjunctive multi-prerequisite requires array (2..6 required refs)", () => {
     const r = validateProcessConfig({
       ...base,

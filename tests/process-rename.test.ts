@@ -123,10 +123,44 @@ describe("removeActionReferences", () => {
         { id: "shortcut", label: "Shortcut", required: false, consequence: "<p>x</p>", consequenceNote: "x" },
       ],
     };
-    // Toggle "collect" from required to distractor: cascade prunes every
-    // inbound requires entry pointing at it (none here), and the caller
-    // flips required + drops outcome + adds consequence/consequenceNote
-    // (the toggle's own-field responsibility, not rename.ts's).
+    // Toggle "log" from required to distractor: it carries no `requires` of
+    // its own (unlike "collect" below), so the cascade + field flip alone
+    // produce a valid config. Cascade prunes every inbound requires entry
+    // pointing at it (none here), and the caller flips required + drops
+    // outcome + adds consequence/consequenceNote (the toggle's own-field
+    // responsibility, not rename.ts's).
+    const pruned = removeActionReferences(cfg, "log");
+    const toggled = {
+      ...pruned,
+      actions: pruned.actions.map((a) =>
+        a.id === "log"
+          ? { ...a, required: false, outcome: undefined, consequence: "<p>x</p>", consequenceNote: "x" }
+          : a,
+      ),
+    };
+    const result = validateProcessConfig(toggled);
+    expect(result.ok, !result.ok ? result.errors.join("; ") : "").toBe(true);
+  });
+
+  it("required->distractor toggle cascade: toggling an action that carries its OWN requires leaves it for the field-matrix validator to catch (schema fix round item 4) -- process-editor.tsx's toggleRequired deliberately never strips it, per its own doc comment (\"never silently deleted\")", () => {
+    const cfg: RenameableProcessConfig = {
+      title: "t",
+      intro: "<p>i</p>",
+      opening: "<p>o</p>",
+      actions: [
+        { id: "photograph", label: "Photograph", required: true, outcome: "<p>x</p>" },
+        {
+          id: "collect", label: "Collect", required: true, requires: ["photograph"],
+          outcome: "<p>x</p>", consequence: "<p>x</p>", consequenceNote: "x",
+        },
+        { id: "log", label: "Log", required: true, outcome: "<p>x</p>" },
+        { id: "shortcut", label: "Shortcut", required: false, consequence: "<p>x</p>", consequenceNote: "x" },
+      ],
+    };
+    // Cascade prunes every INBOUND requires entry pointing at "collect"
+    // (none here) but never touches "collect"'s OWN requires array -- that
+    // is the toggle's own-field responsibility, and it deliberately leaves
+    // it alone (see process-editor.tsx's toggleRequired doc comment).
     const pruned = removeActionReferences(cfg, "collect");
     const toggled = {
       ...pruned,
@@ -136,7 +170,25 @@ describe("removeActionReferences", () => {
           : a,
       ),
     };
-    const result = validateProcessConfig(toggled);
+    const stillInvalid = validateProcessConfig(toggled);
+    expect(stillInvalid.ok).toBe(false);
+    if (!stillInvalid.ok) {
+      expect(stillInvalid.errors.join(" ")).toMatch(/action "collect": distractor actions must not carry requires/);
+    }
+
+    // Once the designer also clears the now-forbidden `requires` (the
+    // Issues-panel-driven fix the doc comment describes), the config is
+    // valid again.
+    const fixed = {
+      ...toggled,
+      actions: toggled.actions.map((a) => {
+        if (a.id !== "collect") return a;
+        const rest = { ...a };
+        delete rest.requires;
+        return rest;
+      }),
+    };
+    const result = validateProcessConfig(fixed);
     expect(result.ok, !result.ok ? result.errors.join("; ") : "").toBe(true);
   });
 });

@@ -81,8 +81,15 @@ function buildLogList(doneIds: readonly string[], byId: Map<string, RuntimeActio
   return ul;
 }
 
-const times = (n: number): string => `${n} time${n === 1 ? "" : "s"}`;
-const prematureAttempts = (n: number): string => `${n} premature attempt${n === 1 ? "" : "s"}`;
+/** Saturation-aware count display (spec §4 review #3: "display '99+'") --
+ *  every attempt counter saturates at 99 AT INCREMENT TIME (state.ts), so a
+ *  displayed "99" can never be distinguished from a true count that kept
+ *  growing past it. Any counter AT the 99 ceiling therefore renders "99+"
+ *  rather than claiming a false-precise "99"; anything below renders as-is. */
+const formatCount = (n: number): string => (n >= 99 ? "99+" : String(n));
+
+const times = (n: number): string => `${formatCount(n)} time${n === 1 ? "" : "s"}`;
+const prematureAttempts = (n: number): string => `${formatCount(n)} premature attempt${n === 1 ? "" : "s"}`;
 
 /** Mount the Process Simulator engine. Action outcomes/consequences and the
  *  intro/opening/expertNote are rendered via innerHTML (pre-sanitized rich
@@ -160,6 +167,17 @@ export function mountProcessSimulator(root: HTMLElement, config: RuntimeProcessC
   let situationHeading!: HTMLHeadingElement;
   let logList!: HTMLUListElement;
   let actionsContainer!: HTMLElement;
+
+  // Illegal-path double-activation guard (fix round): true while the
+  // consequence panel occupies actionsContainer, false whenever the action
+  // menu does. Guards against a SECOND synchronous activation of the same
+  // (already-detached, but still listener-bound) illegal button re-entering
+  // handleActionClick before the panel swap it triggered has any chance to
+  // remove it from the accessibility tree -- without this, such a
+  // double-activation would record two illegal attempts for one learner
+  // action. Cleared on every menu rebuild (step entry, post-success, and
+  // Continue), set whenever the consequence panel renders.
+  let consequenceOpen = false;
 
   // ---------- shared helpers ----------
 
@@ -280,6 +298,7 @@ export function mountProcessSimulator(root: HTMLElement, config: RuntimeProcessC
    *  button BY ID (spec §3), which is still enabled since an illegal
    *  attempt never marks an action done. */
   function renderActionsMenu(focusActionId?: string): void {
+    consequenceOpen = false;
     actionsContainer.innerHTML = "";
 
     const heading = document.createElement("h3");
@@ -327,6 +346,7 @@ export function mountProcessSimulator(root: HTMLElement, config: RuntimeProcessC
     const action = byId.get(attemptedActionId);
     if (!action) return; // defensive: attemptedActionId always comes from config.actions
 
+    consequenceOpen = true;
     actionsContainer.innerHTML = "";
 
     const heading = document.createElement("h3");
@@ -355,6 +375,7 @@ export function mountProcessSimulator(root: HTMLElement, config: RuntimeProcessC
   function handleActionClick(actionId: string): void {
     if (state.step !== "procedure") return; // stale-closure guard
     if (state.done.includes(actionId)) return; // defensive: the button is disabled once done
+    if (consequenceOpen) return; // double-activation guard: a consequence panel is already open for the prior attempt
 
     const result = attemptAction(config, state, actionId);
     state = result.state;
@@ -395,7 +416,13 @@ export function mountProcessSimulator(root: HTMLElement, config: RuntimeProcessC
     // normal resume -- but a debrief render must never assume an invariant
     // it can instead just check.
     if (state.done.length !== totalRequired) {
-      state = initialState();
+      // startOver() (not initialState()) so a resume/render-order defect
+      // never appears to erase an already-reported bestPct/completed --
+      // high-water is preserved exactly like a learner-initiated "Start
+      // over" (spec §4). Case-workspace's main.ts has the same unreachable
+      // guard using initialState() (its bundle must stay byte-identical) --
+      // flagged as a cross-engine follow-up, not fixed here.
+      state = startOver(state);
       renderBrief(true);
       return;
     }
@@ -410,6 +437,11 @@ export function mountProcessSimulator(root: HTMLElement, config: RuntimeProcessC
     const recoveredCount = score.correctness.den - cleanCount;
     const totalAttempts = score.efficiency.den;
     const attemptedDistractors = config.actions.filter((a) => !a.required && (state.attempts.get(a.id) ?? 0) > 0);
+    // Saturation-aware total (spec §4 review #3, "display '99+'"): if ANY
+    // counter contributing to totalAttempts is itself saturated at 99, the
+    // true total could be higher than this exact sum, so the total gets a
+    // "+" too -- iff >=1 counter is AT 99 (not merely large).
+    const attemptsSaturated = Array.from(state.attempts.values()).some((count) => count >= 99);
 
     const resultHead = el("div", "ilb-result-head");
     stepContainer.appendChild(resultHead);
@@ -441,27 +473,30 @@ export function mountProcessSimulator(root: HTMLElement, config: RuntimeProcessC
     const scoreLine = el("p", "ilb-score-line");
     scoreLine.textContent =
       `Steps: ${cleanCount} of ${score.correctness.den} clean. ` +
-      `Attempts: ${totalAttempts} (expert minimum ${score.efficiency.num}). ` +
+      `Attempts: ${totalAttempts}${attemptsSaturated ? "+" : ""} (expert minimum ${score.efficiency.num}). ` +
       `Score: ${score.totalPct}%.`;
     resultHead.appendChild(scoreLine);
 
     // Quality-breakdown chips (mirrors branching's/case's ilb-quality-chips
     // exactly): the SAME counts already in the accessible step review below,
     // rendered as aria-hidden decorative chips -- redundancy doctrine, never
-    // the sole carrier of the breakdown.
-    const chipDefs: Array<[number, string, "best" | "ok" | "poor"]> = [
-      [cleanCount, "clean", "best"],
-      [recoveredCount, "recovered", "ok"],
-      [attemptedDistractors.length, "distractor", "poor"],
+    // the sole carrier of the breakdown. Each label carries its own
+    // singular/plural form (chip copy fix: "distractor" -> "wrong turn(s)",
+    // a real noun that needs it; "clean"/"recovered" are invariant
+    // adjectives, so their singular/plural forms are simply identical).
+    const chipDefs: Array<[number, string, string, "best" | "ok" | "poor"]> = [
+      [cleanCount, "clean", "clean", "best"],
+      [recoveredCount, "recovered", "recovered", "ok"],
+      [attemptedDistractors.length, "wrong turn", "wrong turns", "poor"],
     ];
     if (chipDefs.some(([count]) => count > 0)) {
       const chipsWrap = el("div", "ilb-quality-chips");
       chipsWrap.setAttribute("aria-hidden", "true");
-      for (const [count, label, suffix] of chipDefs) {
+      for (const [count, singular, plural, suffix] of chipDefs) {
         if (count === 0) continue;
         const chip = document.createElement("span");
         chip.className = `ilb-qchip ilb-qchip--${suffix}`;
-        chip.textContent = `${count} ${label}`;
+        chip.textContent = `${count} ${count === 1 ? singular : plural}`;
         chipsWrap.appendChild(chip);
       }
       resultHead.appendChild(chipsWrap);

@@ -264,8 +264,33 @@ describe("mountProcessSimulator", () => {
       clickAction("Photograph the item");
       clickAction("Put on gloves");
       clickAction("Collect the item");
+      // Display-layer ruling (spec §4: "display '99+'" -- a saturated counter
+      // never claims a false-precise "99", since the true count could be
+      // higher): the step-review row shows "99+ times", and the score line's
+      // Attempts total also carries a "+" because this saturated counter
+      // contributed to it (clean=3, totalAttempts=3+99=102 -> 102+).
       const distractorRow = Array.from(document.querySelectorAll(".ilb-comparison-row")).find((r) => r.textContent!.startsWith("Ask someone to move the item"))!;
-      expect(distractorRow.textContent).toContain("99 times");
+      expect(distractorRow.textContent).toContain("99+ times");
+      expect(document.querySelector(".ilb-score-line")!.textContent).toBe(
+        "Steps: 3 of 3 clean. Attempts: 102+ (expert minimum 3). Score: 61%.",
+      );
+    });
+
+    it("double-activation guard: two synchronous activations of the same illegal button record only ONE attempt", () => {
+      const scorm = createScormMock();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).ILBScorm = scorm as unknown as ScormSession;
+      begin();
+
+      const btn = actionButton("Ask someone to move the item");
+      btn.click();
+      btn.click(); // synchronous re-activation of the SAME (now-detached) button while its consequence panel is open
+
+      const savedPayload = scorm.saveSuspendData.mock.calls.at(-1)![0] as { at: Array<[string, number]> };
+      expect(savedPayload.at).toEqual([["move_early", 1]]);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).ILBScorm;
     });
   });
 
@@ -346,6 +371,40 @@ describe("mountProcessSimulator", () => {
       expect(distractorRow.className).toContain("--poor");
       expect(distractorRow.textContent).toContain("attempted 1 time.");
       expect(distractorRow.textContent).toContain("Convenience is not a custody procedure.");
+
+      // Quality chips (decorative, aria-hidden): "distractor" reads as "wrong
+      // turn(s)" (chip copy fix) -- 2 clean (photograph, gloves), 1 recovered
+      // (collect, done after one failure), 1 wrong turn (singular).
+      const chips = Array.from(document.querySelectorAll(".ilb-qchip")).map((c) => c.textContent);
+      expect(chips).toEqual(["2 clean", "1 recovered", "1 wrong turn"]);
+    });
+
+    it("quality chips pluralize \"wrong turn(s)\" correctly for 2+ attempted distractors", () => {
+      const twoDistractorsConfig: RuntimeProcessConfig = {
+        ...richConfig,
+        actions: [
+          ...richConfig.actions,
+          {
+            id: "second_distractor",
+            label: "Skip the log entirely",
+            required: false,
+            consequence: "<p>The record now has a gap no one can explain.</p>",
+            consequenceNote: "A record with a hole in it is worse than no record.",
+          },
+        ],
+      };
+      mountProcessSimulator(root(), twoDistractorsConfig);
+      clickByText(".ilb-btn-pill", "Begin the procedure.");
+      clickAction("Ask someone to move the item");
+      clickByText(".ilb-btn-pill", "Continue");
+      clickAction("Skip the log entirely");
+      clickByText(".ilb-btn-pill", "Continue");
+      clickAction("Photograph the item");
+      clickAction("Put on gloves");
+      clickAction("Collect the item");
+
+      const chips = Array.from(document.querySelectorAll(".ilb-qchip")).map((c) => c.textContent);
+      expect(chips).toEqual(["3 clean", "2 wrong turns"]);
     });
 
     it("renders the authored expertNote", () => {

@@ -76,6 +76,18 @@ export function validateProcessConfig(raw: unknown): ProcessValidation {
   // an editor advisory, not a hard error here).
   for (const a of config.actions) {
     if (!a.requires) continue;
+    // A distractor's own `requires` is never consulted (state.ts's
+    // attemptAction: "any distractor click is unconditionally illegal --
+    // its own `requires` (if authored) is never consulted") -- so the field
+    // is dead/misleading data on a distractor and is forbidden outright,
+    // rather than validated against the resolution rules below (fix round:
+    // closes the gap the required->distractor toggle cascade's doc comment
+    // already anticipated: an orphaned `requires` left behind by a toggle
+    // must be "surfaced by the field-matrix validator as a named error").
+    if (!a.required) {
+      errors.push(`action "${a.id}": distractor actions must not carry requires (a distractor's own prerequisites are never consulted when it is attempted)`);
+      continue;
+    }
     const seenRefs = new Set<string>();
     for (const ref of a.requires) {
       if (ref === a.id) {

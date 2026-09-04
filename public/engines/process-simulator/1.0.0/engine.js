@@ -167,8 +167,9 @@
     });
     return ul;
   }
-  var times = (n) => `${n} time${n === 1 ? "" : "s"}`;
-  var prematureAttempts = (n) => `${n} premature attempt${n === 1 ? "" : "s"}`;
+  var formatCount = (n) => n >= 99 ? "99+" : String(n);
+  var times = (n) => `${formatCount(n)} time${n === 1 ? "" : "s"}`;
+  var prematureAttempts = (n) => `${formatCount(n)} premature attempt${n === 1 ? "" : "s"}`;
   function mountProcessSimulator(root, config) {
     root.innerHTML = "";
     root.classList.add("ilb-process");
@@ -208,6 +209,7 @@
     let situationHeading;
     let logList;
     let actionsContainer;
+    let consequenceOpen = false;
     function persistSuspend() {
       if (!scorm || scorm.mode !== "scorm") return;
       const ok = scorm.saveSuspendData(suspendPayload(state));
@@ -285,6 +287,7 @@
       logList.appendChild(buildLogEntryLi(action, true));
     }
     function renderActionsMenu(focusActionId) {
+      consequenceOpen = false;
       actionsContainer.innerHTML = "";
       const heading = document.createElement("h3");
       heading.textContent = "Actions";
@@ -319,6 +322,7 @@
       var _a;
       const action = byId.get(attemptedActionId);
       if (!action) return;
+      consequenceOpen = true;
       actionsContainer.innerHTML = "";
       const heading = document.createElement("h3");
       heading.tabIndex = -1;
@@ -341,6 +345,7 @@
     function handleActionClick(actionId) {
       if (state.step !== "procedure") return;
       if (state.done.includes(actionId)) return;
+      if (consequenceOpen) return;
       const result = attemptAction(config, state, actionId);
       state = result.state;
       if (!result.legal) {
@@ -366,7 +371,7 @@
     function renderDebrief(focusHeading) {
       var _a, _b, _c, _d;
       if (state.done.length !== totalRequired) {
-        state = initialState();
+        state = startOver(state);
         renderBrief(true);
         return;
       }
@@ -381,6 +386,7 @@
         var _a2;
         return !a.required && ((_a2 = state.attempts.get(a.id)) != null ? _a2 : 0) > 0;
       });
+      const attemptsSaturated = Array.from(state.attempts.values()).some((count) => count >= 99);
       const resultHead = el("div", "ilb-result-head");
       stepContainer.appendChild(resultHead);
       const eyebrow = el("p", "ilb-eyebrow");
@@ -400,21 +406,21 @@
       numeral.appendChild(numeralUnit);
       resultHead.appendChild(numeral);
       const scoreLine = el("p", "ilb-score-line");
-      scoreLine.textContent = `Steps: ${cleanCount} of ${score.correctness.den} clean. Attempts: ${totalAttempts} (expert minimum ${score.efficiency.num}). Score: ${score.totalPct}%.`;
+      scoreLine.textContent = `Steps: ${cleanCount} of ${score.correctness.den} clean. Attempts: ${totalAttempts}${attemptsSaturated ? "+" : ""} (expert minimum ${score.efficiency.num}). Score: ${score.totalPct}%.`;
       resultHead.appendChild(scoreLine);
       const chipDefs = [
-        [cleanCount, "clean", "best"],
-        [recoveredCount, "recovered", "ok"],
-        [attemptedDistractors.length, "distractor", "poor"]
+        [cleanCount, "clean", "clean", "best"],
+        [recoveredCount, "recovered", "recovered", "ok"],
+        [attemptedDistractors.length, "wrong turn", "wrong turns", "poor"]
       ];
       if (chipDefs.some(([count]) => count > 0)) {
         const chipsWrap = el("div", "ilb-quality-chips");
         chipsWrap.setAttribute("aria-hidden", "true");
-        for (const [count, label, suffix] of chipDefs) {
+        for (const [count, singular, plural, suffix] of chipDefs) {
           if (count === 0) continue;
           const chip = document.createElement("span");
           chip.className = `ilb-qchip ilb-qchip--${suffix}`;
-          chip.textContent = `${count} ${label}`;
+          chip.textContent = `${count} ${count === 1 ? singular : plural}`;
           chipsWrap.appendChild(chip);
         }
         resultHead.appendChild(chipsWrap);
