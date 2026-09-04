@@ -23,21 +23,24 @@ Prisma 7 requires an explicit driver adapter even for local SQLite (see
 
     npm test
 
-488 tests across schema validation (both engines), the formula interpreter,
-the sanitizer, asset upload/validation, engine-runtime build output, SCORM
-manifest/adapter generation, package assembly, the compliance scanner,
-multi-engine dispatch/registry, a golden deterministic-export regression test
-per engine (`tests/golden-export.test.ts`, `tests/multi-engine.test.ts`), the
-design-token/contrast/placement modules, the branching-scenario state machine
-and graph validator, locked screen-reader announcement-contract transcripts
-for both engines, and an automated axe-core accessibility gate over the
-rendered lesson runtime in every engine's representative states (Parameter
-Sandbox; Branching Scenario's start scene, immediate-feedback panel, and
-ending/debrief).
+1294 tests across schema validation (all four engines), the formula
+interpreter, the sanitizer, asset upload/validation, engine-runtime build
+output, SCORM manifest/adapter generation, package assembly, the compliance
+scanner, multi-engine dispatch/registry, a golden deterministic-export
+regression test per engine (`tests/golden-export.test.ts`,
+`tests/multi-engine.test.ts`), the design-token/contrast/placement modules,
+the branching-scenario state machine and graph validator, the case-workspace
+and process-simulator state machines and scoring, locked screen-reader
+announcement-contract transcripts for all four engines, and an automated
+axe-core accessibility gate over the rendered lesson runtime in every
+engine's representative states (Parameter Sandbox; Branching Scenario's
+start scene, immediate-feedback panel, and ending/debrief; Case / Evidence
+Workspace's workspace, conclude, and debrief steps; Process Simulator's
+action menu, consequence panel, and debrief).
 
 ## Engines
 
-ILB ships three engines today, chosen (with a starter) when an interactive is
+ILB ships four engines today, chosen (with a starter) when an interactive is
 created:
 
 - **Parameter Sandbox** — learners experiment with a live model: inputs
@@ -52,8 +55,13 @@ created:
   artifacts (text, image, or table), build a case file of the evidence they
   find relevant, commit to a conclusion, and justify it with reasons —
   graded against a designer-authored expert map.
+- **Process Simulator** — learners perform a multi-step procedure against a
+  designer-authored prerequisite graph on a flat pool of actions; a wrong or
+  premature action produces its authored consequence and the learner
+  continues — mistakes cost score, never the attempt, and there are no
+  terminal dead ends. Graded 60% first-try correctness / 40% efficiency.
 
-All three engines share the same contract: hand-audited runtime bundles
+All four engines share the same contract: hand-audited runtime bundles
 (`src/engine-runtime/**` → `public/engines/**`, SHA-256-checked against
 `engines.manifest.json`), a strict Zod authoring schema, and the existing
 SCORM shell, compliance scanner, design tokens, and accessibility machinery.
@@ -144,6 +152,38 @@ same sequence. M1 ships the engine, editor, blank starter, and export
 wiring; the companion-doc plain-text format and a worked exemplar are
 tracked as follow-on milestones.
 
+**Process Simulator.** The fourth engine's designer authors a flat pool of
+4-24 actions (each `required` or a `distractor`) over a prerequisite graph:
+a required action's `requires` list is conjunctive (every listed action must
+already be done, not just one), validated acyclic at save time, and only
+required actions are referenceable. The editor's Actions section shows
+`outcome`/`consequence`/`consequenceNote` per that field matrix, with
+inline hints, and flipping a required action to a distractor prunes every
+other action's now-illegal prerequisite reference to it in the same update
+that flips the flag — orphaned outcome/consequence text is kept, never
+silently deleted, and surfaced as a named Issues-panel error until resolved,
+so a toggle can never brick a draft. A learner walks a Situation log that
+grows one entry per legal action; a wrong or premature action opens a
+consequence panel in place of the action menu (the Situation panel and
+progress live region persist untouched) and lets the learner continue —
+mistakes cost score, never the attempt. Scoring is 60% first-try correctness
+(a required action counts "clean" only if never attempted prematurely) plus
+40% efficiency (required actions ÷ total attempts, every illegal click
+saturating its own counter at 99), so a learner who completes every required
+action can never fall below a 60% floor no matter how many distractors they
+hit — locked by degenerate fixtures so that property can't drift silently.
+Like the other three engines, its screen-reader contract is locked by
+tests: `tests/sr-transcript-process.test.ts` locks the per-entry situation-
+log carriers, the success-path focus to the Situation heading, and the
+consequence panel's own focus-and-heading contract, and
+`docs/a11y/nvda-check-process-simulator.md` walks a human NVDA pass through
+the same sequence — including the one state word (NVDA's "unavailable") a
+completed action's disabled button announces, which is why every prior
+engine's NVDA script now uses that same word instead of the literal
+"disabled". M1 ships the engine, editor, blank starter, and export wiring;
+the companion-doc plain-text format and a worked exemplar are tracked as
+follow-on milestones.
+
 ## Design system
 
 **Token source.** `src/lib/design/tokens.json` is the single source of truth
@@ -153,9 +193,10 @@ by app code, the schema, and tests. Generated artifacts are emitted from that
 one source by `npm run build:engines`, all committed: `src/app/tokens.css` (a
 Tailwind v4 `@theme` mapping + `--rds-*` variables for the app chrome) and a
 tokens layer prepended into each engine's `public/engines/<engine-id>/*/engine.css`
-(the audited, checksummed lesson runtime stylesheet — currently
-`param-sandbox` and `branching-scenario`). `tests/engine-build-drift.test.ts`
-fails the build if any committed artifact, for either engine, ever drifts
+(the audited, checksummed lesson runtime stylesheet — all four engines today:
+`param-sandbox`, `branching-scenario`, `case-workspace`, and
+`process-simulator`). `tests/engine-build-drift.test.ts`
+fails the build if any committed artifact, for any engine, ever drifts
 from a fresh emit of the source — edit `tokens.json`, not the generated
 files.
 
@@ -256,8 +297,8 @@ tool; any import mode works (graded imports receive both completion and a
 
 ## Roadmap
 
-Case/Evidence Workspace's companion doc + exemplar (M2/M3); Process Simulator
-engine; visual flow-graph authoring for Branching Scenario; sign-in + admin
+Case/Evidence Workspace's and Process Simulator's companion docs + exemplars
+(M2/M3 for each); visual flow-graph authoring for Branching Scenario; sign-in + admin
 policy UI; Vercel + Railway deployment; CreateAI generation provider (the
 Branching Scenario image-alt field's AI-suggest → human-accept seam is
 already in place, awaiting the provider).
