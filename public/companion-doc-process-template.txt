@@ -1,0 +1,52 @@
+# Welcome! This is a companion doc for building a process simulator --
+# learners perform actions from a menu in an order that respects each
+# action's prerequisites; a wrong or premature action produces a
+# realistic consequence and lets the learner continue. Fill in your
+# own actions and send this file back. No special software or
+# training is needed to use it.
+# Lines starting with # (like these) are comments and are ignored.
+# Each ACTION is required (part of the correct path) or a distractor
+# (always wrong), like this:
+#   ACTION: Photograph the item in place (required)
+#   Outcome: The item's position is recorded before anything moves.
+#
+#   ACTION: Collect the item (required, after: Photograph the item in
+#   place, Put on gloves)
+#   Outcome: The item is bagged.
+#   Consequence: The item moved before it was photographed; its
+#   position now rests on memory, not the record.
+#   Note: Collection has two prerequisites; skipping either
+#   compromises the record.
+#
+#   ACTION: Ask the officer to move the item closer (distractor)
+#   Consequence: The chain of custody now starts with an undocumented
+#   move.
+#   Note: Convenience is not a custody procedure.
+# "after:" lists the OTHER required actions (by label) that must be
+# done first -- list every one that applies, separated by commas.
+# Outcome:/Consequence:/Note: may appear in any order right after an
+# ACTION line, each at most once. Keep action labels plain: a label
+# containing "(", ")", ",", or "after:" can confuse this format when
+# it is read back in.
+# When you are done, save and share this file with whoever is
+# building the lesson.
+
+TITLE: Evidence Intake
+INTRO: Learn to collect and log evidence in an order that survives cross-examination.
+OPENING: A sealed scene, one item to collect, and a log that must hold up in court.
+EXPERTNOTE: The order that survives cross-examination is the one where nothing touched the item before the record existed.
+
+ACTION: Photograph the item in place (required)
+Outcome: The item's position is recorded before anything moves.
+
+ACTION: Put on gloves (required)
+Outcome: Contamination risk is controlled before contact.
+
+ACTION: Collect the item (required, after: Photograph the item in place, Put on gloves)
+Outcome: The item is bagged.
+Consequence: The item moved before it was photographed; its position now rests on memory, not the record.
+Note: Collection has two prerequisites; skipping either compromises the record.
+
+ACTION: Ask the officer to move the item closer (distractor)
+Consequence: The chain of custody now starts with an undocumented move.
+Note: Convenience is not a custody procedure.
