@@ -108,7 +108,7 @@ scenario back and forth across revision cycles without either side touching
 JSON.
 
 **Exemplar library.** Each engine's starter picker separates a blank start
-from seven built-in exemplars, grouped as distinct `<optgroup>`s with a visible
+from eight built-in exemplars, grouped as distinct `<optgroup>`s with a visible
 description for whichever starter is selected. Four Branching Scenario
 scenarios escalate from one tracked variable to full complexity — The Budget
 Cut, The Community Meeting, The Crisis, and Plea Bargain (the last ships
@@ -122,10 +122,17 @@ Scenario engine already had, now shared by both engines via a common
 Incident, is authored the same doc-first way through that engine's own
 companion-doc format — a fictional ladder-fall investigation weighed to a
 best-supported conclusion across seven artifacts, with one red herring the
-score never rewards. Every exemplar's content — learning objective, scene or
-model text, SME defensibility notes, and (for the sandbox pair) witness-vector
-challenge assignments — is drafted first as a brief under `docs/exemplars/`,
-which the shipped starter config transcribes verbatim, so the brief stays the
+score never rewards. The Process Simulator's first exemplar, Evidence
+Intake, is likewise authored doc-first through that engine's own
+companion-doc format — a fictional chain-of-custody procedure whose
+prerequisite graph is deliberately wide at the top (two pairs of actions
+carry genuine order flexibility) and strict once evidence is collected, so a
+learner is graded on knowing which steps can float and which can't, not on
+recalling one memorized sequence. Every exemplar's content — learning
+objective, scene or model text, SME defensibility notes, and (for the
+sandbox pair) witness-vector challenge assignments — is drafted first as a
+brief under `docs/exemplars/`, which the shipped starter config transcribes
+verbatim, so the brief stays the
 single source of truth; `docs/exemplars/alt-policy.md` records the project's
 decorative/informative image-alt policy those briefs follow.
 
