@@ -29,8 +29,8 @@ change to the runtime's markup or to the blank procedure starter config._
 6. Continue reading (the opening situation text comes first) → NVDA should say:
    **"Actions heading level 3"**
 7. Press Tab → NVDA should say: **"Describe the first action here, button"**
-8. Press Tab → NVDA should say: **"Describe a second, gated action here, button"**
-9. Press Tab → NVDA should say: **"Describe a third, independent required action here, button"**
+8. Press Tab → NVDA should say: **"Describe a second gated action here, button"**
+9. Press Tab → NVDA should say: **"Describe a third independent required action here, button"**
 10. Press Tab → NVDA should say: **"Describe a tempting but wrong action here, button"**
 
 If you hear anything else here -- a different name, a missing "button" role word, a
@@ -56,7 +56,7 @@ what the runtime currently renders.
 15. Press Tab from the Situation heading → the completed action's button is skipped
    entirely (it dropped out of TAB order, though it stayed in reading order above) → NVDA
    should land directly on the next action:
-   **"Describe a second, gated action here, button"**
+   **"Describe a second gated action here, button"**
 
 If step 1 above didn't leave focus on the Situation heading -- e.g. NVDA reads the
 "Situation" line only when you navigate to it manually -- that's a
@@ -109,7 +109,7 @@ re-announced here, that's a regression in the churn guard.
 27. Press H → NVDA should say: **"Step review heading level 3"**
 28. Continue reading the step review (bundled as ONE reading-order entry, same pattern
    as the other three engines' debrief lists) → NVDA should say, verbatim:
-   **"Describe the first action here: completed on the first try. Describe a second, gated action here: completed on the first try. Describe a third, independent required action here: completed on the first try. Describe a tempting but wrong action here: attempted 1 time. Explain, for the debrief, why this action is never correct."**
+   **"Describe the first action here: completed on the first try. Describe a second gated action here: completed on the first try. Describe a third independent required action here: completed on the first try. Describe a tempting but wrong action here: attempted 1 time. Explain, for the debrief, why this action is never correct."**
 29. Continue reading (or Tab; this is the only focusable control at debrief) → NVDA
    should say: **"Start over, button"**
 

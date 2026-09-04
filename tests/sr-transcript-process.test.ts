@@ -76,8 +76,8 @@ describe("screen-reader announcement contract (blank starter, process simulator)
         { role: "heading level 3", name: "Situation" },
         { role: "heading level 3", name: "Actions" },
         { role: "button", name: "Describe the first action here" },
-        { role: "button", name: "Describe a second, gated action here" },
-        { role: "button", name: "Describe a third, independent required action here" },
+        { role: "button", name: "Describe a second gated action here" },
+        { role: "button", name: "Describe a third independent required action here" },
         { role: "button", name: "Describe a tempting but wrong action here" },
       ]);
     });
@@ -87,8 +87,8 @@ describe("screen-reader announcement contract (blank starter, process simulator)
       clickByText(".ilb-btn-pill", "Begin the procedure.");
       expect(focusOrderTranscript(root)).toEqual([
         { role: "button", name: "Describe the first action here" },
-        { role: "button", name: "Describe a second, gated action here" },
-        { role: "button", name: "Describe a third, independent required action here" },
+        { role: "button", name: "Describe a second gated action here" },
+        { role: "button", name: "Describe a third independent required action here" },
         { role: "button", name: "Describe a tempting but wrong action here" },
       ]);
     });
@@ -105,14 +105,14 @@ describe("screen-reader announcement contract (blank starter, process simulator)
         { role: "text", name: "Latest: Describe what becomes true in the situation once this action is legally performed." },
         { role: "heading level 3", name: "Actions" },
         { role: "button", name: "Describe the first action here", states: ["disabled"] },
-        { role: "button", name: "Describe a second, gated action here" },
-        { role: "button", name: "Describe a third, independent required action here" },
+        { role: "button", name: "Describe a second gated action here" },
+        { role: "button", name: "Describe a third independent required action here" },
         { role: "button", name: "Describe a tempting but wrong action here" },
       ]);
 
       expect(focusOrderTranscript(root)).toEqual([
-        { role: "button", name: "Describe a second, gated action here" },
-        { role: "button", name: "Describe a third, independent required action here" },
+        { role: "button", name: "Describe a second gated action here" },
+        { role: "button", name: "Describe a third independent required action here" },
         { role: "button", name: "Describe a tempting but wrong action here" },
       ]);
     });
@@ -142,8 +142,8 @@ describe("screen-reader announcement contract (blank starter, process simulator)
     function completeCleanly(): void {
       clickByText(".ilb-btn-pill", "Begin the procedure.");
       clickAction("Describe the first action here");
-      clickAction("Describe a second, gated action here");
-      clickAction("Describe a third, independent required action here");
+      clickAction("Describe a second gated action here");
+      clickAction("Describe a third independent required action here");
     }
 
     it("reading order: status, eyebrow, h2 = title, score line, situation log read-back (per-entry), bundled step review, Start over", () => {
@@ -164,8 +164,8 @@ describe("screen-reader announcement contract (blank starter, process simulator)
           role: "text",
           name:
             "Describe the first action here: completed on the first try. " +
-            "Describe a second, gated action here: completed on the first try. " +
-            "Describe a third, independent required action here: completed on the first try.",
+            "Describe a second gated action here: completed on the first try. " +
+            "Describe a third independent required action here: completed on the first try.",
         },
         { role: "button", name: "Start over" },
       ]);

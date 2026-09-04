@@ -863,6 +863,19 @@ describe("parseCaseCompanionDoc / serializeCaseCompanionDoc — INTRO HTML-escap
     const { config: config2 } = parseCaseCompanionDoc(doc2);
     expect((config2 as { intro?: string }).intro).toBe(intro1);
   });
+
+  it("flattens an embedded newline in TITLE/INTRO to a space rather than splitting into two physical lines (shared newline-flattening fix)", () => {
+    const original = {
+      ...CASE_STARTERS.blank.config,
+      title: "T",
+      intro: "<p>First line of the intro.\nSecond line of the intro.</p>",
+    };
+    const doc = serializeCaseCompanionDoc(original);
+    expect(doc).toContain("INTRO: First line of the intro. Second line of the intro.");
+    const { config, report } = parseCaseCompanionDoc(doc);
+    expect(report.filter((r) => r.severity === "error")).toHaveLength(0);
+    expect((config as { intro?: string }).intro).toBe("<p>First line of the intro. Second line of the intro.</p>");
+  });
 });
 
 // ---------------------------------------------------------------------------

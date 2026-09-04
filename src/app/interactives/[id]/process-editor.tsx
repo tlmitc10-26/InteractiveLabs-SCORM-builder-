@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   useDraftEditor, Section, Row, Field, TextField, SelectField, IdAdvanced, useRowKeys, inputCls,
-  ExportButton, type AssetRef,
+  ExportButton, ImportPanel, type AssetRef,
 } from "./editor-shared";
 // Light import (mirrors case-editor.tsx's own rationale for runtime-config.ts):
 // no zod/sanitize-html in this client bundle -- the editor never validates,
@@ -16,12 +16,14 @@ import { toProcessRuntimeConfig, type ProcessRuntimeConfigLike } from "@/lib/eng
 // Advanced affordance, action-row delete, AND the required->distractor
 // toggle cascade (spec §5 review #10).
 import { renameActionId, removeActionReferences, type RenameableProcessConfig } from "@/lib/engines/process-simulator/rename";
+// Light import (no zod/sanitize-html -- see companion-doc.ts's own file
+// comment): companion-doc import/copy (M2, spec §6) -- same ImportPanel
+// component case-editor.tsx/branching-editor.tsx already use.
+import { parseProcessCompanionDoc, serializeProcessCompanionDoc, type ProcessConfigLike as CompanionProcessConfigLike } from "@/lib/engines/process-simulator/companion-doc";
 import { uniqueSlug } from "./slugify";
 import { RDS_COLOR_NAMES, type TokenName } from "@/lib/design/tokens";
 
-/* Editing shape mirrors schema.ts's ProcessConfig (pre-validation). No
-   companion-doc import in M1 (spec §6 is a separate M2 milestone) -- unlike
-   case-editor.tsx/branching-editor.tsx, there is no ImportPanel here. */
+/* Editing shape mirrors schema.ts's ProcessConfig (pre-validation). */
 type EProcessAction = {
   id: string; label: string; required: boolean; requires?: string[];
   outcome?: string; consequence?: string; consequenceNote?: string;
@@ -68,6 +70,22 @@ export function ProcessEditor({ interactiveId, initialTitle, initialConfig, asse
 
   const { title, config, setConfig, errors, saveState, iframeRef, handleTitleChange, patch, markSaving, onIframeLoad } =
     useDraftEditor<EProcessConfig>({ interactiveId, initialTitle, initialConfig, toPreviewRuntime: postPreview });
+
+  // Bumped once per companion-doc import (never on ordinary edits) -- same
+  // rowKeys-trap fix as case-editor.tsx's/branching-editor.tsx's own
+  // importGeneration (see their comments for the full mechanism):
+  // useRowKeys seeds each row's stable key from the row array's length only
+  // in its useState initializer, so a setConfig that wholesale-replaces
+  // `actions` (this import) would otherwise leave stale keys paired with
+  // unrelated new row data. Passed as the `key` on the Actions section below
+  // to force a full remount on import.
+  const [importGeneration, setImportGeneration] = useState(0);
+
+  const handleImport = useCallback((parsed: EProcessConfig) => {
+    setConfig(parsed);
+    setImportGeneration((g) => g + 1);
+    markSaving();
+  }, [setConfig, markSaving]);
 
   // Backs each row's "Rename to match label" Advanced affordance (ids that
   // OTHER actions' `requires` arrays actually reference -- see rename.ts).
@@ -145,8 +163,9 @@ export function ProcessEditor({ interactiveId, initialTitle, initialConfig, asse
           </div>
         )}
 
-        <ProcedureSection config={config} onChange={patch} />
+        <ProcedureSection config={config} onChange={patch} onImport={handleImport} />
         <ActionsSection
+          key={`actions-${importGeneration}`}
           actions={config.actions}
           onChange={(actions) => patch({ actions })}
           onRenameId={renameAction} onRemove={removeAction} onToggleRequired={toggleRequired}
@@ -182,8 +201,8 @@ export function ProcessEditor({ interactiveId, initialTitle, initialConfig, asse
 
 /* ---------- Procedure section ---------- */
 
-function ProcedureSection({ config, onChange }: {
-  config: EProcessConfig; onChange: (p: Partial<EProcessConfig>) => void;
+function ProcedureSection({ config, onChange, onImport }: {
+  config: EProcessConfig; onChange: (p: Partial<EProcessConfig>) => void; onImport: (config: EProcessConfig) => void;
 }) {
   return (
     <Section title="Procedure">
@@ -202,6 +221,18 @@ function ProcedureSection({ config, onChange }: {
       <SelectField label="Header color (brief step brand band)" value={config.headerColor ?? "primary"}
         options={HEADER_COLOR_OPTIONS}
         onChange={(headerColor) => onChange({ headerColor: headerColor as TokenName })} />
+      {/* ImportPanel renders its own "Import report" <h3> once a report
+          exists -- this card's <Section>-provided <h2>("Procedure") already
+          precedes it, so the heading order is h1 -> h2 -> h3 (case-editor.tsx
+          precedent). */}
+      <ImportPanel<EProcessConfig>
+        config={config}
+        parse={parseProcessCompanionDoc}
+        serialize={(c) => serializeProcessCompanionDoc(c as unknown as CompanionProcessConfigLike)}
+        templateHref="/companion-doc-process-template.txt"
+        confirmText="This replaces everything in this interactive. The current draft cannot be recovered. Continue?"
+        onApply={onImport}
+      />
     </Section>
   );
 }

@@ -38,7 +38,7 @@ export const PROCESS_STARTERS: Record<string, { label: string; description: stri
         },
         {
           id: "second_action",
-          label: "Describe a second, gated action here",
+          label: "Describe a second gated action here",
           required: true,
           requires: ["first_action"],
           outcome: "<p>Describe what becomes true once this action is legally performed.</p>",
@@ -47,7 +47,7 @@ export const PROCESS_STARTERS: Record<string, { label: string; description: stri
         },
         {
           id: "third_action",
-          label: "Describe a third, independent required action here",
+          label: "Describe a third independent required action here",
           required: true,
           outcome: "<p>Describe what becomes true once this action is legally performed.</p>",
         },

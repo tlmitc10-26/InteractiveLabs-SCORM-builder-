@@ -800,8 +800,8 @@ async function generateProcessSimulatorDoc() {
   const distractorStillEnabled = document.activeElement?.tagName === "BUTTON" && !document.activeElement.disabled;
 
   // ==================== 6. Debrief: full read-back + bundled step review ====================
-  clickAction("Describe a second, gated action here");
-  clickAction("Describe a third, independent required action here");
+  clickAction("Describe a second gated action here");
+  clickAction("Describe a third independent required action here");
   const debriefReading = readingOrderTranscript(root);
   const debriefStatus = debriefReading.find((e) => e.role === "status");
   const eyebrow = debriefReading.find((e) => e.role === "text" && e.name === "Procedure complete");
