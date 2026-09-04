@@ -26,6 +26,15 @@
         "engine.js": "390519fbada6e3f26b7d816b97221fd6626d0150fe897eae18198f73e813de96",
         "engine.css": "61eaeef85dcaa6bf48fa30335df444a4950ac3d635d524f240c445ff9fda498a"
       }
+    },
+    {
+      "id": "process-simulator",
+      "version": "1.0.0",
+      "title": "Process Simulator",
+      "files": {
+        "engine.js": "2e1b35594a90257e42848ae28e297ffe71f8bbf5a1b6698dc1f530838d8ca5ff",
+        "engine.css": "2fe91a401650417c0e015ebf81f8aeb0f93132e3f915471bb6591c318a87bc15"
+      }
     }
   ],
   "scorm": {
