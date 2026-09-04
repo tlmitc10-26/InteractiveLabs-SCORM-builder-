@@ -1200,7 +1200,7 @@ describe("Evidence Intake — companion doc is the source of truth (stress test)
     });
   });
 
-  it('banned words ("admissible", "thrown out") are absent from every learner-visible string', () => {
+  it('banned words ("admissible", "thrown out", "suppressed", "excluded", "hold up in court", "inadmissible") are absent from every learner-visible string', () => {
     const strings: string[] = [starterConfig.title, starterConfig.intro, starterConfig.opening, starterConfig.expertNote ?? ""];
     for (const a of starterConfig.actions) {
       strings.push(a.label, a.outcome ?? "", a.consequence ?? "", a.consequenceNote ?? "");
@@ -1208,6 +1208,10 @@ describe("Evidence Intake — companion doc is the source of truth (stress test)
     const joined = strings.join(" \n ").toLowerCase();
     expect(joined).not.toContain("admissible");
     expect(joined).not.toContain("thrown out");
+    expect(joined).not.toContain("suppressed");
+    expect(joined).not.toContain("excluded");
+    expect(joined).not.toContain("hold up in court");
+    expect(joined).not.toContain("inadmissible");
   });
 
   it("the scope statement appears verbatim in the intro", () => {

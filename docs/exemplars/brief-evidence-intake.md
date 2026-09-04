@@ -29,7 +29,7 @@ The characteristic failure this exercise is built around is not ignorance. It is
 - **No required label contains `,`, `(` or `)`.** Those three characters are grammar-significant in an `after:` clause and the parser treats them as a hard **error** on a required label. Every label below is checked against that rule; a "tidy" edit that adds a comma to one of them breaks the import.
 - Sub-lines are `Outcome:`, `Consequence:` and `Note:`, each on exactly one physical line, at most once per block, in any order. This format has no free bodies — any other line inside an `ACTION:` block is a line-numbered error.
 - Field matrix, both directions: a required action always carries `Outcome:`; it carries `Consequence:` + `Note:` **iff** it has an `after:` clause (a prerequisite-free required action cannot be attempted illegally, so that text would be dead and is rejected); a distractor carries `Consequence:` + `Note:` and never `Outcome:`.
-- `Consequence:` texts describe **operational and evidentiary harm only** — what stops being knowable, what can no longer be reconstructed. They never describe an adjudicated outcome. **"admissible" and "thrown out" are banned words**, asserted absent from every learner-visible string in `tests/exemplar-content.test.ts`.
+- `Consequence:` texts describe **operational and evidentiary harm only** — what stops being knowable, what can no longer be reconstructed. They never describe an adjudicated outcome. **"admissible", "thrown out", "suppressed", "excluded", "hold up in court" and "inadmissible" are banned words**, asserted absent from every learner-visible string in `tests/exemplar-content.test.ts`.
 - SME rationale in §4 and §6 is **brief-only** — review material, never in the config and never shown to the learner.
 
 ## 4. Configuration summary
@@ -47,7 +47,13 @@ The characteristic failure this exercise is built around is not ignorance. It is
 
 **The situation (learner-facing framing):** a rear door at a small veterinary clinic was pried open overnight and the tool is still lying inside the doorway. The learner is the deputy assigned to bring that one item in. There is exactly one item, deliberately: the exercise is about the record, not about triage.
 
-**Cast** (all fictional, as is the agency): Deputy Ruben Alcaraz, first on scene; Nadia Oyelaran, the clinic's office manager and reporting party; Hana Yamashiro, evidence custodian. The Ashmoor County Sheriff's Office, its evidence manual, the Cottonmill Veterinary Clinic and every person named are invented for this exercise. Both coined names were checked against live search for collision with a real agency or business: there is no Ashmoor County and no Ashmoor County Sheriff's Office anywhere in the United States (the nearest real names are Ashe County NC and Ashland County OH), and there is no Cottonmill Veterinary Clinic.
+**Cast** (all fictional, as is the agency): Deputy Ruben Alcavero, first on scene; Nadia Oyelaran, the clinic's office manager and reporting party; Hana Yamashiro, evidence custodian. The Ashmoor County Sheriff's Office, its evidence manual, the Cottonmill Veterinary Clinic and every person named are invented for this exercise. Both coined agency/business names were checked against live search for collision with a real agency or business: there is no Ashmoor County and no Ashmoor County Sheriff's Office anywhere in the United States (the nearest real names are Ashe County NC and Ashland County OH), and there is no Cottonmill Veterinary Clinic.
+
+**Cast-name collision check (SME review round).** All three personal names were also checked individually. "Deputy Ruben Alcaraz" — this brief's original name — turned out to collide with a real person, Spanish footballer Rubén Alcaraz Jiménez (currently of Granada CF), and was renamed to "Ruben Alcavero" everywhere (starter, companion doc, this brief); a live search on the new surname returns no matching real person. "Nadia Oyelaran" returns no exact match to a real, notable person (the nearest hits pair the surname with unrelated first names). "Hana Yamashiro" returns no real person, but does turn up a same-named character on an unrelated fan wiki; that is the same harmless fiction-overlaps-fiction case accepted below for "Ashmoor," not a real-entity collision, and the name is kept as is.
+
+**Known naming overlap, consciously accepted.** "Ashmoor" is also used as a setting name in at least two unrelated pieces of horror fiction (a serialized horror story and a small horror game, both independently titled/set around an "Ashmoor"). Neither is a real place, agency or business, so it does not implicate the collision check above, which exists to keep this exercise from being read as describing anyone or anything real. The overlap with other fiction is accepted rather than avoided by a further rename.
+
+**Known v1 engine limitation.** The process-simulator engine has no branching or state-conditional consequence text (spec §10: "consequence = text + score only") — each action's `Consequence:` is one fixed string shown identically no matter what the learner has already done. Several distractor and premature-attempt consequences in §5 read as though they presume a specific prior scene state (for example, `move_the_item_into_better_light`'s consequence presumes the item has not yet been collected, and would read oddly if triggered after collection was already illegal for other reasons). This is an accepted v1 authoring constraint, not a content defect to fix in this round: the texts are written to be true and defensible on their own terms, not to model every possible prior sequence.
 
 ### The scope statement
 
@@ -55,7 +61,7 @@ Spec §7 makes this a content requirement, not a nicety. It appears **verbatim**
 
 > Ashmoor County, its sheriff's office, its evidence manual and everyone named here are fictional. What follows is one fictional agency's standard operating procedure, written to teach the reasoning behind evidence handling; it is not a standard, and the policy of the agency you work for governs how you actually do this work.
 
-Two things it has to do and does. It names the procedure as **one fictional agency's SOP** rather than as the procedure, because real agencies differ on genuinely contested points — whether the label is written before or after the seal, whether a sketch is required for a single-item recovery, who may transport. And it says **local policy governs**, so a learner who works for an agency whose manual orders these steps differently is not being told their employer is wrong.
+Two things it has to do and does. It names the procedure as **one fictional agency's SOP** rather than as the procedure, because real agencies differ on genuinely contested points — whether photographs require a second technician, whether a sketch is required for a single-item recovery, who may transport. And it says **local policy governs**, so a learner who works for an agency whose manual orders these steps differently is not being told their employer is wrong.
 
 ### Required actions and the prerequisite graph
 
@@ -85,7 +91,7 @@ Every edge below is defensible **on its own**, without appeal to "that's the ord
 | 5 ← 3 (collect after photographing) | Documentation before disturbance | Collection destroys the item's position permanently — this is the one-way door of the whole procedure. The photographs are the only record of the relationship between the item, the forced latch and the doorway. Taken after collection, a photograph shows a placement somebody made rather than a position somebody found. |
 | 5 ← 4 (collect after sketching and measuring) | Documentation before disturbance | The same one-way door, a different record. Measurements can only be taken against the item while it lies where it lay; after collection, "fourteen inches from the jamb" can be recalled but not measured, and a recalled dimension is testimony rather than documentation. The sketch also carries what a photograph cannot: scale, orientation and the parts of the room outside the frame. |
 | 6 ← 5 (seal after collecting) | Continuous custody | A seal makes one claim: this package has been closed since collection and has not been opened since. Applied to an empty bag it makes that claim about nothing, and the bag then has to be opened again to put the item in — which destroys the only claim the seal was there to make. |
-| 7 ← 6 (label and initial after sealing) | Continuous custody | The initials and date are not decoration on the label; they have to run across the tape and onto the paper on both sides so that lifting the tape breaks them. Before the seal exists there is no tape to cross, so the one part of the marking that reports on tampering cannot be made at all. |
+| 7 ← 6 (label and initial after sealing) | Continuous custody | The initials and date are not decoration on the label; they have to run across the tape and onto the paper on both sides so that lifting the tape breaks them. Before the seal exists there is no tape to cross, so the one part of the marking that reports on tampering cannot be made at all. This edge is authored for the initialing half specifically: an agency whose manual has the label's descriptive fields written before sealing is exercising a real, contested local choice this exercise takes no side on, but the initials that must cross the seal cannot exist before the seal does under any agency's manual, so gating the combined action on sealing is defensible regardless of that choice. |
 | 8 ← 7 (log after labelling) | Continuous custody | The log entry and the face of the package are one record kept in two places, and they stay identical because one is copied from the other. Logging first means describing from memory an item that carries no number yet, so any disagreement between the two is discovered later by whoever needs them rather than immediately by the person who made them. |
 | 9 ← 8 (transfer after logging) | Continuous custody | Custody is continuous only if every change of hands is a documented event. A handoff made before the entry exists is remembered rather than recorded, and the receiving custodian has no line to sign against — the gap it creates is at exactly the point the record is supposed to be strongest. |
 
@@ -120,19 +126,19 @@ This is the exact text of `docs/exemplars/evidence-intake.companion.txt`. `INTRO
 
 ```
 TITLE: Evidence Intake
-INTRO: A rear door at the Cottonmill Veterinary Clinic was pried open overnight, and the tool used on it is still lying inside the doorway. Your job this morning is to bring that one item back to the Ashmoor County evidence room with a record complete enough to be read months from now by someone who was never at the scene. Ashmoor County, its sheriff's office, its evidence manual and everyone named here are fictional. What follows is one fictional agency's standard operating procedure, written to teach the reasoning behind evidence handling; it is not a standard, and the policy of the agency you work for governs how you actually do this work. By the end of this exercise you will be able to sequence an evidence intake so that every step that destroys information happens after the step that records it, and to say what each link in a chain of custody is actually protecting. More than one order is correct here. Work the procedure in an order you can defend, and read what each action does to the scene before you choose the next one.
-OPENING: It is 06:40 on a Tuesday. Deputy Ruben Alcaraz has met you at the clinic's rear door, which was forced at the latch and stands half open, and a cash box is missing from the front desk. A flat steel pry bar is lying on the tile about a foot inside the doorway. Nadia Oyelaran, the clinic's office manager, opened up this morning, found the door and called it in; she is waiting in the parking lot with two staff members, and a delivery van has just pulled up to the same door. Nothing has been moved. The bar is yours to bring in.
+INTRO: A rear door at the Cottonmill Veterinary Clinic was pried open overnight, and the tool used on it is still lying inside the doorway. Your job this morning is to bring that one item back to the Ashmoor County evidence room with a record complete enough to be read months from now by someone who was never at the scene. Ashmoor County, its sheriff's office, its evidence manual and everyone named here are fictional. What follows is one fictional agency's standard operating procedure, written to teach the reasoning behind evidence handling; it is not a standard, and the policy of the agency you work for governs how you actually do this work. By the end of this exercise you will be able to sequence an evidence intake so that every step that destroys information happens after the step that records it, and to say what each link in a chain of custody is actually protecting. A wrong or premature action produces a realistic consequence and lets you continue — mistakes cost score, never the attempt. More than one order is correct here. Work the procedure in an order you can defend, and read what each action does to the scene before you choose the next one.
+OPENING: It is 06:40 on a Tuesday. Deputy Ruben Alcavero has met you at the clinic's rear door, which was forced at the latch and stands half open, and a cash box is missing from the front desk. A flat steel pry bar is lying on the tile about a foot inside the doorway. Nadia Oyelaran, the clinic's office manager, opened up this morning, found the door and called it in; she is waiting in the parking lot with two staff members, and a delivery van has just pulled up to the same door. Nothing has been moved. The bar is yours to bring in.
 EXPERTNOTE: The expert path is not a single order. Two things have to be true before the bar moves: the scene is under control, and the bar's position exists somewhere other than in your memory. Photographs and a measured sketch are two independent records of the same undisturbed scene, so whichever you take first is a matter of light and preference rather than procedure. Gloves are the same kind of choice - any time before you touch the bar is the right time. After the bar is in the bag the order stops being flexible, because from there each step is what gives the next one its meaning: a seal only reports on itself if your initials cross it, a label is only findable if the log carries the same number, and a handoff is only continuous if the entry exists before the package leaves your hands.
 
 ACTION: Secure the scene and control who enters it (required)
-Outcome: Deputy Alcaraz takes the parking lot side and turns the delivery driver back to the street. The clinic staff move around to the front of the building, and one deputy starts a log of everyone who crosses the tape. The scene stops changing while you work in it.
+Outcome: Deputy Alcavero takes the parking lot side and turns the delivery driver back to the street. The clinic staff move around to the front of the building, and one deputy starts a log of everyone who crosses the tape. The scene stops changing while you work in it.
 
 ACTION: Put on a fresh pair of examination gloves (required)
 Outcome: You glove up from the box in your kit rather than reusing the pair in your jacket pocket. Whatever is on the bar stays on the bar, and nothing of yours joins it.
 
 ACTION: Photograph the item where it lies (required, after: Secure the scene and control who enters it)
-Outcome: Three frames: the doorway from inside the corridor, the bar in relation to the forced latch, and a close overall with a scale card alongside it. The bar's position now exists in something other than your memory.
-Consequence: You are photographing a scene that is still open. Behind you the delivery driver has stepped through the doorway to see what happened, and the frames you just shot record a room that has already had two extra people in it. Whether they show the doorway as the burglar left it is now a question nobody can answer.
+Outcome: Four frames: the doorway from inside the corridor, the bar in relation to the forced latch, a close-up of the bar without a scale, and the same close-up again with a scale card beside it. The bar's position now exists in something other than your memory.
+Consequence: You are photographing a scene that is still open. Behind you the delivery driver has stepped through the doorway to see what happened, and the frames you just shot record a room that has already had two extra people in it. Whether they show the doorway as it was left overnight is now a question nobody can answer.
 Note: A photograph of an uncontrolled scene records the scene at the moment the shutter opened and nothing earlier than that.
 
 ACTION: Sketch the room and measure the item's position (required, after: Secure the scene and control who enters it)
@@ -141,7 +147,7 @@ Consequence: You are measuring to a doorway people are still walking through. On
 Note: A measurement is only as good as the scene it was taken in. Control the access first, then fix the item to something that will still be there tomorrow.
 
 ACTION: Collect the item and place it in an evidence bag (required, after: Put on a fresh pair of examination gloves, Photograph the item where it lies, Sketch the room and measure the item's position)
-Outcome: You lift the bar by its flat faces, keeping clear of the pry end, and set it into a paper evidence bag large enough that nothing has to be forced. The bag goes on the clean side of your kit and never on the floor.
+Outcome: You lift the bar by its flat faces, keeping clear of the pry end, and set it into a paper evidence bag large enough that nothing has to be forced, padding the pry end so it cannot shift or puncture the bag in transit. The bag goes on the clean side of your kit and never on the floor.
 Consequence: The bar comes up before the scene has finished being recorded. Whatever was still missing - the photographs, the measurements, or clean gloves between your hand and the steel - cannot be supplied afterward, because the only thing that could have supplied it was the bar lying where you found it.
 Note: Collection is the one step that cannot be undone. Everything that documents the item where it was found has to exist before the item moves.
 
@@ -156,12 +162,12 @@ Consequence: You are writing on a bag that is still open. Initials that do not c
 Note: The initials belong to the seal, not to the label. They only do their work when they run across the tape and onto the bag on both sides.
 
 ACTION: Record the item on the agency evidence log (required, after: Label the sealed bag and initial across the seal)
-Outcome: You enter the case number, item one, a short description of the bar and its approximate length, the recovery location, the time of collection and your name. The entry matches the face of the bag word for word.
+Outcome: You enter the case number, item one, a short description of the bar and its approximate length, the recovery location, the date and time of collection and your name. The entry matches the face of the bag word for word.
 Consequence: You are logging a package that carries no number yet. The entry you make now describes an item you will have to identify all over again when you finally label the bag, and the two records can only agree by luck.
 Note: The log and the label are one record kept in two places. Write the label first and copy it across, and the two of them cannot disagree.
 
 ACTION: Transfer the sealed package to the evidence custodian (required, after: Record the item on the agency evidence log)
-Outcome: You carry the bag to the evidence room and hand it to custodian Hana Yamashiro, who checks the seal against the label, signs the transfer line and gives you the receipt copy. Custody has changed hands once, on paper, with both of you standing there.
+Outcome: You carry the bag to the evidence room and hand it to custodian Hana Yamashiro, who checks the seal against the label. You both sign the transfer line, and she gives you the receipt copy. Custody has changed hands once, on paper, with both of you standing there.
 Consequence: You are handing over a package the log does not know about. From the moment it leaves your hands with no entry behind it, the only account of where it has been since the clinic is your recollection, and the custodian has nothing to sign against.
 Note: A transfer is a documented event. If the log entry does not exist first, the handoff was not recorded, it was only remembered.
 
@@ -195,14 +201,14 @@ Every number in this section is output from the real modules, produced by runnin
 | actions parsed | 13 (9 required, 4 distractors) |
 | prerequisite edges | 9 |
 | legal orders of the required actions | 8 |
-| `intro` length | 1043 characters (cap 5000) |
-| `opening` length | 536 characters (cap 2000) |
+| `intro` length | 1168 characters (cap 5000) |
+| `opening` length | 537 characters (cap 2000) |
 | `expertNote` length | 797 characters (cap 3000) |
 | longest label | 55 characters (cap 200) |
-| longest `outcome` | 266 characters (cap 1500) |
+| longest `outcome` | 291 characters (cap 1500) |
 | longest `consequence` | 347 characters (cap 1500) |
 | longest `consequenceNote` | 165 characters (cap 300) |
-| banned words in the config | `admissible` **absent**, `thrown out` **absent** |
+| banned words in the config | `admissible`, `thrown out`, `suppressed`, `excluded`, `hold up in court`, `inadmissible` — all **absent** |
 
 ### Scoring, restated for this config
 
@@ -336,7 +342,7 @@ The process engine's v1 has no header image on the Brief step by design (spec §
 - [ ] Witness walkthrough asserted through the REAL state machine and scoring: `cleanCount` 6, `totalAttempts` 16, correctness 6/9, efficiency 9/16, **`scoreProcess(...).totalPct === 63`** from an exact 62.5.
 - [ ] Flawless run asserted at 100; messy run asserted at 52.
 - [ ] No-giveaway gates asserted: pooled band 0.7500 ≤ 1.2346; longest (10 words) and shortest (6 words) labels in the pool are both required actions.
-- [ ] Banned-words test: `admissible` and `thrown out` absent from every learner-visible string in the config.
+- [ ] Banned-words test: `admissible`, `thrown out`, `suppressed`, `excluded`, `hold up in court` and `inadmissible` absent from every learner-visible string in the config.
 - [ ] The scope statement in §4 appears verbatim inside `INTRO:`.
 - [ ] SME rationale in §4 and §6, the source list in §7, and every annotation in this brief are **not** transcribed into the config.
 - [ ] Export zip under 40 KB via the real assemble path.
